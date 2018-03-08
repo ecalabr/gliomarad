@@ -59,7 +59,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             hdrs.append(dicom.read_file(dicoms[ind][0]))
             try:
                 series.append(hdrs[ind].SeriesDescription)
-            except:
+            except Exception:
                 print("- Skipping series " + str(ind + 1) + " without series description")
                 series.append("none")
 
@@ -73,22 +73,22 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                 fileout.write("%s" % "\tslthick=")
                 try:
                     fileout.write("%s" % hdrs[ind].SliceThickness)
-                except:
+                except Exception:
                     pass
                 fileout.write("%s" % "\tacqmtx=")
                 try:
                     fileout.write("%s" % str(hdrs[ind].AcquisitionMatrix))
-                except:
+                except Exception:
                     pass
                 fileout.write("%s" % "\trowcol=")
                 try:
                     fileout.write("%s" % str(hdrs[ind].Rows) + "x" + str(hdrs[ind].Columns))
-                except:
+                except Exception:
                     pass
                 fileout.write("%s" % "\tslices=")
                 try:
                     fileout.write("%s" % str(hdrs[ind].ImagesInAcquisition))
-                except:
+                except Exception:
                     pass
                 fileout.write("%s" % "\n")
 
@@ -528,7 +528,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             eddy.inputs.terminal_output = "none"
             try:
                 _ = eddy.run()
-            except:
+            except Exception:
                 print("-- Could not eddy correct DTI")
         else:
             print("- Eddy corrected DWIs already exist at " + dti_outfile)
@@ -552,7 +552,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                 if not os.path.isfile(fa_out):
                     dti.inputs.args = ""
                     _ = dti.run()
-            except:
+            except Exception:
                 print("- could not process DTI")
         else:
             if os.path.isfile(fa_out):
@@ -638,7 +638,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                 niiout = ants_apply(moving, template, 'Linear', transforms, os.path.dirname(dcm_dir), rep)
                 series_dict[sers].update({"filename_reg": niiout})
                 series_dict[sers].update({"transform": transforms})
-        except:
+        except Exception:
             pass
 
     # BET brain masking based on combination of t2 and t1
@@ -729,7 +729,6 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
     print("\nSEGMENTING TUMOR VOLUMES:")
     seg_file = os.path.join(os.path.dirname(dcm_dir), "tumor_seg.nii.gz")
     if not os.path.isfile(seg_file):
-        sc_direc = os.path.dirname(os.path.realpath(__file__))
         print("- segmenting tumor")
         #_ = subprocess.call("python " + seg_script + " " + os.path.dirname(dcm_dir), shell=True)
         test_ecalabr.test(os.path.dirname(dcm_dir))
@@ -847,7 +846,7 @@ for dcmz in zip_dcm: #[zip_dcm[0]]:#
         if not serdict[s]["filename"] == "None":
             try:
                 stats[s] = stats[s] + 1
-            except:
+            except Exception:
                 pass
     count = count + 1
 
