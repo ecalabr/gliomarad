@@ -1,0 +1,2 @@
+print terminal output to file
+remove segmentation subprocess call and replace with python import

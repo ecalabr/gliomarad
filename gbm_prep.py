@@ -3,7 +3,6 @@ import dicom
 import nibabel as nib
 import numpy as np
 from glob import glob
-import shutil
 import subprocess
 import time
 import sys
