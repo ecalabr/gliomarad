@@ -60,7 +60,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             try:
                 series.append(hdrs[ind].SeriesDescription)
             except Exception:
-                print("- Skipping series " + str(ind + 1) + " without series description")
+                logger("- Skipping series " + str(ind + 1) + " without series description")
                 series.append("none")
 
         # save series list
@@ -107,7 +107,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                 if all(ss.lower() in string.lower() for ss in substrlist) \
                         and not any(ssn.lower() in string.lower() for ssn in substrnot):
                     inds.append(ind)
-                    print("- matched series: " + string)
+                    logger("- matched series: " + string)
 
         return inds
 
@@ -122,7 +122,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
         # for each output, find match and append to new list for conversion
         keeper = []
         for srs in srs_dict:
-            print("\nFINDING SERIES: " + srs)
+            logger("\nFINDING SERIES: " + srs)
             inds = substr_list(series, srs_dict[srs]["or"], srs_dict[srs]["not"])
 
             # if there are inds of matches, pick the first match in the axial orientation and continue
@@ -141,7 +141,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                     inds = keeper
 
             if inds or inds == 0:  # this handles 0 index matches
-                print("- keeping series: " + series[inds])
+                logger("- keeping series: " + series[inds])
                 new_dicoms.append(dicoms[inds])
                 srs_dict[srs]["dicoms"] = dicoms[inds]
                 new_hdrs.append(hdrs[inds])
@@ -151,7 +151,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                 new_dirs.append(dirs[inds])
                 srs_dict[srs]["dirs"] = dirs[inds]
             else:
-                print("- no matching series found! \n")
+                logger("- no matching series found! \n")
                 new_dicoms.append([])
                 srs_dict[srs]["dicoms"] = []
                 new_hdrs.append([])
@@ -167,7 +167,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
     def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
         # define vars
         output_ser = []
-        print("\nCONVERTING FILES:")
+        logger("\nCONVERTING FILES:")
 
         # basic converter initiation
         converter = Dcm2niix()
@@ -186,13 +186,13 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             outfilepath = os.path.join(os.path.dirname(dicom_dir), outfilename + ".nii.gz")
             # don't repeat conversion if already done
             if strs_dict[series]["series"] == "None":
-                print("- no matching series found: " + series)
+                logger("- no matching series found: " + series)
                 outfilepath = "None"
             elif not os.path.isfile(outfilepath) or repeat:
-                print("- Converting " + outfilename)
+                logger("- Converting " + outfilename)
                 converter.run()
             else:
-                print("- " + outfilename + " already exists")
+                logger("- " + outfilename + " already exists")
 
             # append to outfile list
             output_ser.append(outfilepath)
@@ -238,10 +238,10 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
 
         trnsfm = outprefix + "Composite.h5"
         if not os.path.isfile(trnsfm) or repeat:
-            print("- Registering image " + moving_nii + " to " + template_nii)
+            logger("- Registering image " + moving_nii + " to " + template_nii)
             antsreg.run()
         else:
-            print("- Warp file already exists at " + trnsfm)
+            logger("- Warp file already exists at " + trnsfm)
         return trnsfm
 
     # Fast ants diffeomorphic registration
@@ -282,10 +282,10 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
 
         trnsfm = outprefix + "Composite.h5"
         if not os.path.isfile(trnsfm) or repeat:
-            print("- Registering image " + moving_nii + " to " + template_nii)
+            logger("- Registering image " + moving_nii + " to " + template_nii)
             antsreg.run()
         else:
-            print("- Warp file already exists at " + trnsfm)
+            logger("- Warp file already exists at " + trnsfm)
         return trnsfm
 
     # ANTS translation
@@ -326,10 +326,10 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
 
         trnsfm = outprefix + "Composite.h5"
         if not os.path.isfile(trnsfm) or repeat:
-            print("- Registering image " + moving_nii + " to " + template_nii)
+            logger("- Registering image " + moving_nii + " to " + template_nii)
             antsreg.run()
         else:
-            print("- Warp file already exists at " + trnsfm)
+            logger("- Warp file already exists at " + trnsfm)
         return trnsfm
 
     # Ants apply transforms to list
@@ -351,7 +351,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             output_nii[ind] = os.path.join(work_dir, os.path.basename(mvng).split(ext)[0] + '_warped.nii.gz')
             # do registration if not already done
             if not os.path.isfile(output_nii[ind]) or repeat:
-                print("- Creating warped image " + output_nii[ind])
+                logger("- Creating warped image " + output_nii[ind])
                 antsapply = ApplyTransforms()
                 antsapply.inputs.dimension=3
                 antsapply.inputs.terminal_output='none'  # suppress terminal output
@@ -364,7 +364,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                 antsapply.inputs.invert_transform_flags=[invert_bool] * len(transform_list)
                 antsapply.run()
             else:
-                print("- Transformed image already exists at " + output_nii[ind])
+                logger("- Transformed image already exists at " + output_nii[ind])
         # if only 1 label, don't return array
         if len(output_nii) == 1:
             output_nii = output_nii[0]
@@ -377,14 +377,14 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
         for srs in ser_dict:
             if "filename_masked" in ser_dict[srs] and os.path.isfile(ser_dict[srs]["filename_masked"]):
                 if "no_norm" in ser_dict[srs] and ser_dict[srs]["no_norm"] == True:
-                    print("- skipping normalization for " + srs)
+                    logger("- skipping normalization for " + srs)
                 else:
                     fn = ser_dict[srs]["filename_masked"]
                     normname = os.path.join(os.path.dirname(fn), os.path.basename(fn).split(".")[0] + "_norm.nii.gz")
                     ser_dict[srs].update({"filename_norm": normname})
                     # if normalized file doesn't exist, make it
                     if not os.path.isfile(normname) or repeat:
-                        print("- normalizing " + srs + " at " + fn)
+                        logger("- normalizing " + srs + " at " + fn)
                         #norm_cmd = "ImageMath 3 " + ser_dict[srs]["filename_norm"] + " Normalize " + fn
                         #_ = os.system(norm_cmd)
                         # first get max and min
@@ -403,7 +403,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                         norm.inputs.op_string="-sub %s -div %s" % (minv, (maxv-minv))
                         norm.run()
                     else:
-                        print("- normalized " + srs + " already exists at " + normname)
+                        logger("- normalized " + srs + " already exists at " + normname)
         # remove stat result json file if exists, check home and current dir
         if os.path.isfile("~/stat_result.json"):
             os.remove("~/stat_result.json")
@@ -420,13 +420,13 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
         for srs in ser_dict:
             if "filename_norm" in ser_dict[srs]: # normalized files only, others ignored
                 files.append(ser_dict[srs]["filename_norm"])
-                print("- adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
+                logger("- adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
         # get dirname from first normalized image, make nii4d name from this
         bdir = os.path.dirname(files[0])
         nii4d = os.path.join(bdir, "nii4d.nii.gz")
         # if nii4d doesn't exist, make it
         if not os.path.isfile(nii4d) or repeat:
-            print("- creating 4D nii at " + nii4d)
+            logger("- creating 4D nii at " + nii4d)
             #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
             #os.system(nii4dcmd)
             merger = Merge()
@@ -436,7 +436,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             merger.inputs.terminal_output = "none"
             merger.run()
         else:
-            print("- 4D Nii already exists at " + nii4d)
+            logger("- 4D Nii already exists at " + nii4d)
         return ser_dict
 
     # get the series list, the filtered series list, and convert the appropriate dicoms to niis
@@ -445,9 +445,9 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
     series_dict = dcm_list_2_niis(series_dict, dcm_dir, rep)
 
     # print outputs of file conversion
-    print("\nCONVERTED FILES LIST:")
+    logger("\nCONVERTED FILES LIST:")
     for ser in series_dict:
-        print("- " + ser + " = " + series_dict[ser]["filename"])
+        logger("- " + ser + " = " + series_dict[ser]["filename"])
 
     # split b0 and dwi and discard b0 (if necessary)
     dwib0 = series_dict["DWI"]["filename"]
@@ -485,22 +485,22 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
     if os.path.isfile(series_dict["DTI"]["filename"]):
         # define DTI input
         dti_in = series_dict["DTI"]["filename"]
-        print("\nPROCESSING DTI")
-        print("- DTI file found at " + dti_in)
+        logger("\nPROCESSING DTI")
+        logger("- DTI file found at " + dti_in)
         # separate b0 image
         b0 = os.path.join(os.path.dirname(dicomdir), "DTI_b0.nii.gz")
         if not os.path.isfile(b0):
-            print("- separating b0 image from DTI")
+            logger("- separating b0 image from DTI")
             fslroi = ExtractROI(in_file=dti_in, roi_file=b0, t_min=0, t_size=1, terminal_output="none")
             fslroi.run()
         else:
-            print("- b0 image already exists at " + b0)
+            logger("- b0 image already exists at " + b0)
         # add b0 to list for affine registration
         series_dict.update({"DTI_b0": {"filename": b0, "reg": "diffeo", "reg_target": "FLAIR", "no_norm": True}})
         # make BET mask
         dti_mask = os.path.join(os.path.dirname(dicomdir), "DTI_mask.nii.gz")
         if not os.path.isfile(dti_mask) or rep:
-            print("- Making BET brain mask for DTI")
+            logger("- Making BET brain mask for DTI")
             btr = BET()
             btr.inputs.in_file = b0 # base mask on b0 image
             btr.inputs.out_file = os.path.join(os.path.dirname(dicomdir), "DTI") # output prefix for mask _mask is added
@@ -509,12 +509,12 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             btr.inputs.frac = 0.2 # lower threshold for more inclusive mask
             _ = btr.run()
         else:
-            print("- DTI BET masking already exists at " + dti_mask)
+            logger("- DTI BET masking already exists at " + dti_mask)
         # do eddy correction with outlier replacement
         dti_out = os.path.join(os.path.dirname(dicomdir), "DTI_eddy")
         dti_outfile = os.path.join(os.path.dirname(dicomdir), "DTI_eddy.nii.gz")
         if not os.path.isfile(dti_outfile) or rep:
-            print("- Eddy correcting DWIs")
+            logger("- Eddy correcting DWIs")
             eddy = Eddy()
             eddy.inputs.in_file = dti_in
             eddy.inputs.out_base = dti_out
@@ -529,13 +529,13 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             try:
                 _ = eddy.run()
             except Exception:
-                print("-- Could not eddy correct DTI")
+                logger("-- Could not eddy correct DTI")
         else:
-            print("- Eddy corrected DWIs already exist at " + dti_outfile)
+            logger("- Eddy corrected DWIs already exist at " + dti_outfile)
         # do DTI processing
         fa_out = dti_out + "_FA.nii.gz"
         if os.path.isfile(dti_outfile) and not os.path.isfile(fa_out) or os.path.isfile(dti_outfile) and rep:
-            print("- Fitting DTI")
+            logger("- Fitting DTI")
             dti = DTIFit()
             dti.inputs.dwi = dti_outfile
             dti.inputs.bvecs = dti_out + ".eddy_rotated_bvecs"
@@ -553,10 +553,10 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                     dti.inputs.args = ""
                     _ = dti.run()
             except Exception:
-                print("- could not process DTI")
+                logger("- could not process DTI")
         else:
             if os.path.isfile(fa_out):
-                print("- DTI outputs already exist with prefix " + dti_out)
+                logger("- DTI outputs already exist with prefix " + dti_out)
         # add DTI to series_dict for registration (note, DTI is masked at this point)
         series_dict.update({"DTI_FA": {"filename": dti_out + "_FA.nii.gz", "reg": "DTI_b0"}})
         series_dict.update({"DTI_MD": {"filename": dti_out + "_MD.nii.gz", "reg": "DTI_b0", "no_norm": True}})
@@ -566,7 +566,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
 
     # register data together using reg_target as target, if its a file, use it, if not assume its a dict key for an already registered file
     # there are multiple loops here because dicts dont preserve order, and we need it for some registration steps
-    print("\nREGISTERING IMAGES:")
+    logger("\nREGISTERING IMAGES:")
     # if reg is false, or if there is no input file found, then just make the reg filename same as unreg filename
     for sers in series_dict:
         if series_dict[sers]["filename"] == "None" or not series_dict[sers]["reg"]:
@@ -642,14 +642,14 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             pass
 
     # BET brain masking based on combination of t2 and t1
-    print("\nBRAIN MASKING:")
+    logger("\nBRAIN MASKING:")
     t2mask = "none"
     flairmask = "none"
     # make brain mask based on flair
     if os.path.isfile(series_dict["FLAIR"]["filename"]):
         flairmask = os.path.join(os.path.dirname(dcm_dir), "FLAIR_warped_mask.nii.gz")
         if not os.path.isfile(flairmask):
-            print("- making brain mask based on FLAIR")
+            logger("- making brain mask based on FLAIR")
             bet = BET()
             bet.inputs.in_file = series_dict["FLAIR"]["filename_reg"]
             bet.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), "FLAIR_warped")
@@ -659,14 +659,14 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             bet.inputs.terminal_output = "none"
             _ = bet.run()
         else:
-            print("- FLAIR brain mask already exists at " + flairmask)
+            logger("- FLAIR brain mask already exists at " + flairmask)
     else:
-        print("- could not find FLAIR, skipping FLAIR brain masking")
+        logger("- could not find FLAIR, skipping FLAIR brain masking")
     # make brain mask based on T2
     if os.path.isfile(series_dict["T2"]["filename"]):
         t2mask = os.path.join(os.path.dirname(dcm_dir), "T2_warped_mask.nii.gz")
         if not os.path.isfile(t2mask):
-            print("- making brain mask based on T2")
+            logger("- making brain mask based on T2")
             bet = BET()
             bet.inputs.in_file = series_dict["T2"]["filename_reg"]
             bet.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), "T2_warped")
@@ -675,14 +675,14 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             bet.inputs.terminal_output = "none"
             _ = bet.run()
         else:
-            print("- T2 brain mask already exists at " + t2mask)
+            logger("- T2 brain mask already exists at " + t2mask)
     else:
-        print("- could not find T2, skipping FLAIR brain masking")
+        logger("- could not find T2, skipping FLAIR brain masking")
     # combine brain masks if both exist, if not use one or other
     if os.path.isfile(t2mask) and os.path.isfile(flairmask):
         mask = os.path.join(os.path.dirname(dcm_dir), "combined_brain_mask.nii.gz")
         if not os.path.isfile(mask):
-            print("- making combined T2 and Flair brain mask at " + mask)
+            logger("- making combined T2 and Flair brain mask at " + mask)
             mask_cmd = ApplyMask()
             mask_cmd.inputs.in_file = t2mask
             mask_cmd.inputs.mask_file = flairmask
@@ -691,7 +691,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             mask_cmd.inputs.output_datatype = "input"
             _ = mask_cmd.run()
         else:
-            print("- combined T2 and FLAIR brain mask already exists at " + mask)
+            logger("- combined T2 and FLAIR brain mask already exists at " + mask)
     elif os.path.isfile(t2mask):
         mask = t2mask
     elif os.path.isfile(flairmask):
@@ -705,7 +705,7 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
             if not os.path.isfile(ser_masked) and os.path.isfile(series_dict[sers]["filename_reg"]):
                 # check that warping was actually done
                 if not series_dict[sers]["filename_reg"] == series_dict[sers]["filename"]:
-                    print("- masking " + series_dict[sers]["filename_reg"])
+                    logger("- masking " + series_dict[sers]["filename_reg"])
                     # apply mask using fsl maths
                     mask_cmd = ApplyMask()
                     mask_cmd.inputs.in_file = series_dict[sers]["filename_reg"]
@@ -715,32 +715,32 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
                     _ = mask_cmd.run()
                     series_dict[sers].update({"filename_masked": ser_masked})
             elif os.path.isfile(ser_masked):
-                print("- masked file already exists for " + sers + " at " + ser_masked)
+                logger("- masked file already exists for " + sers + " at " + ser_masked)
                 series_dict[sers].update({"filename_masked": ser_masked})
             else:
-                print("- skipping masking for " + sers + " as file does not exist")
+                logger("- skipping masking for " + sers + " as file does not exist")
 
     # normalize and nii4d registered data
-    print("\nMAKING 4D NII:")
+    logger("\nMAKING 4D NII:")
     series_dict = norm_niis(series_dict, rep)
     series_dict = make_nii4d(series_dict, rep)
 
     # now create tumor segmentation
-    print("\nSEGMENTING TUMOR VOLUMES:")
+    logger("\nSEGMENTING TUMOR VOLUMES:")
     seg_file = os.path.join(os.path.dirname(dcm_dir), "tumor_seg.nii.gz")
     if not os.path.isfile(seg_file):
-        print("- segmenting tumor")
+        logger("- segmenting tumor")
         #_ = subprocess.call("python " + seg_script + " " + os.path.dirname(dcm_dir), shell=True)
         test_ecalabr.test(os.path.dirname(dcm_dir))
         # copy header information from warped masked flair to tumor seg
-        print("- correcting nii header for segmentation file")
+        logger("- correcting nii header for segmentation file")
         hdrfix = CopyGeom()
         hdrfix.inputs.dest_file = seg_file
         hdrfix.inputs.in_file = series_dict["FLAIR"]["filename_masked"]
         hdrfix.inputs.terminal_output = "none"
         _ = hdrfix.run()
     else:
-        print("- tumor segmentation file aready exists at " + seg_file)
+        logger("- tumor segmentation file aready exists at " + seg_file)
 
     # now save metadata file, with np?
     dict_outfile = os.path.join(os.path.dirname(dcm_dir), "metadata.npy")
@@ -749,11 +749,11 @@ def read_dicom_dir(dcm_dir, series_dict=(), rep=False):
 
     return series_dict
 
-
-
-
-
-
+#######################
+#######################
+#######################
+#######################
+#######################
 # outside function code
 
 # matching strings format is [[strs to match AND], OR [strs to match AND]
@@ -795,7 +795,6 @@ dti_index = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55_index.txt"
 dti_acqp = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55_acqp.txt"
 dti_bvec = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55.bvec"
 dti_bval = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55.bval"
-sc_d = os.path.dirname(os.path.realpath(__file__))
 for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
     if not os.path.isfile(file_path):
         sys.exit("Could not find required file: " + file_path)
@@ -807,13 +806,23 @@ zip_dcm = glob(dcm_zip_dir + "*.zip")
 # run read_dicom_dir in a loop with some basic stats to see what files we extracted
 count = 0
 stats = {}
+
+# make logger
+log=[]
+def logger(string):
+    print(string)
+    t = time.ctime()
+    log.append(t + "\t" + string.strip())
+
+# iterate through all dicom directories
 for dcmz in zip_dcm: #[zip_dcm[0]]:#
     # start timer
     start = time.time()
     # unzip and get out_dir, tmp_dir, dicom_dir
     acc_no = dcmz.rsplit("/",1)[1].split(".",1)[0]
     tmp_dir = os.path.join(dcm_zip_dir, acc_no)
-    print("\n\nUNZIPPING:\n- " + dcmz + ". If files are already unzipped, work will not be repeated.")
+    logger("\n\nUNZIPPING:")
+    logger("- " + dcmz + ". If files are already unzipped, work will not be repeated.")
     unz_cmd = "unzip -n -qq -d " + tmp_dir + " " + dcmz
     #os.system(unz_cmd)
     _ = subprocess.call(unz_cmd, shell=True)
@@ -822,22 +831,12 @@ for dcmz in zip_dcm: #[zip_dcm[0]]:#
     out_dir = dcmz.rsplit(".",1)[0]
 
     # print some stating info
-    print("- working directory = " + os.path.dirname(dicomdir))
+    logger("- working directory = " + os.path.dirname(dicomdir))
 
     # run the basic code above to convert dicoms and register them
     # need to reset the series dictionary each time so that values dont cary over
     mydict = make_serdict()
     serdict = read_dicom_dir(dicomdir, mydict, rep=False)
-
-
-    # # move keeper outputs to out_dir and delete temp folder contents
-    # keep_files = glob(dicomdir + "*.nii.gz")
-    # keep_files = keep_files + glob(dicomdir + "*.txt")
-    # keep_files = keep_files + glob(dicomdir + "*.npy")
-    # for keep_file in keep_files:
-    #     dest = os.path.join(out_dir, keep_file.rsplit("/",1)[1])
-    #     os.rename(keep_file, dest)
-    #shutil.rmtree(dicomdir, ignore_errors=True)
 
     # get basic stats about what files are present
     for s in serdict:
@@ -852,9 +851,15 @@ for dcmz in zip_dcm: #[zip_dcm[0]]:#
 
     # print elapsed time
     end = time.time()
-    print("\nTIME ELAPSED: " + str(round((end - start)/60.0)) + " minutes")
+    logger("\nTIME ELAPSED: " + str(round((end - start)/60.0)) + " minutes")
+
+    # write log file
+    with open(os.path.join(os.path.dirname(dicomdir), "log.txt"), "a+") as logfile:
+        for line in log:
+            logfile.write(line + "\n")
+        log = []
 
 # print stats results
 print("\nSTATS:")
-print(stats)
+print(str(stats))
 print("Total count: " + str(count))
