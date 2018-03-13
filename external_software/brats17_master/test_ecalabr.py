@@ -28,6 +28,7 @@ from external_software.brats17_master.train import NetFactory
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def test(data_direc):
+    idno = os.path.basename(data_direc)
     # build fake config file
     if data_direc[-1] == "/":
         data_direc = data_direc[:-1]
@@ -38,7 +39,7 @@ def test(data_direc):
     config = {"data": {"data_root": data_rt,
                        "save_folder": save_dr,
                        "data_names": data_nm,
-                       "modality_postfix": ["FLAIR_warped_masked", "T1_warped_masked", "T1gad_warped_masked", "T2_warped_masked"],
+                       "modality_postfix": ["FLAIR_wm", "T1_wm", "T1gad_wm", "T2_wm"],
                        "file_postfix": "nii.gz"},
 
               "network1ax": {"net_type":"MSNet",
@@ -536,7 +537,7 @@ def test(data_direc):
         test_time.append(time.time() - t0)
         final_label = np.zeros(temp_size, np.int16)
         final_label = set_ND_volume_roi_with_bounding_box_range(final_label, temp_bbox[0], temp_bbox[1], out_label)
-        save_array_as_nifty_volume(final_label, os.path.join(save_dir, "tumor_seg.nii.gz"))
+        save_array_as_nifty_volume(final_label, os.path.join(save_dir, idno + "_tumor_seg.nii.gz"))
         #print(temp_name)
     #test_time = np.asarray(test_time)
     #print('test time', test_time.mean())
