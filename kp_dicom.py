@@ -23,6 +23,7 @@ def dicom2nii(study, nii_dir):
         converter.inputs.terminal_output = "allatonce"
         converter.anonymize = True
         converter.inputs.out_filename = "%i-%s-%q-"  # define output filenames
+        converter.inputs.ignore_exception = True
         #print(converter.cmdline)
         converter.run()
         open(comp_file, 'a').close()
@@ -39,14 +40,15 @@ def find_dwi(out_dir, nii_dir):
     # work through each nifti in the output folder until one matches criteria
     for nii in niis:
         filename = os.path.basename(nii)
-        idno = filename.split("-")[0]
-        ser = filename.split("-")[1]
-        seq = filename.split("-")[2]
-        nifti = nib.load(nii)
-        # matching criteria are series < 100, sequence is EP_SE and is 4D (i.e. composed with b0 img)
-        if int(ser) < 100 and seq == "EP_SE" and nifti.header["dim"][4] == 2:
-            dwi = nii
-            break
+        if len(filename.split("-")) >= 3:
+            idno = filename.split("-")[0]
+            ser = filename.split("-")[1]
+            seq = filename.split("-")[2]
+            nifti = nib.load(nii)
+            # matching criteria are series < 100, sequence is EP_SE and is 4D (i.e. composed with b0 img)
+            if int(ser) < 100 and seq == "EP_SE" and nifti.header["dim"][4] == 2:
+                dwi = nii
+                break
     # if a dwi was found, then split b0 from it and save as dwi
     dwi_out = os.path.join(out_dir, idno + "_dwi.nii.gz")
     if dwi:
@@ -59,10 +61,13 @@ def find_dwi(out_dir, nii_dir):
             print("- saved DWI for ID " + idno + " at " + dwi_out)
         else:
             print("- DWI already exists at " + dwi_out)
+        dims = nifti.header["dim"]
     else:
         print("- could not find DWI for ID " + idno)
+        ser = 0
+        dims = 0
     # return some important info, series number and nifti dims
-    return int(ser), nifti.header["dim"], dwi_out
+    return int(ser), dims, dwi_out
 
 
 def find_adc(out_dir, nii_dir, dwi_series, dwi_dimensions):
@@ -73,14 +78,15 @@ def find_adc(out_dir, nii_dir, dwi_series, dwi_dimensions):
     # work through each nifti in the output folder until one matches criteria
     for nii in niis:
         filename = os.path.basename(nii)
-        idno = filename.split("-")[0]
-        ser = filename.split("-")[1]
-        seq = filename.split("-")[2]
-        nifti = nib.load(nii)
-        # matching criteria are: series 300 if dwi is 3, sequence is EP_SE and is same dims as dwi
-        if int(ser) == (dwi_series*100) and seq == "EP_SE" and all(nifti.header["dim"][1:3] == dwi_dimensions[1:3]):
-            adc = nii
-            break
+        if len(filename.split("-")) >= 3:
+            idno = filename.split("-")[0]
+            ser = filename.split("-")[1]
+            seq = filename.split("-")[2]
+            nifti = nib.load(nii)
+            # matching criteria are: series 300 if dwi is 3, sequence is EP_SE and is same dims as dwi
+            if int(ser) == (dwi_series*100) and seq == "EP_SE" and all(nifti.header["dim"][1:3] == dwi_dimensions[1:3]):
+                adc = nii
+                break
     # if a dwi was found, then split b0 from it and save as dwi
     adc_out = os.path.join(out_dir, idno + "_adc.nii.gz")
     if adc:
@@ -102,14 +108,15 @@ def find_flair(out_dir, nii_dir):
     # work through each nifti in the output folder until one matches criteria
     for nii in niis:
         filename = os.path.basename(nii)
-        idno = filename.split("-")[0]
-        ser = filename.split("-")[1]
-        seq = filename.split("-")[2]
-        nifti = nib.load(nii)
-        # matching criteria are: series single digit, sequence is SE_IR, slices > 64
-        if int(ser) < 100 and seq == "SE_IR" and nifti.header["dim"][3]>64:
-            flair = nii
-            break
+        if len(filename.split("-")) >= 3:
+            idno = filename.split("-")[0]
+            ser = filename.split("-")[1]
+            seq = filename.split("-")[2]
+            nifti = nib.load(nii)
+            # matching criteria are: series single digit, sequence is SE_IR, slices > 64
+            if int(ser) < 100 and seq == "SE_IR" and nifti.header["dim"][3]>64:
+                flair = nii
+                break
     # if a dwi was found, then split b0 from it and save as dwi
     flair_out = os.path.join(out_dir, idno + "_flair.nii.gz")
     if flair:
@@ -354,26 +361,29 @@ def convert_dicoms(parent_dir):
             dwi_ser, dwi_dims, dwi = find_dwi(temp_dir, temp_dir)
             adc = find_adc(temp_dir, temp_dir, dwi_ser, dwi_dims)
             flair = find_flair(temp_dir, temp_dir)
-            flair_tnsfm = rigid_reg(flair, TEMPLATE, temp_dir)
-            flair_warped = ants_apply(flair, TEMPLATE, flair_tnsfm, temp_dir)
-            dwi_tnsfm = diffeo_reg(dwi, flair_warped, temp_dir)
-            dwi_warped = ants_apply(dwi, flair_warped, dwi_tnsfm, temp_dir)
-            adc_warped = ants_apply(adc, flair_warped, dwi_tnsfm, temp_dir)
-            mask = mask_flair(flair_warped, temp_dir)
-            flair_masked = apply_mask(flair_warped, mask, output_dir)
-            dwi_masked = apply_mask(dwi_warped, mask, output_dir)
-            adc_masked = apply_mask(adc_warped, mask, output_dir)
-            print("- output files are:")
-            print("FLAIR = " + flair_masked)
-            print("DWI = " + dwi_masked)
-            print("ADC = " + adc_masked)
+            if os.path.isfile(dwi) and os.path.isfile(adc) and os.path.isfile(flair):
+                flair_tnsfm = rigid_reg(flair, TEMPLATE, temp_dir)
+                flair_warped = ants_apply(flair, TEMPLATE, flair_tnsfm, temp_dir)
+                dwi_tnsfm = diffeo_reg(dwi, flair_warped, temp_dir)
+                dwi_warped = ants_apply(dwi, flair_warped, dwi_tnsfm, temp_dir)
+                adc_warped = ants_apply(adc, flair_warped, dwi_tnsfm, temp_dir)
+                mask = mask_flair(flair_warped, temp_dir)
+                flair_masked = apply_mask(flair_warped, mask, output_dir)
+                dwi_masked = apply_mask(dwi_warped, mask, output_dir)
+                adc_masked = apply_mask(adc_warped, mask, output_dir)
+                print("- output files are:")
+                print("FLAIR = " + flair_masked)
+                print("DWI = " + dwi_masked)
+                print("ADC = " + adc_masked)
+            else:
+                print("ERROR - COULD NOT FIND ALL FILES")
 
 
 
 # GLOBAL VARS
 TEMPLATE = "/Users/edc15/Desktop/strokecode/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii"
-KPDIR = "/Users/edc15/Desktop/kp_test/"
-N_LIMIT = 1000
+KPDIR = "/Users/edc15/Desktop/kp_test_data/"
+N_LIMIT = 200
 
 convert_dicoms(KPDIR)
 
