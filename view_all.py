@@ -2,7 +2,6 @@ import os
 from glob import glob
 
 direc = "/Users/edc15/Desktop/kp_test_data/outfiles"
-logfile = "/Users/edc15/Desktop/kp_test_data/outfiles/log.txt"
 macro = "/Users/edc15/Desktop/kp_test_data/outfiles/macro.txt"
 
 niis = glob(direc + "/*.nii.gz")
@@ -19,22 +18,23 @@ for ids in unqids:
     dwi = os.path.join(direc, ids + "_dwi_warped_masked.nii.gz")
     adc = os.path.join(direc, ids + "_adc_warped_masked.nii.gz")
     if os.path.isfile(flair) and os.path.isfile(dwi) and os.path.isfile(adc):
-        dwi_list.append(dwi)
+        dwi_list.append(ids)
 
 scpt = list()
-scpt.append("filelist = newArray" + str(tuple(dwi_list)) + ";")
-scpt.append("for (i = 0; i < lengthOf(filelist); i++) {")
-scpt.append("open(filelist[i]);")
+scpt.append("basedir = \"/Users/edc15/Desktop/kp_test_data/outfiles/\";")
+scpt.append("idlist = newArray" + str(tuple(dwi_list)) + ";")
+scpt.append("for (i = 0; i < lengthOf(idlist); i++) {")
+scpt.append("open(basedir+idlist[i]+\"_dwi_warped_masked.nii.gz\");")
 scpt.append("run(\"In [+]\");")
 scpt.append("run(\"In [+]\");")
 scpt.append("run(\"In [+]\");")
 scpt.append("doCommand(\"Start Animation [\\\\]\");")
 scpt.append("Dialog.create(\"Stroke?\");")
-scpt.append("Dialog.addCheckbox(\"Is there a stroke?\", false);")
+scpt.append("Dialog.addCheckbox(\"Stroke?\", false);")
 scpt.append("Dialog.show;")
 scpt.append("bool = Dialog.getCheckbox();")
 scpt.append("if (bool) {")
-scpt.append("File.append(filelist[i], \"" + logfile + "\");")
+scpt.append("File.append(idlist[i], basedir+\"log.txt\");")
 scpt.append("};")
 scpt.append("run(\"Close All\");")
 scpt.append("};")
