@@ -40,7 +40,7 @@ def read_dicom_dir(dcm_zip, rep=False):
 # outside function code
 
 # Define global variables and required files and check that they exist
-reg_atlas = "/Users/edc15/Desktop/strokecode/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii"
+reg_atlas = "/Users/edc15/Desktop/strokecode/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz"
 dti_index = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55_index.txt"
 dti_acqp = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55_acqp.txt"
 dti_bvec = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55.bvec"
@@ -50,9 +50,9 @@ for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
         sys.exit("Could not find required file: " + file_path)
 
 # Define dicom zip directory and get a list of zip files from a dicom zip folder
-dcm_zip_dir = "/Users/edc15/Desktop/gbm/gbm_data/"
+dcm_zip_dir = "/Users/edc15/Desktop/idh_mutant_gbm/idh1_mutant_gbm/"
 zip_dcm = glob(dcm_zip_dir + "*.zip")
 
-# iterate through all dicom directories
-for dcmz in [zip_dcm[0]]:# #[zip_dcm[0]]:#
+# iterate through all dicom zip files
+for dcmz in zip_dcm:# #[zip_dcm[0]]:#
     serdict = read_dicom_dir(dcmz)

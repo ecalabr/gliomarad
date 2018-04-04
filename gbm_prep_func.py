@@ -26,12 +26,15 @@ import external_software.brats17_master.test_ecalabr as test_ecalabr
 def make_log(work_dir):
     if not os.path.isdir(work_dir):
         os.mkdir(work_dir)
-    # make log file name
+    # make log file name and erase contents if they already exist
     idno = os.path.basename(work_dir)
     log_file = os.path.join(work_dir, idno + "_log.txt")
+    open(log_file, 'w').close()
     # make logger
     logger = logging.getLogger("my_logger")
     logger.setLevel(logging.DEBUG) # should this be DEBUG?
+    # set all existing handlers to null to prevent duplication
+    logger.handlers = []
     # create file handler that logs debug and higher level messages
     fh = logging.FileHandler(log_file)
     fh.setLevel(logging.DEBUG)
@@ -52,7 +55,7 @@ def make_log(work_dir):
 # matching strings format is [[strs to match AND], OR [strs to match AND]
 def make_serdict(reg_atlas, dcm_dir):
     t1_str = [["t1"]]
-    t1_not = ["post", "gad", "flair"]
+    t1_not = ["post", "gad", "flair", "+c", " pg "]
     t2_str = [["t2"]]
     t2_not = ["flair", "optic", "motor", "track"]
     flair_str = [["ax", "flair"]]
@@ -61,7 +64,7 @@ def make_serdict(reg_atlas, dcm_dir):
     dwi_not = []
     adc_str = [["ax", "adc"], ["apparent", "diffusion"]]
     adc_not = ["exp"]
-    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"]]
+    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "]]
     t1gad_not = ["pre"]
     swi_str = [["isi"], ["swan"]]
     swi_not = ["ref", "filt", "pha", "rf"]
@@ -222,7 +225,7 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                 new_hdrs.append([])
                 srs_dict[srs].update({"hdrs": []})
                 new_series.append("None")
-                srs_dict[srs].update({"series": []})
+                srs_dict[srs].update({"series": "None"})
                 new_dirs.append("None")
                 srs_dict[srs].update({"dirs": []})
     return srs_dict
@@ -852,6 +855,11 @@ def tumor_seg(ser_dict):
     dcm_dir = ser_dict["info"]["dcmdir"]
     logger.info("SEGMENTING TUMOR VOLUMES:")
     seg_file = os.path.join(os.path.dirname(dcm_dir), idno + "_tumor_seg.nii.gz")
+    files = ["FLAIR", "T1", "T1gad", "T2"]
+    for item in files:
+        if not os.path.isfile(ser_dict[item]["filename"]) or not os.path.isfile(ser_dict[item]["filename_masked"]):
+            print("- missing file for segmentation")
+            return ser_dict
     if not os.path.isfile(seg_file):
         logger.info("- segmenting tumor")
         test_ecalabr.test(os.path.dirname(dcm_dir))
