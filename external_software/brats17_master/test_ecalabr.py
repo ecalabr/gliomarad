@@ -16,7 +16,7 @@ import time
 import os
 import sys
 import tensorflow as tf
-from tensorflow.contrib.data import Iterator
+# from tensorflow.contrib.data import Iterator
 from external_software.brats17_master.util.data_loader import *
 from external_software.brats17_master.util.data_process import *
 from external_software.brats17_master.util.train_test_func import *

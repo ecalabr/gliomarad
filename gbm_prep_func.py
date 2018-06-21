@@ -1,5 +1,5 @@
 import os
-import dicom
+import pydicom as dicom
 import nibabel as nib
 import numpy as np
 from glob import glob
@@ -55,10 +55,10 @@ def make_log(work_dir):
 # matching strings format is [[strs to match AND], OR [strs to match AND]
 def make_serdict(reg_atlas, dcm_dir):
     t1_str = [["t1"]]
-    t1_not = ["post", "gad", "flair", "+c", " pg "]
+    t1_not = ["post", " gad", "flair", "+", " pg ", "brainlab"]  # try to eliminate "Gad sag bravo T1 brainlab"
     t2_str = [["t2"]]
     t2_not = ["flair", "optic", "motor", "track"]
-    flair_str = [["ax", "flair"]]
+    flair_str = [["ax", "flair"]]  # do we always want ax here??
     flair_not = []
     dwi_str = [["ax", "dwi"]]
     dwi_not = []
@@ -134,7 +134,8 @@ def get_series(dicom_dir):
         fileout = open(series_file, 'w')
         for ind, item in enumerate(series):
             fileout.write("%s" % item)
-            fileout.write("%s" % "\t\t\t\t\t\t\t")
+            nspaces = 75 - len(item) # assume no series description longer than 75
+            fileout.write("%s" % " " * nspaces)
             fileout.write("%s" % "\tslthick=")
             try:
                 fileout.write("%s" % hdrs[ind].SliceThickness)
@@ -153,6 +154,11 @@ def get_series(dicom_dir):
             fileout.write("%s" % "\tslices=")
             try:
                 fileout.write("%s" % str(hdrs[ind].ImagesInAcquisition))
+            except Exception:
+                pass
+            fileout.write("%s" % "\tacqtime=")
+            try:
+                fileout.write("%s" % str(hdrs[ind].AcquisitionTime))
             except Exception:
                 pass
             fileout.write("%s" % "\n")
@@ -201,12 +207,16 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                     inds = inds[0]
                 else:  # if more than 1 inds, try to find the one with the most slices, otherwise just pick first one
                     for n, i in enumerate(inds,1):
-                        if n == 1: # pick first ind
+                        if n == 1: # pick first ind by default
                             keeper = i
                         if int(hdrs[i].ImagesInAcquisition) > int(hdrs[keeper].ImagesInAcquisition):
                             keeper = i # if another series has more images, pick it instead
-                        if int(hdrs[i].ImagesInAcquisition) == int(hdrs[keeper].ImagesInAcquisition) and "repeat" in series[i]:
-                            keeper = i # if another series has the same # imgs but contains "repeat", pick it instead
+                        # now handle matching series with the same number of images
+                        elif int(hdrs[i].ImagesInAcquisition) == int(hdrs[keeper].ImagesInAcquisition):
+                            if int(hdrs[i].AcquisitionTime) > int(hdrs[keeper].AcquisitionTime):
+                                keeper = i # if another ser with same #imgs was acquired later, keep it instead
+                            if any(example in series[i] for example in ["repeat", "redo"]):
+                                keeper = i # if another ser with same #imgs contains "repeat" in description, keep it
                     inds = keeper
             if inds or inds == 0:  # this handles 0 index matches
                 logger.info("- keeping series: " + series[inds])
@@ -243,7 +253,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
     converter = Dcm2niix()
     converter.inputs.compress = "y"
     converter.inputs.output_dir = os.path.dirname(dicom_dir)
-    converter.inputs.terminal_output = "allatonce"
+    converter.terminal_output = "allatonce"
     converter.anonymize = True
 
     # convert all subdirectories from dicom to nii
@@ -271,7 +281,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
     # print outputs of file conversion
     logger.info("CONVERTED FILES LIST:")
     for ser in strs_dict:
-        if "dicoms" in strs_dict[series].keys():
+        if "dicoms" in strs_dict[ser].keys():
             logger.info("- " + ser + " = " + strs_dict[ser]["filename"])
     return strs_dict
 
@@ -296,7 +306,7 @@ def affine_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]] * 2
     antsreg.inputs.sigma_units=['vox'] * 2
     antsreg.inputs.transforms=['Rigid', 'Affine']  # ['Rigid', 'Affine', 'SyN']
-    antsreg.inputs.terminal_output='none'
+    antsreg.terminal_output='none'
     antsreg.inputs.use_histogram_matching=True
     antsreg.inputs.write_composite_transform=True
     antsreg.inputs.initial_moving_transform_com=1  # use center of mass for initial transform
@@ -340,7 +350,7 @@ def diffeo_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.moving_image=moving_nii
     antsreg.inputs.output_transform_prefix=outprefix
     antsreg.inputs.num_threads=8
-    antsreg.inputs.terminal_output='none'
+    antsreg.terminal_output='none'
     antsreg.inputs.initial_moving_transform_com=1
     antsreg.inputs.winsorize_lower_quantile=0.005
     antsreg.inputs.winsorize_upper_quantile=0.995
@@ -352,7 +362,7 @@ def diffeo_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.write_composite_transform=True
     antsreg.inputs.metric=['MI', 'Mattes']
     antsreg.inputs.metric_weight=[1.0, 1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 500, 250, 0], [50, 50, 0]]
+    antsreg.inputs.number_of_iterations=[[1000, 500, 250, 50], [50, 50, 25]]
     antsreg.inputs.convergence_threshold=[1e-07, 1e-07]
     antsreg.inputs.convergence_window_size=[5, 5]
     antsreg.inputs.radius_or_number_of_bins=[32, 32]
@@ -390,7 +400,7 @@ def trans_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]]
     antsreg.inputs.sigma_units=['vox']
     antsreg.inputs.transforms=['Translation']  # ['Rigid', 'Affine', 'SyN']
-    antsreg.inputs.terminal_output='none'
+    antsreg.terminal_output='none'
     antsreg.inputs.use_histogram_matching=True
     antsreg.inputs.write_composite_transform=True
     antsreg.inputs.initial_moving_transform_com=1  # use center of mass for initial transform
@@ -398,7 +408,7 @@ def trans_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.winsorize_upper_quantile=0.995
     antsreg.inputs.metric=['Mattes']  # ['MI', 'MI', 'CC']
     antsreg.inputs.metric_weight=[1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 500, 100, 50]]  # [100, 70, 50, 20]
+    antsreg.inputs.number_of_iterations=[[1000, 500, 250, 50]]  # [100, 70, 50, 20]
     antsreg.inputs.convergence_threshold=[1e-07]
     antsreg.inputs.convergence_window_size=[10]
     antsreg.inputs.radius_or_number_of_bins=[32]  # 4
@@ -440,7 +450,7 @@ def ants_apply(moving_nii, reference_nii, interp, transform_list, work_dir, inve
             logger.info("- Creating warped image " + output_nii[ind])
             antsapply = ApplyTransforms()
             antsapply.inputs.dimension=3
-            antsapply.inputs.terminal_output='none'  # suppress terminal output
+            antsapply.terminal_output='none'  # suppress terminal output
             antsapply.inputs.input_image=mvng
             antsapply.inputs.reference_image=reference_nii
             antsapply.inputs.output_image=output_nii[ind]
@@ -457,7 +467,8 @@ def ants_apply(moving_nii, reference_nii, interp, transform_list, work_dir, inve
         output_nii = output_nii[0]
     return output_nii
 
-# register data together using reg_target as target, if its a file, use it, if not assume its a dict key for an already registered file
+# register data together using reg_target as target, if its a file, use it
+# if not assume its a dict key for an already registered file
 # there are multiple loops here because dicts dont preserve order, and we need it for some registration steps
 def reg_series(ser_dict, repeat=False):
     # logging
@@ -471,7 +482,7 @@ def reg_series(ser_dict, repeat=False):
             ser_dict[ser].update({"filename_reg": ser_dict[ser]["filename"]})
             ser_dict[ser].update({"transform": "None"})
             ser_dict[ser].update({"reg": False})
-        # if reg is True, then do the registration using translation, affine, nonlinear, or just applying existing transform
+        # if reg True, then do the registration using translation, affine, nonlin, or just applying existing transform
     # handle translation registration
     for ser in ser_dict:
         if ser_dict[ser]["reg"] == "trans":
@@ -564,7 +575,7 @@ def norm_niis(ser_dict, repeat=False):
                     im_stats = ImageStats()
                     im_stats.inputs.in_file=fn
                     im_stats.inputs.op_string="-R"
-                    im_stats.inputs.terminal_output="allatonce"
+                    im_stats.terminal_output="allatonce"
                     logger.debug(im_stats.cmdline)
                     result = im_stats.run()
                     minv, maxv = result.outputs.out_stat
@@ -573,7 +584,7 @@ def norm_niis(ser_dict, repeat=False):
                     norm.inputs.in_file=fn
                     norm.inputs.out_file=normname
                     norm.inputs.out_data_type="float"
-                    norm.inputs.terminal_output="none"
+                    norm.terminal_output="none"
                     norm.inputs.op_string="-sub %s -div %s" % (minv, (maxv-minv))
                     logger.debug(norm.cmdline)
                     norm.run()
@@ -613,7 +624,7 @@ def make_nii4d(ser_dict, repeat=False):
         merger.inputs.in_files = files
         merger.inputs.dimension = "t"
         merger.inputs.merged_file = nii4d
-        merger.inputs.terminal_output = "none"
+        merger.terminal_output = "none"
         logger.debug(merger.cmdline)
         merger.run()
     else:
@@ -673,7 +684,8 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
         b0 = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_b0.nii.gz")
         if not os.path.isfile(b0):
             logger.info("- separating b0 image from DTI")
-            fslroi = ExtractROI(in_file=dti_in, roi_file=b0, t_min=0, t_size=1, terminal_output="none")
+            fslroi = ExtractROI(in_file=dti_in, roi_file=b0, t_min=0, t_size=1)
+            fslroi.terminal_output = "none"
             logger.debug(fslroi.cmdline)
             fslroi.run()
         else:
@@ -709,7 +721,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
             eddy.inputs.in_bval = dti_bval
             eddy.inputs.use_cuda = True
             eddy.inputs.repol = True
-            eddy.inputs.terminal_output = "none"
+            eddy.terminal_output = "none"
             try:
                 logger.debug(eddy.cmdline)
                 _ = eddy.run()
@@ -727,10 +739,10 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
             dti.inputs.bvals = dti_bval
             dti.inputs.base_name = dti_out
             dti.inputs.mask = dti_mask
-            dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
-            dti.inputs.terminal_output = "none"
+            # dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
+            dti.terminal_output = "none"
             dti.inputs.save_tensor = True
-            dti.inputs.ignore_exception = True  # for some reason running though nipype causes error at end
+            # dti.ignore_exception = True  # for some reason running though nipype causes error at end
             try:
                 logger.debug(dti.cmdline)
                 _ = dti.run()
@@ -740,19 +752,23 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
                     logger.debug(dti.cmdline)
                     _ = dti.run()
             except Exception:
-                logger.info("- could not process DTI")
+                if not os.path.isfile(fa_out):
+                    logger.info("- could not process DTI")
+                else:
+                    logger.info("- DTI processing completed")
         else:
             if os.path.isfile(fa_out):
                 logger.info("- DTI outputs already exist with prefix " + dti_out)
-        # add DTI to series_dict for registration (note, DTI is masked at this point)
-        ser_dict.update({"DTI_FA": {"filename": dti_out + "_FA.nii.gz", "reg": "DTI_b0"}})
-        ser_dict.update({"DTI_MD": {"filename": dti_out + "_MD.nii.gz", "reg": "DTI_b0", "no_norm": True}})
-        ser_dict.update({"DTI_L1": {"filename": dti_out + "_L1.nii.gz", "reg": "DTI_b0", "no_norm": True}})
-        ser_dict.update({"DTI_L2": {"filename": dti_out + "_L2.nii.gz", "reg": "DTI_b0", "no_norm": True}})
-        ser_dict.update({"DTI_L3": {"filename": dti_out + "_L3.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+        # if DTI processing completed, add DTI to series_dict for registration (note, DTI is masked at this point)
+        if os.path.isfile(fa_out):
+            ser_dict.update({"DTI_FA": {"filename": dti_out + "_FA.nii.gz", "reg": "DTI_b0"}})
+            ser_dict.update({"DTI_MD": {"filename": dti_out + "_MD.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+            ser_dict.update({"DTI_L1": {"filename": dti_out + "_L1.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+            ser_dict.update({"DTI_L2": {"filename": dti_out + "_L2.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+            ser_dict.update({"DTI_L3": {"filename": dti_out + "_L3.nii.gz", "reg": "DTI_b0", "no_norm": True}})
     return ser_dict
 
-# make mask based on t2 and flair and apply to all other images
+# make mask based on t1gad and flair and apply to all other images
 def brain_mask(ser_dict):
     # logging
     logger = logging.getLogger("my_logger")
@@ -762,7 +778,7 @@ def brain_mask(ser_dict):
     dcm_dir = ser_dict["info"]["dcmdir"]
     # BET brain masking based on combination of t2 and t1
     logger.info("BRAIN MASKING:")
-    t2mask = "none"
+    t1gadmask = "none"
     flairmask = "none"
     # make brain mask based on flair
     if os.path.isfile(ser_dict["FLAIR"]["filename"]):
@@ -775,47 +791,47 @@ def brain_mask(ser_dict):
             bet.inputs.mask = True
             bet.inputs.no_output = True
             bet.inputs.frac = 0.5
-            bet.inputs.terminal_output = "none"
+            bet.terminal_output = "none"
             logger.debug(bet.cmdline)
             _ = bet.run()
         else:
             logger.info("- FLAIR brain mask already exists at " + flairmask)
     else:
         logger.info("- could not find FLAIR, skipping FLAIR brain masking")
-    # make brain mask based on T2
-    if os.path.isfile(ser_dict["T2"]["filename"]):
-        t2mask = os.path.join(os.path.dirname(dcm_dir), idno + "_T2_w_mask.nii.gz")
-        if not os.path.isfile(t2mask):
-            logger.info("- making brain mask based on T2")
+    # make another brain mask based on T1gad
+    if os.path.isfile(ser_dict["T1gad"]["filename"]):
+        t1gadmask = os.path.join(os.path.dirname(dcm_dir), idno + "_T1gad_w_mask.nii.gz")
+        if not os.path.isfile(t1gadmask):
+            logger.info("- making brain mask based on T1gad")
             bet = BET()
-            bet.inputs.in_file = ser_dict["T2"]["filename_reg"]
-            bet.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), idno + "_T2_w")
+            bet.inputs.in_file = ser_dict["T1gad"]["filename_reg"]
+            bet.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), idno + "_T1gad_w")
             bet.inputs.mask = True
             bet.inputs.no_output = True
-            bet.inputs.terminal_output = "none"
+            bet.terminal_output = "none"
             logger.debug(bet.cmdline)
             _ = bet.run()
         else:
-            logger.info("- T2 brain mask already exists at " + t2mask)
+            logger.info("- T1gad brain mask already exists at " + t1gadmask)
     else:
-        logger.info("- could not find T2, skipping FLAIR brain masking")
+        logger.info("- could not find T1gad, skipping T1gad brain masking")
     # combine brain masks if both exist, if not use one or other
-    if os.path.isfile(t2mask) and os.path.isfile(flairmask):
+    if os.path.isfile(t1gadmask) and os.path.isfile(flairmask):
         mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
         if not os.path.isfile(mask):
-            logger.info("- making combined T2 and Flair brain mask at " + mask)
+            logger.info("- making combined T1gad and Flair brain mask at " + mask)
             mask_cmd = ApplyMask()
-            mask_cmd.inputs.in_file = t2mask
+            mask_cmd.inputs.in_file = t1gadmask
             mask_cmd.inputs.mask_file = flairmask
             mask_cmd.inputs.out_file = mask
-            mask_cmd.inputs.terminal_output = "none"
+            mask_cmd.terminal_output = "none"
             mask_cmd.inputs.output_datatype = "input"
             logger.debug(mask_cmd.cmdline)
             _ = mask_cmd.run()
         else:
-            logger.info("- combined T2 and FLAIR brain mask already exists at " + mask)
-    elif os.path.isfile(t2mask):
-        mask = t2mask
+            logger.info("- combined T1gad and FLAIR brain mask already exists at " + mask)
+    elif os.path.isfile(t1gadmask):
+        mask = t1gadmask
     elif os.path.isfile(flairmask):
         mask = flairmask
     else:
@@ -823,26 +839,29 @@ def brain_mask(ser_dict):
     # now apply to all other images if mask exists
     if os.path.isfile(mask):
         for sers in ser_dict:
-            # os.path.join(os.path.dirname(dcm_dir), idno + "_" + sers + "_wm.nii.gz")
-            ser_masked = ser_dict[sers]["filename_reg"].rsplit(".nii", 1)[0] + "m.nii.gz"
-            if not os.path.isfile(ser_masked) and os.path.isfile(ser_dict[sers]["filename_reg"]):
-                # check that warping was actually done
-                if not ser_dict[sers]["filename_reg"] == ser_dict[sers]["filename"]:
-                    logger.info("- masking " + ser_dict[sers]["filename_reg"])
-                    # apply mask using fsl maths
-                    mask_cmd = ApplyMask()
-                    mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
-                    mask_cmd.inputs.mask_file = mask
-                    mask_cmd.inputs.out_file = ser_masked
-                    mask_cmd.inputs.terminal_output = "none"
-                    logger.debug(mask_cmd.cmdline)
-                    _ = mask_cmd.run()
+            if "filename_reg" in ser_dict[sers]:  # check that filename_reg entry exists
+                os.path.join(os.path.dirname(dcm_dir), idno + "_" + sers + "_wm.nii.gz")
+                ser_masked = ser_dict[sers]["filename_reg"].rsplit(".nii", 1)[0] + "m.nii.gz"
+                if not os.path.isfile(ser_masked) and os.path.isfile(ser_dict[sers]["filename_reg"]):
+                    # check that warping was actually done or not
+                    if not ser_dict[sers]["filename_reg"] == ser_dict[sers]["filename"]:
+                        logger.info("- masking " + ser_dict[sers]["filename_reg"])
+                        # apply mask using fsl maths
+                        mask_cmd = ApplyMask()
+                        mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
+                        mask_cmd.inputs.mask_file = mask
+                        mask_cmd.inputs.out_file = ser_masked
+                        mask_cmd.terminal_output = "none"
+                        logger.debug(mask_cmd.cmdline)
+                        _ = mask_cmd.run()
+                        ser_dict[sers].update({"filename_masked": ser_masked})
+                elif os.path.isfile(ser_masked):
+                    logger.info("- masked file already exists for " + sers + " at " + ser_masked)
                     ser_dict[sers].update({"filename_masked": ser_masked})
-            elif os.path.isfile(ser_masked):
-                logger.info("- masked file already exists for " + sers + " at " + ser_masked)
-                ser_dict[sers].update({"filename_masked": ser_masked})
+                else:
+                    logger.info("- skipping masking for " + sers + " as file does not exist")
             else:
-                logger.info("- skipping masking for " + sers + " as file does not exist")
+                logger.info("- no filename_reg entry exists for series " + sers)
     return ser_dict
 
 # create tumor segmentation
@@ -868,7 +887,7 @@ def tumor_seg(ser_dict):
         hdrfix = CopyGeom()
         hdrfix.inputs.dest_file = seg_file
         hdrfix.inputs.in_file = ser_dict["FLAIR"]["filename_masked"]
-        hdrfix.inputs.terminal_output = "none"
+        hdrfix.terminal_output = "none"
         logger.debug(hdrfix.cmdline)
         _ = hdrfix.run()
     else:

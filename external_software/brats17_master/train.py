@@ -17,7 +17,7 @@ import time
 import os
 import sys
 import tensorflow as tf
-from tensorflow.contrib.data import Iterator
+# from tensorflow.contrib.data import Iterator
 from tensorflow.contrib.layers.python.layers import regularizers
 from niftynet.layer.loss_segmentation import LossFunction
 from external_software.brats17_master.util.data_loader import *

@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 from gbm_prep_func import *
 
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
@@ -27,7 +28,7 @@ def read_dicom_dir(dcm_zip, rep=False):
     series_dict = brain_mask(series_dict)
     series_dict = norm_niis(series_dict)
     series_dict = make_nii4d(series_dict)
-    series_dict = tumor_seg(series_dict)
+    # series_dict = tumor_seg(series_dict) # skipping for now... intermittantly working
     np.save(os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata.npy"), series_dict)
 
     return series_dict
@@ -39,20 +40,24 @@ def read_dicom_dir(dcm_zip, rep=False):
 #######################
 # outside function code
 
+
 # Define global variables and required files and check that they exist
-reg_atlas = "/Users/edc15/Desktop/strokecode/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz"
-dti_index = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55_index.txt"
-dti_acqp = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55_acqp.txt"
-dti_bvec = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55.bvec"
-dti_bval = "/Users/edc15/Desktop/gbm/gbm_data/DTI_files/GE_hardi_55.bval"
+reg_atlas = "/media/ecalabr/data/support_files/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz"
+dti_index = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55_index.txt"
+dti_acqp = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55_acqp.txt"
+dti_bvec = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55.bvec"
+dti_bval = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55.bval"
 for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
     if not os.path.isfile(file_path):
         sys.exit("Could not find required file: " + file_path)
 
 # Define dicom zip directory and get a list of zip files from a dicom zip folder
-dcm_zip_dir = "/Users/edc15/Desktop/idh_mutant_gbm/idh1_mutant_gbm/"
+dcm_zip_dir = "/media/ecalabr/data/idh_wt_gbm/"
 zip_dcm = glob(dcm_zip_dir + "*.zip")
+zip_dcm = sorted(zip_dcm, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))  # sorts on accession no
 
 # iterate through all dicom zip files
-for dcmz in zip_dcm:# #[zip_dcm[0]]:#
+zip_dcm = zip_dcm[46:]  #0:36 done
+for i, dcmz in enumerate(zip_dcm):
     serdict = read_dicom_dir(dcmz)
+    print("COMPLETED # " + str(i) + " of " + str(len(zip_dcm)))
