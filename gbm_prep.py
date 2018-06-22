@@ -1,5 +1,4 @@
 import sys
-import numpy as np
 from gbm_prep_func import *
 
 # wrapper function for reading a complete dicom directory with/without registration to one of the images

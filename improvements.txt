@@ -1,0 +1,1 @@
+move all tumor segmentation to the end so the model doesnt have to be loaded each time

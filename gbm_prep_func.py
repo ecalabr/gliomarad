@@ -171,8 +171,8 @@ def substr_list(strings, substrs, substrnot):
     logger = logging.getLogger("my_logger")
     # define variables
     inds = []
-
-    # for each input filename
+    # for each input series description
+    number = 1
     for ind, string in enumerate(strings, 0):
         # for each substr list in substrs
         for substrlist in substrs:
@@ -180,8 +180,8 @@ def substr_list(strings, substrs, substrnot):
             if all(ss.lower() in string.lower() for ss in substrlist) \
                     and not any(ssn.lower() in string.lower() for ssn in substrnot):
                 inds.append(ind)
-                logger.info("- matched series: " + string)
-
+                logger.info("- matched series: " + string + " (" + str(number) + ")")
+                number = number + 1 # step the number of matching series
     return inds
 
 # get filtered series list
@@ -195,13 +195,13 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
     new_dirs = []
     # for each output, find match and append to new list for conversion
     keeper = []
+    number = []
     for srs in srs_dict:
         # only search if terms are provided
         if "or" in srs_dict[srs].keys() and "not" in srs_dict[srs].keys():
             logger.info("FINDING SERIES: " + srs)
             inds = substr_list(series, srs_dict[srs]["or"], srs_dict[srs]["not"])
-            # if there are inds of matches, pick the first match in the axial orientation and continue
-            # if no axial reformats, then pick another orientation
+            # if there are inds of matches, pick the first match by default and check for more slices or repeat series
             if inds:  # if only 1 ind, then use it
                 if len(inds) == 1:
                     inds = inds[0]
@@ -209,17 +209,21 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                     for n, i in enumerate(inds,1):
                         if n == 1: # pick first ind by default
                             keeper = i
+                            number = n
                         if int(hdrs[i].ImagesInAcquisition) > int(hdrs[keeper].ImagesInAcquisition):
                             keeper = i # if another series has more images, pick it instead
+                            number = n
                         # now handle matching series with the same number of images
                         elif int(hdrs[i].ImagesInAcquisition) == int(hdrs[keeper].ImagesInAcquisition):
                             if int(hdrs[i].AcquisitionTime) > int(hdrs[keeper].AcquisitionTime):
                                 keeper = i # if another ser with same #imgs was acquired later, keep it instead
+                                number = n
                             if any(example in series[i] for example in ["repeat", "redo"]):
                                 keeper = i # if another ser with same #imgs contains "repeat" in description, keep it
+                                number = n
                     inds = keeper
             if inds or inds == 0:  # this handles 0 index matches
-                logger.info("- keeping series: " + series[inds])
+                logger.info("- keeping series: " + series[inds] + " (" + str(number) + ")")
                 new_dicoms.append(dicoms[inds])
                 srs_dict[srs].update({"dicoms": dicoms[inds]})
                 new_hdrs.append(hdrs[inds])
@@ -281,7 +285,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
     # print outputs of file conversion
     logger.info("CONVERTED FILES LIST:")
     for ser in strs_dict:
-        if "dicoms" in strs_dict[ser].keys():
+        if "dicoms" in strs_dict[ser] and "filename" in strs_dict[ser] and os.path.isfile(strs_dict[ser]["filename"]):
             logger.info("- " + ser + " = " + strs_dict[ser]["filename"])
     return strs_dict
 
