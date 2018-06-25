@@ -48,7 +48,11 @@ class DataLoader():
         """
         # use pre-defined patient names
         if(self.data_names is not None):
-            patient_names = [self.data_names]
+            if not isinstance(self.data_names, list):
+                patient_names = [self.data_names]
+            else:
+                patient_names = self.data_names
+            # print(patient_names)
         return patient_names
 
     def __load_one_volume(self, patient_name, mod):

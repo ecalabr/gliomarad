@@ -5,6 +5,7 @@ import numpy as np
 from glob import glob
 import subprocess
 import logging
+import yaml
 from nipype.interfaces.dcm2nii import Dcm2niix
 from nipype.interfaces.ants import Registration
 from nipype.interfaces.ants import ApplyTransforms
@@ -138,7 +139,7 @@ def get_series(dicom_dir):
             fileout.write("%s" % " " * nspaces)
             fileout.write("%s" % "\tslthick=")
             try:
-                fileout.write("%s" % hdrs[ind].SliceThickness)
+                fileout.write("%s" % str(hdrs[ind].SliceThickness).rstrip("0").rstrip("."))
             except Exception:
                 pass
             fileout.write("%s" % "\tacqmtx=")
@@ -174,14 +175,20 @@ def substr_list(strings, substrs, substrnot):
     # for each input series description
     number = 1
     for ind, string in enumerate(strings, 0):
+        match = False
         # for each substr list in substrs
         for substrlist in substrs:
             # if all substrs match and no NOT substrs match then append to matches
             if all(ss.lower() in string.lower() for ss in substrlist) \
                     and not any(ssn.lower() in string.lower() for ssn in substrnot):
                 inds.append(ind)
-                logger.info("- matched series: " + string + " (" + str(number) + ")")
-                number = number + 1 # step the number of matching series
+                match = True
+        if match:
+            logger.info("- matched series: " + string + " (" + str(number) + ")")
+            number = number + 1 # step the number of matching series
+    # return only unique inds if inds is not empty
+    if inds:
+        inds = list(set(inds)) # returns only unique values for inds
     return inds
 
 # get filtered series list
@@ -195,33 +202,35 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
     new_dirs = []
     # for each output, find match and append to new list for conversion
     keeper = []
-    number = []
+    number = 1 # series number chosen to report in the logger info
     for srs in srs_dict:
         # only search if terms are provided
         if "or" in srs_dict[srs].keys() and "not" in srs_dict[srs].keys():
             logger.info("FINDING SERIES: " + srs)
-            inds = substr_list(series, srs_dict[srs]["or"], srs_dict[srs]["not"])
+            inds = substr_list(series, srs_dict[srs]["or"], srs_dict[srs]["not"]) # calls above function
             # if there are inds of matches, pick the first match by default and check for more slices or repeat series
             if inds:  # if only 1 ind, then use it
                 if len(inds) == 1:
                     inds = inds[0]
                 else:  # if more than 1 inds, try to find the one with the most slices, otherwise just pick first one
-                    for n, i in enumerate(inds,1):
-                        if n == 1: # pick first ind by default
+                    for i in inds:
+                        if inds.index(i) == 0: # pick first ind by default (this method works bc inds is unique set)
                             keeper = i
-                            number = n
-                        if int(hdrs[i].ImagesInAcquisition) > int(hdrs[keeper].ImagesInAcquisition):
-                            keeper = i # if another series has more images, pick it instead
-                            number = n
-                        # now handle matching series with the same number of images
-                        elif int(hdrs[i].ImagesInAcquisition) == int(hdrs[keeper].ImagesInAcquisition):
-                            if int(hdrs[i].AcquisitionTime) > int(hdrs[keeper].AcquisitionTime):
-                                keeper = i # if another ser with same #imgs was acquired later, keep it instead
-                                number = n
-                            if any(example in series[i] for example in ["repeat", "redo"]):
-                                keeper = i # if another ser with same #imgs contains "repeat" in description, keep it
-                                number = n
-                    inds = keeper
+                        if hasattr(hdrs[i], "ImagesInAcquisition") and hasattr(hdrs[keeper], "ImagesInAcquisition"):
+                            # if another series has more images, pick it instead
+                            if int(hdrs[i].ImagesInAcquisition) > int(hdrs[keeper].ImagesInAcquisition):
+                                keeper = i
+                            # if another series has the same # images:
+                            elif int(hdrs[i].ImagesInAcquisition) == int(hdrs[keeper].ImagesInAcquisition):
+                                # and was acquired later, keep it instead
+                                if hasattr(hdrs[i], "AcquisitionTime") and hasattr(hdrs[keeper], "AcquisitionTime"):
+                                    if int(hdrs[i].AcquisitionTime) > int(hdrs[keeper].AcquisitionTime):
+                                        keeper = i
+                                # and description contains "repeat" or "redo", keep it instead
+                                if any(example in series[i] for example in ["repeat", "redo"]):
+                                    keeper = i
+                    number = inds.index(keeper) + 1 # number of index chosen (starting at 1 for index 0)
+                    inds = keeper # replace inds with just the keeper index
             if inds or inds == 0:  # this handles 0 index matches
                 logger.info("- keeping series: " + series[inds] + " (" + str(number) + ")")
                 new_dicoms.append(dicoms[inds])
@@ -519,10 +528,11 @@ def reg_series(ser_dict, repeat=False):
             else:
                 movingr = ser_dict[ser]["filename"]
                 movinga = ser_dict[ser]["filename"]
-            transforms = affine_reg(movingr, template, os.path.dirname(dcm_dir), repeat)
-            niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
-            ser_dict[ser].update({"filename_reg": niiout})
-            ser_dict[ser].update({"transform": transforms})
+            if os.path.isfile(movingr) and os.path.isfile(template): # make sure template and moving files exist
+                transforms = affine_reg(movingr, template, os.path.dirname(dcm_dir), repeat)
+                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                ser_dict[ser].update({"filename_reg": niiout})
+                ser_dict[ser].update({"transform": transforms})
     # handle diffeo registration
     for ser in ser_dict:
         if ser_dict[ser]["reg"] == "diffeo":
@@ -537,10 +547,11 @@ def reg_series(ser_dict, repeat=False):
             else:
                 movingr = ser_dict[ser]["filename"]
                 movinga = ser_dict[ser]["filename"]
-            transforms = diffeo_reg(movingr, template, os.path.dirname(dcm_dir), repeat)
-            niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
-            ser_dict[ser].update({"filename_reg": niiout})
-            ser_dict[ser].update({"transform": transforms})
+            if os.path.isfile(movingr) and os.path.isfile(template): # check that all files exist prior to reg
+                transforms = diffeo_reg(movingr, template, os.path.dirname(dcm_dir), repeat)
+                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                ser_dict[ser].update({"filename_reg": niiout})
+                ser_dict[ser].update({"transform": transforms})
     # handle applying an existing transform (assumes reg entry is the key for another series' transform)
     for ser in ser_dict:
         try:
@@ -616,23 +627,26 @@ def make_nii4d(ser_dict, repeat=False):
         if "filename_norm" in ser_dict[srs]: # normalized files only, others ignored
             files.append(ser_dict[srs]["filename_norm"])
             logger.info("- adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
-    # get dirname from first normalized image, make nii4d name from this
-    bdir = os.path.dirname(files[0])
-    nii4d = os.path.join(bdir, idno + "_nii4d.nii.gz")
-    # if nii4d doesn't exist, make it
-    if not os.path.isfile(nii4d) or repeat:
-        logger.info("- creating 4D nii at " + nii4d)
-        #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
-        #os.system(nii4dcmd)
-        merger = Merge()
-        merger.inputs.in_files = files
-        merger.inputs.dimension = "t"
-        merger.inputs.merged_file = nii4d
-        merger.terminal_output = "none"
-        logger.debug(merger.cmdline)
-        merger.run()
+    if files and len(files)>1: # only attempt work if normalized files exist and there is more than 1
+        # get dirname from first normalized image, make nii4d name from this
+        bdir = os.path.dirname(files[0])
+        nii4d = os.path.join(bdir, idno + "_nii4d.nii.gz")
+        # if nii4d doesn't exist, make it
+        if not os.path.isfile(nii4d) or repeat:
+            logger.info("- creating 4D nii at " + nii4d)
+            #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
+            #os.system(nii4dcmd)
+            merger = Merge()
+            merger.inputs.in_files = files
+            merger.inputs.dimension = "t"
+            merger.inputs.merged_file = nii4d
+            merger.terminal_output = "none"
+            logger.debug(merger.cmdline)
+            merger.run()
+        else:
+            logger.info("- 4D Nii already exists at " + nii4d)
     else:
-        logger.info("- 4D Nii already exists at " + nii4d)
+        logger.info("- not enough files to make 4D Nii")
     return ser_dict
 
 # split b0 and dwi and discard b0 (if necessary)
@@ -801,15 +815,16 @@ def brain_mask(ser_dict):
         else:
             logger.info("- FLAIR brain mask already exists at " + flairmask)
     else:
-        logger.info("- could not find FLAIR, skipping FLAIR brain masking")
+        logger.info("- could not find registered FLAIR, skipping FLAIR brain masking")
     # make another brain mask based on T1gad
-    if os.path.isfile(ser_dict["T1gad"]["filename"]):
+    t1gadregname = os.path.join(os.path.dirname(dcm_dir), idno + "_T1gad_w.nii.gz")
+    if os.path.isfile(ser_dict["T1gad"]["filename"]) and os.path.isfile(t1gadregname):
         t1gadmask = os.path.join(os.path.dirname(dcm_dir), idno + "_T1gad_w_mask.nii.gz")
         if not os.path.isfile(t1gadmask):
             logger.info("- making brain mask based on T1gad")
             bet = BET()
             bet.inputs.in_file = ser_dict["T1gad"]["filename_reg"]
-            bet.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), idno + "_T1gad_w")
+            bet.inputs.out_file = t1gadregname
             bet.inputs.mask = True
             bet.inputs.no_output = True
             bet.terminal_output = "none"
@@ -818,7 +833,7 @@ def brain_mask(ser_dict):
         else:
             logger.info("- T1gad brain mask already exists at " + t1gadmask)
     else:
-        logger.info("- could not find T1gad, skipping T1gad brain masking")
+        logger.info("- could not find registered T1gad, skipping T1gad brain masking")
     # combine brain masks if both exist, if not use one or other
     if os.path.isfile(t1gadmask) and os.path.isfile(flairmask):
         mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
@@ -862,6 +877,8 @@ def brain_mask(ser_dict):
                 elif os.path.isfile(ser_masked):
                     logger.info("- masked file already exists for " + sers + " at " + ser_masked)
                     ser_dict[sers].update({"filename_masked": ser_masked})
+                elif sers == "info":
+                    pass
                 else:
                     logger.info("- skipping masking for " + sers + " as file does not exist")
             else:
@@ -897,3 +914,30 @@ def tumor_seg(ser_dict):
     else:
         logger.info("- tumor segmentation file aready exists at " + seg_file)
     return ser_dict
+
+# print and save series dict
+def print_series_dict(series_dict):
+    dcm_dir = series_dict["info"]["dcmdir"]
+    # first save as a numpy file
+    np.save(os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata.npy"), series_dict)
+    # now save a human readable format
+    # first need to remove binary entries from dict, also will only print the first dicom path from the list
+    def remove_nonstr_from_dict(a_dict):
+        new_dict = {}
+        for k, v in a_dict.items():
+            if isinstance(v, dict):
+                v = remove_nonstr_from_dict(v)
+            if isinstance(v, (int, long, float, complex, str, list, dict)):
+                if k == "dicoms" and isinstance(v, list) and v: # ensure dicoms is a list and is not empty
+                    new_dict[k] = v[0]
+                else:
+                    new_dict[k] = v
+        return new_dict
+    filename_out = os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata_HR.txt")
+    # json attempt fails
+    #with open(filename_out, 'w') as f:
+    #    f.write("%s" % json.dumps(series_dict, indent=2, sort_keys=True))
+    # yaml attempt works but ugly, need to remove non-string entries in nested dict somehow
+    with open(filename_out, 'w') as f:
+        f.write("%s" % yaml.dump(remove_nonstr_from_dict(series_dict)))
+    return series_dict

@@ -1,15 +1,18 @@
 import sys
+import time
 from gbm_prep_func import *
 
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
 def read_dicom_dir(dcm_zip, rep=False):
     """
-    This function takes a DICOM directory for a single patient study, and converts all appropriate series to NIFTI.
-    It will also register any/all datasets to a given target.
+    This function takes a directory containing UCSF air formatted dicom zip files, creates subdirectories for each one,
+    and converts all relevant files to nifti format. It also processes DTI, makes brain masks, registers the different
+    series to the same space, and finally creates a 4D nifti to review all of the data.
+    It will also perform 3 compartment tumor segmentation, though this is a work in progress at the moment
     :param dcm_zip: the full path to the dicom zipfile as a string
     :param rep: boolean, repeat work or not
-    :return: returns the path to a metadata file dict that contains lots of relevant info
-    Note this forces axial plane image orientation. To change this, edit the filter_series function
+    :return: returns the path to a metadata file dict (as *.npy file) that contains lots of relevant info
+    Currently this does not force any specific image orientation. To change this, edit the filter_series function
     """
 
     # Pipeline step by step
@@ -27,8 +30,8 @@ def read_dicom_dir(dcm_zip, rep=False):
     series_dict = brain_mask(series_dict)
     series_dict = norm_niis(series_dict)
     series_dict = make_nii4d(series_dict)
-    # series_dict = tumor_seg(series_dict) # skipping for now... intermittantly working
-    np.save(os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata.npy"), series_dict)
+    # series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
+    series_dict = print_series_dict(series_dict)
 
     return series_dict
 
@@ -56,7 +59,11 @@ zip_dcm = glob(dcm_zip_dir + "*.zip")
 zip_dcm = sorted(zip_dcm, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))  # sorts on accession no
 
 # iterate through all dicom zip files
-zip_dcm = zip_dcm[46:]  #0:36 done
-for i, dcmz in enumerate(zip_dcm):
+zip_dcm = zip_dcm[68:] #[46:]  #0:36 done
+if not isinstance(zip_dcm, list):
+    zip_dcm = [zip_dcm]
+for i, dcmz in enumerate(zip_dcm, 1):
+    start_t = time.time()
     serdict = read_dicom_dir(dcmz)
-    print("COMPLETED # " + str(i) + " of " + str(len(zip_dcm)))
+    elapsed_t = time.time() - start_t
+    print("\nCOMPLETED # "+str(i)+" of "+str(len(zip_dcm))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")

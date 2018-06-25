@@ -30,10 +30,15 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def test(dir_list):
     if not isinstance(dir_list, list):
         dir_list = [dir_list]
-    data_rt = os.path.dirname(dir_list[0])
+    # get data root dir with handling of possible trailing slash
+    tmp = dir_list[0]
+    if tmp[-1] == "/":
+        tmp = tmp[:-1]
+    data_rt = os.path.dirname(tmp)
     save_dr = []
     data_nm = []
     idno = []
+    completed = 0 # number of tumors with existing segmentations
     modality = ["FLAIR_wm", "T1_wm", "T1gad_wm", "T2_wm"]
     for i, direc in enumerate(dir_list):
         if direc[-1] == "/":
@@ -41,13 +46,19 @@ def test(dir_list):
         idno_tmp = os.path.basename(direc)
         # only process if all required files exist
         if all(os.path.isfile(os.path.join(direc, idno_tmp + "_"+mod+".nii.gz")) for mod in modality):
-            data_nm.append(idno_tmp) # idno is dirname in this case
-            save_dr.append(direc)
-            idno.append(idno_tmp)
-    print("Segmenting tumors for the following directories:")
-    for path in data_nm:
-        print(os.path.join(data_rt, path))
-    print(str(len(data_nm)) + " of " + str(len(dir_list)))
+            # do not repeat if tumor seg file already exists
+            if not os.path.isfile(os.path.join(direc, idno_tmp + "_tumor_seg.nii.gz")):
+                data_nm.append(idno_tmp) # idno is dirname in this case
+                save_dr.append(direc)
+                idno.append(idno_tmp)
+            else:
+                completed = completed + 1
+    print("Segmenting tumors for the following directories >> out file:")
+    for i, path in enumerate(data_nm):
+        print(os.path.join(data_rt, path) + " >> " + os.path.join(save_dr[i], idno[i] + "_tumor_seg.nii.gz"))
+    print("This will process " + str(len(data_nm)) + " of " + str(len(dir_list)) + " total directories.")
+    num_incmpl = len(dir_list) - (len(data_nm) + completed) # number of studies without all required images
+    print(str(completed)+" already have existing segmentations and "+str(num_incmpl)+" lack required images.")
     # yes no query
     valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
     unanswered = True
@@ -431,6 +442,7 @@ def test(dir_list):
     margin = config_test.get('roi_patch_margin', 5)
 
     for i in range(image_num):
+        start_t = time.time()
         [temp_imgs, temp_weight, temp_name, temp_bbox, temp_size] = dataloader.get_image_data_with_name(i)
         t0 = time.time()
         # 5.1, test of 1st network
@@ -571,7 +583,10 @@ def test(dir_list):
         test_time.append(time.time() - t0)
         final_label = np.zeros(temp_size, np.int16)
         final_label = set_ND_volume_roi_with_bounding_box_range(final_label, temp_bbox[0], temp_bbox[1], out_label)
-        save_array_as_nifty_volume(final_label, os.path.join(save_dir[i], idno[i] + "_tumor_seg.nii.gz"))
+        seg_outpath = os.path.join(save_dir[i], idno[i] + "_tumor_seg.nii.gz")
+        print("Saving output " + str(i+1) + " of " + str(image_num) + " to: " + seg_outpath)
+        save_array_as_nifty_volume(final_label, seg_outpath)
+        print("- segmentation time = " + str(time.time() - start_t) + " seconds")
         # print(temp_name)
     # test_time = np.asarray(test_time)
     # print('test time', test_time.mean())

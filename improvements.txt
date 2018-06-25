@@ -1,1 +1,13 @@
-move all tumor segmentation to the end so the model doesnt have to be loaded each time
+implement integration of - move all tumor segmentation to the end so the model doesnt have to be loaded each time (attempted)
+consider a way to prevent log file from being overwritten if it completed successfully (not sure how to start)
+dont repeat human readble and numpy metadata outputs if they already exist
+incorporate topup DTI files when/where they exist
+"gad t1" named series are not currently converted images - need to redo masking, nii4d, and tumor seg on these studies as well
+make nets for image segmentation and synthetic CT
+
+
+test fix issue where matching series names are repeated instead of using each unique name
+
+test series matching numbering output to logger - CHECK
+test series list numbering printing to series_list.txt (may need to delete old versions) - CHECK
+test human readable series dict outputs - CHECK
