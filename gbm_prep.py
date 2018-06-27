@@ -54,12 +54,12 @@ for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
         sys.exit("Could not find required file: " + file_path)
 
 # Define dicom zip directory and get a list of zip files from a dicom zip folder
-dcm_zip_dir = "/media/ecalabr/data/idh_wt_gbm/"
+dcm_zip_dir = "/media/ecalabr/data/idh_mt_gbm/"
 zip_dcm = glob(dcm_zip_dir + "*.zip")
 zip_dcm = sorted(zip_dcm, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))  # sorts on accession no
 
 # iterate through all dicom zip files
-zip_dcm = zip_dcm[68:] #[46:]  #0:36 done
+zip_dcm = zip_dcm #[46:]  #0:36 done
 if not isinstance(zip_dcm, list):
     zip_dcm = [zip_dcm]
 for i, dcmz in enumerate(zip_dcm, 1):

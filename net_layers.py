@@ -73,33 +73,54 @@ def fixed_padding(inputs, kernel_size, strides, data_format="channels_last"):
     Args:
         inputs: a tensorflow tensor - the input data tensor
         kernel_size: an int or tuple/list - the size of the convolution kernel
-        strides: a list - strides, determines which dimensions to pad, must have length == input dimensions (-batchsize)
+        strides: a list or tuple of length 2 or 3 - the strides used for convolution
+            determines which dimensions to pad, must have length == input dimensions (-batchsize)
         data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
     Returns:
         A tensor with the same format as the input with the data either intact or padded (if kernel_size > 1)
     """
     # determine pad start and end
     pad_total = kernel_size - 1
-    pad_beg = pad_total // 2
-    pad_end = pad_total - pad_beg
+    p_beg = pad_total // 2
+    p_end = pad_total - p_beg
 
-    # determine which dimensions to pad
-    if len(strides) == 3 and all(stride > 1 for stride in strides): # full 3D
-        if data_format == "channels_first":
-            padded_inputs = tf.pad(inputs, [[0, 0], [0, 0], [pad_beg, pad_end], [pad_beg, pad_end], [pad_beg, pad_end]])
-        elif data_format == "channels_last":
-            padded_inputs = tf.pad(inputs, [[0, 0], [pad_beg, pad_end], [pad_beg, pad_end], [pad_beg, pad_end], [0, 0]])
+    # set value_error_str
+    data_format_error = "'data_format' should be 'channels_first' or 'channels_last', but is " + str(data_format)
+
+    # handle 2D strides first
+    if len(strides)==2:
+        if strides == [2, 2]:
+            if data_format == "channels_first":
+                padded_inputs = tf.pad(inputs, [[0, 0], [0, 0], [p_beg, p_end], [p_beg, p_end]])
+            elif data_format == "channels_last":
+                padded_inputs = tf.pad(inputs, [[0, 0], [p_beg, p_end], [p_beg, p_end], [0, 0]])
+            else:
+                raise ValueError(data_format_error)
         else:
-            raise ValueError("'data_format' should be 'channels_first' or 'channels_last', but is " + str(data_format))
-    elif 1 < len(strides) < 4 and all(stride > 1 for stride in strides[0:1]): # 2D or 3D with stride of 1 in third dim
-        if data_format == "channels_first":
-            padded_inputs = tf.pad(inputs, [[0, 0], [0, 0], [pad_beg, pad_end], [pad_beg, pad_end]])
-        elif data_format == "channels_last":
-            padded_inputs = tf.pad(inputs, [[0, 0], [pad_beg, pad_end], [pad_beg, pad_end], [0, 0]])
+            raise ValueError("2D strides must be [2, 2] but are " + str(strides))
+
+    # handle 3D strides
+    elif len(strides)==3:
+        # full 3D strides
+        if strides == [2, 2, 2]:
+            if data_format == "channels_first":
+                padded_inputs = tf.pad(inputs, [[0, 0], [0, 0], [p_beg, p_end], [p_beg, p_end], [p_beg, p_end]])
+            elif data_format == "channels_last":
+                padded_inputs = tf.pad(inputs, [[0, 0], [p_beg, p_end], [p_beg, p_end], [p_beg, p_end], [0, 0]])
+            else:
+                raise ValueError(data_format_error)
+        # handle strides in x y (aka h w) only
+        elif strides in [[2, 2, 1], [1, 2, 2]]:
+            if data_format == "channels_first":
+                padded_inputs = tf.pad(inputs, [[0, 0], [0, 0], [0, 0], [p_beg, p_end], [p_beg, p_end]])
+            elif data_format == "channels_last":
+                padded_inputs = tf.pad(inputs, [[0, 0], [0, 0], [p_beg, p_end], [p_beg, p_end], [0, 0]])
+            else:
+                raise ValueError(data_format_error)
         else:
-            raise ValueError("'data_format' should be 'channels_first' or 'channels_last', but is " + str(data_format))
+            raise ValueError("3D strides must be [2, 2, 2], [2, 2, 1], or [1, 2, 2] but are " + str(strides))
     else:
-        raise ValueError("Expected strides of [2, 2], [2, 2, 2], or [2, 2, 1] but got " + str(strides))
+        raise ValueError("Strides must be a tuple or list of length 2 or 3")
 
     return padded_inputs
 
@@ -110,9 +131,9 @@ def conv2d_fixed_pad(inputs, filters, kernel_size, strides, dilation, data_forma
     Args:
         inputs: a tensorflow tensor - the input data tensor
         filters: an int - the number of filters for the layers
-        kernel_size: an int - the size of the convolution kernel
-        strides: strides: an int - the stride for the convolutions
-        dilation: an int - the dilation rate for the convolution
+        kernel_size: an int or list/tuple - the size of the convolution kernel
+        strides: strides: an int or list/tuple - the stride for the convolutions
+        dilation: an int or list/tuple - the dilation rate for the convolution
         data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
     Returns:
         tf.layers.conv2d layer with explicit padding
@@ -181,7 +202,7 @@ def upsample_layer(inputs, filters, kernel_size, strides, data_format):
         inputs: a tensorflow tensor - the input data tensor
         filters: an int - the number of filters for the layers
         kernel_size: an int or tuple/list - the size of the convolution kernel
-        strides:
+        strides:  an int or list/tuple - the strides for  the convolution
         data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
     Returns:
         tf.layers.conv2d_transpose or tf.layers.conv3d_transpose layer depending on length of strides argument
@@ -221,7 +242,7 @@ def upsample_layer(inputs, filters, kernel_size, strides, data_format):
 ################################################################################
 
 # Simple residual layer
-def residual_layer(tensor, n_filters=64, k_size=3, strides=1, dilation=1,
+def residual_layer(tensor, n_filters=64, k_size=(3, 3), strides=(1, 1), dilation=(1, 1),
                    is_training=False, data_format="channels_last"):
     """
     Creates a single simple residual block with batch normalization and activation
@@ -229,9 +250,9 @@ def residual_layer(tensor, n_filters=64, k_size=3, strides=1, dilation=1,
     Args:
         tensor: a tensorflow tensor - the input data tensor
         n_filters: an int - the number of filters for the layers
-        k_size: an int - the size of the convolution kernel for the residual layers
-        strides: an int - the stride for the convolutions of the residual layers
-        dilation: an int - the dilation rate for the convolution
+        k_size: an int or list/tuple - the size of the convolution kernel for the residual layers
+        strides: an int or list/tuple - the stride for the convolutions of the first convolution layer
+        dilation: an int or list/tuple - the dilation rate for the convolution
         is_training: a boolean - whether or not the model is training
         data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
     Returns:
@@ -241,7 +262,7 @@ def residual_layer(tensor, n_filters=64, k_size=3, strides=1, dilation=1,
     shortcut = tensor
 
     # determine if strided
-    if not isinstance(strides, list):
+    if not isinstance(strides, (list, tuple)):
         strides = [strides] * 2
     strided = True if any(stride > 1 for stride in strides) else False
 
@@ -256,8 +277,8 @@ def residual_layer(tensor, n_filters=64, k_size=3, strides=1, dilation=1,
     tensor = batch_norm(tensor, is_training, data_format=data_format)
     tensor = activation(tensor)
 
-    # Convolution block 2
-    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation=dilation, data_format=data_format)
+    # Convolution block 2 (force strides==1)
+    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides=1, dilation=dilation, data_format=data_format)
     tensor = batch_norm(tensor, is_training, data_format=data_format)
 
     # add shortcut to outputs and one final activation
@@ -268,7 +289,7 @@ def residual_layer(tensor, n_filters=64, k_size=3, strides=1, dilation=1,
 
 
 # Bottleneck residual layer
-def bneck_residual_layer(tensor, n_filters=64, k_size=3, strides=1, is_training=False, dilation=1,
+def bneck_residual_layer(tensor, n_filters=64, k_size=(3, 3), strides=(1, 1), is_training=False, dilation=(1,1),
                          data_format="channels_last"):
     """
     Creates a single bottleneck residual block with batch normalization and activation
@@ -276,10 +297,10 @@ def bneck_residual_layer(tensor, n_filters=64, k_size=3, strides=1, is_training=
     Args:
         tensor: a tensorflow tensor - the input data tensor
         n_filters: an int - the number of filters for the layers
-        k_size: an int - the size of the convolution kernel for the residual layers
-        strides: an int - the stride for the convolutions of the residual layers
+        k_size: an int or list/tuple - the size of the convolution kernel for the residual layers
+        strides: an int or list/tuple - the stride for the convolutions of the middle convolution layer
         is_training: a boolean - whether or not the model is training
-        dilation: an int - the dilation rate for the convolution
+        dilation: an int or list/tuple - the dilation rate for the convolution
         data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
     Returns:
         tensor: a tensorflow tensor - the output of the layer
@@ -288,7 +309,7 @@ def bneck_residual_layer(tensor, n_filters=64, k_size=3, strides=1, is_training=
     shortcut = tensor
 
     # determine if strided
-    if not isinstance(strides, list):
+    if not isinstance(strides, (list, tuple)):
         strides = [strides] * 2
     strided = True if any(stride > 1 for stride in strides) else False
 
@@ -330,7 +351,7 @@ def resid_layer3D(tensor, n_filters=64, k_size=(3, 3, 3), strides=(1, 1, 1), dil
         tensor: a tensorflow tensor - the input data tensor
         n_filters: an int - the number of filters for the layers
         k_size: an int or list/tuple - the size of the convolution kernel for the residual layers
-        strides: an int or list/tuple - the stride for the convolutions of the residual layers
+        strides: an int or list/tuple - the stride for the convolutions of the first convolution layer
         dilation: an int or list/tuple - the dilation rate of the convolution
         is_training: a boolean - whether or not the model is training
         data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
@@ -356,8 +377,8 @@ def resid_layer3D(tensor, n_filters=64, k_size=(3, 3, 3), strides=(1, 1, 1), dil
     tensor = batch_norm(tensor, is_training, data_format=data_format)
     tensor = activation(tensor)
 
-    # Convolution block 2
-    tensor = conv3d_fixed_pad(tensor, n_filters, k_size, strides, dilation=dilation, data_format=data_format)
+    # Convolution block 2 (force strides==1)
+    tensor = conv3d_fixed_pad(tensor, n_filters, k_size, strides=[1, 1, 1], dilation=dilation, data_format=data_format)
     tensor = batch_norm(tensor, is_training, data_format=data_format)
 
     # add shortcut to outputs and one final activation
@@ -430,7 +451,7 @@ def resnet(tensor, is_training, n_classes, n_blocks=16, ds=(3, 7, 13),
     return logits
 
 
-def MSNet(tensor, is_training, n_classes, k_size= (3, 3, 1), base_filters=32, data_format="channels_last"):
+def MSNet(tensor, is_training, n_classes, k_size=(1, 3, 3), base_filters=32, data_format="channels_last"):
     """Creates a MSNet modeled after: https://github.com/taigw/brats17/blob/master/util/MSNet.py
     Args:
         tensor: a tensorflow tensor - the input data tensor
@@ -438,7 +459,7 @@ def MSNet(tensor, is_training, n_classes, k_size= (3, 3, 1), base_filters=32, da
         n_classes: an int - the number of output classes for logits
         base_filters: an int - the number of filters for the first layer of the network (auto scaled for deeper layers)
         k_size: an int or list/tuple of ints - the size of the convolution kernel for the residual layers
-        data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
+        data_format: a string - "channels_first" for NCDHW data or "channels_last" for NDHWC
     Returns:
         logits: a tensorflow tensor - unscaled logits of size n_classes
     """
@@ -446,29 +467,27 @@ def MSNet(tensor, is_training, n_classes, k_size= (3, 3, 1), base_filters=32, da
     with tf.variable_scope("resnet"):
 
         # set default values
+        ksize = list(k_size) if isinstance(k_size, (tuple, list)) else [1, k_size, k_size]
         filters = base_filters
-        ksize = list(k_size)
         dilation = [1, 1, 1]
         strides = [1, 1, 1]
 
-        # first set of residual blocks with 3x3x1 itraslice convolutions
+        # first set of residual blocks with 1x3x3 (DxWxH) itraslice convolutions
         tensor = resid_layer3D(tensor, filters, ksize, strides, dilation, is_training, data_format)
         tensor = tf.identity(tensor, "block_1_1")
         tensor = resid_layer3D(tensor, filters, ksize, strides, dilation, is_training, data_format)
         tensor = tf.identity(tensor, "block_1_2")
 
-        # first interslice 1x1x3 convolution layer
-        tensor = conv3d_fixed_pad(tensor, filters, [1, 1, 3], strides, dilation, data_format)
+        # first interslice 3x1x1 (DxWxH) convolution layer
+        tensor = conv3d_fixed_pad(tensor, filters, [3, 1, 1], strides, dilation, data_format)
         tensor = tf.identity(tensor, "interslice_1")
         tensor = batch_norm(tensor, is_training, data_format)
         tensor = activation(tensor)
 
-        # first downsampling layer with strides=2
+        # second downsampling residual block with strides==2 in HxW (original was single conv layer without residual)
         filters = base_filters * 2
-        tensor = conv3d_fixed_pad(tensor, filters, ksize, [2, 2, 1], dilation, data_format)
+        tensor = resid_layer3D(tensor, filters, ksize, [1, 2, 2], dilation, is_training, data_format)
         tensor = tf.identity(tensor, "downsample_1")
-        tensor = batch_norm(tensor, is_training, data_format)
-        tensor = activation(tensor)
 
         # second set of residual blocks
         tensor = resid_layer3D(tensor, filters, ksize, strides, dilation, is_training, data_format)
@@ -477,71 +496,135 @@ def MSNet(tensor, is_training, n_classes, k_size= (3, 3, 1), base_filters=32, da
         tensor = tf.identity(tensor, "block_2_2")
 
         # second interslice 1x1x3 convolution layer
-        fuse1 = conv3d_fixed_pad(tensor, filters, [1, 1, 3], strides, dilation, data_format)
+        fuse1 = conv3d_fixed_pad(tensor, filters, [3, 1, 1], strides, dilation, data_format)
         fuse1 = tf.identity(fuse1, "interslice_2")
         fuse1 = batch_norm(fuse1, is_training, data_format)
         fuse1 = activation(fuse1)
 
-        # second downsampling layer with strides=2
+        # second downsampling residual block with strides==2 in HxW (original was single conv layer without residual)
         filters = base_filters * 4
-        tensor = conv3d_fixed_pad(fuse1, filters, ksize, [2, 2, 1], dilation, data_format)
+        tensor = resid_layer3D(tensor, filters, ksize, [1, 2, 2], dilation, is_training, data_format)
         tensor = tf.identity(tensor, "downsample_2")
-        tensor = batch_norm(tensor, is_training, data_format)
-        tensor = activation(tensor)
 
-        # first set of residual blocks with dilated convolutions and dilation rates of 1, 2, 3 respectively
+        # first set of residual blocks with dilated convolutions and dilation rates of 1, 2, 3 respectively in HxW
         tensor = resid_layer3D(tensor, filters, ksize, strides, dilation, is_training, data_format)
         tensor = tf.identity(tensor, "block_3_1")
-        tensor = resid_layer3D(tensor, filters, ksize, strides, [2, 2, 1], is_training, data_format)
+        tensor = resid_layer3D(tensor, filters, ksize, strides, [1, 2, 2], is_training, data_format)
         tensor = tf.identity(tensor, "block_3_2")
-        tensor = resid_layer3D(tensor, filters, ksize, strides, [3, 3, 1], is_training, data_format)
+        tensor = resid_layer3D(tensor, filters, ksize, strides, [1, 3, 3], is_training, data_format)
         tensor = tf.identity(tensor, "block_3_3")
 
-        # third interslice 1x1x3 convolution layer
-        fuse2 = conv3d_fixed_pad(tensor, filters, [1, 1, 3], strides, dilation, data_format)
+        # third interslice 3x1x1 (DxWxH) convolution layer
+        fuse2 = conv3d_fixed_pad(tensor, filters, [3, 1, 1], strides, dilation, data_format)
         fuse2 = tf.identity(fuse2, "interslice_3")
         fuse2 = batch_norm(fuse2, is_training, data_format)
         fuse2 = activation(fuse2)
 
-        # second set of residual blocks with dilated convolutions and dilation rates of 1, 2, 3 respectively
-        tensor = resid_layer3D(fuse2, filters, ksize, strides, [3, 3, 1], is_training, data_format)
+        # second set of residual blocks with dilated convolutions and dilation rates of 1, 2, and 3 respectively in HxW
+        tensor = resid_layer3D(fuse2, filters, ksize, strides, [1, 3, 3], is_training, data_format)
         tensor = tf.identity(tensor, "block_4_1")
-        tensor = resid_layer3D(tensor, filters, ksize, strides, [2, 2, 1], is_training, data_format)
+        tensor = resid_layer3D(tensor, filters, ksize, strides, [1, 2, 2], is_training, data_format)
         tensor = tf.identity(tensor, "block_4_2")
         tensor = resid_layer3D(tensor, filters, ksize, strides, dilation, is_training, data_format)
         tensor = tf.identity(tensor, "block_4_3")
 
-        # fourth interslice 1x1x3 convolution layer
-        fuse3 = conv3d_fixed_pad(tensor, filters, [1, 1, 3], strides, dilation, data_format)
+        # fourth interslice 3x1x1 (DxWxH) convolution layer
+        fuse3 = conv3d_fixed_pad(tensor, filters, [3, 1, 1], strides, dilation, data_format)
         fuse3 = tf.identity(fuse3, "interslice_4")
         fuse3 = batch_norm(fuse3, is_training, data_format)
         fuse3 = activation(fuse3)
 
         # first fusion layer with 2x upsampling (n_classes outputs)
-        fuse1 = upsample_layer(fuse1, n_classes, ksize, [2, 2, 1], data_format)
+        fuse1 = upsample_layer(fuse1, n_classes, ksize, [1, 2, 2], data_format)
         fuse1 = batch_norm(fuse1, is_training, data_format)
         fuse1 = activation(fuse1)
 
         # second fusion layer with 4x upsampling (n_classes * 2 outputs)
-        fuse2 = upsample_layer(fuse2, n_classes*2, ksize, [2, 2, 1], data_format)
+        fuse2 = upsample_layer(fuse2, n_classes*2, ksize, [1, 2, 2], data_format)
         fuse2 = batch_norm(fuse2, is_training, data_format)
         fuse2 = activation(fuse2)
-        fuse2 = upsample_layer(fuse2, n_classes*2, ksize, [2, 2, 1], data_format)
+        fuse2 = upsample_layer(fuse2, n_classes*2, ksize, [1, 2, 2], data_format)
         fuse2 = batch_norm(fuse2, is_training, data_format)
         fuse2 = activation(fuse2)
 
-        # third fusion layer with 4x upsampling (n_classes * 4 outputs)
-        fuse3 = upsample_layer(fuse3, n_classes*4, ksize, [2, 2, 1], data_format)
+        # third fusion layer with 4x upsampling (n_classes * 4 outputs) [unsure why its x4 here]
+        fuse3 = upsample_layer(fuse3, n_classes*4, ksize, [1, 2, 2], data_format)
         fuse3 = batch_norm(fuse3, is_training, data_format)
         fuse3 = activation(fuse3)
-        fuse3 = upsample_layer(fuse3, n_classes*4, ksize, [2, 2, 1], data_format)
+        fuse3 = upsample_layer(fuse3, n_classes*4, ksize, [1, 2, 2], data_format)
         fuse3 = batch_norm(fuse3, is_training, data_format)
         fuse3 = activation(fuse3)
 
-        # concatenate fusion layers
+        # concatenate fusion layers along channel dim "channels_first" for NCDHW or "channels_last" for NDHWC
         tensor = tf.concat([fuse1, fuse2, fuse3], name="concatenate", axis=-1 if data_format=="channels_last" else 1)
 
         # final layer (n_classes outputs)
         tensor = conv3d_fixed_pad(tensor, n_classes, ksize, strides, dilation, data_format)
+
+        return tensor
+
+
+# autoencoder residual unet
+def resid_unet(tensor, is_training, n_blocks=17, ds=(2, 5, 9, 13),
+           base_filters=64, k_size=(3,3), data_format="channels_last"):
+    """Creates a ResNet using n=n_blocks simple resnet blocks and n=ds downsampling layers
+    Args:
+        tensor: a tensorflow tensor - the input data tensor
+        is_training: a boolean - whether or not the model is training
+        n_blocks: an int - the number of residual blocks to build into the network
+        ds: a list/tuple of ints - the indices (starting from 0) of the downsampling blocks (i.e. where strides=2)
+        base_filters: an int - the number of filters for the first layer of the network (auto scaled for deeper layers)
+        k_size: an int - the size of the convolution kernel for the residual layers
+        data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
+    Returns:
+        logits: a tensorflow tensor - unscaled logits of size n_classes
+    """
+
+    # set variable scope
+    with tf.variable_scope("resid_unet"):
+
+        # set default values
+        ksize = list(k_size) if isinstance(k_size, (tuple, list)) else [k_size] * 2
+        filters = base_filters
+        dilation = [1, 1]
+        strides = [1, 1]
+
+        # initial convolutional layer
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = tf.identity(tensor, "init_conv")
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+
+        # encoder residual blocks
+        for i in range(n_blocks):
+            # if this is a downsampling block, strides=2 and filters is doubled, else strides=1
+            if i in ds:
+                strides = 2
+                filters = 2 * filters
+            else:
+                strides = 1
+            tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+            tensor = tf.identity(tensor, "encoder_block_layer_" + str(i).zfill(len(str(n_blocks * 2))))
+
+        # decoder residual blocks
+        filters = filters
+        for i in range(n_blocks)[::-1]:
+            # if this is a downsampling block, perform upsampling block, reduce nfilters
+            if i in ds:
+                strides = 2
+                filters = filters / 2
+                tensor = upsample_residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+                tensor = tf.identity(tensor, "decoder_block_layer_" + str(i).zfill(len(str(n_blocks * 2))))
+            else:
+                strides = 1
+                tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+                tensor = tf.identity(tensor, "decoder_block_layer_" + str(i).zfill(len(str(n_blocks * 2))))
+
+        # final convolutional layer
+        filters = base_filters
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = tf.identity(tensor, "final_conv")
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
 
         return tensor

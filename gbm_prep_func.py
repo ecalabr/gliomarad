@@ -27,10 +27,10 @@ import external_software.brats17_master.test_ecalabr as test_ecalabr
 def make_log(work_dir):
     if not os.path.isdir(work_dir):
         os.mkdir(work_dir)
-    # make log file name and erase contents if they already exist
+    # make log file, append to existing
     idno = os.path.basename(work_dir)
     log_file = os.path.join(work_dir, idno + "_log.txt")
-    open(log_file, 'w').close()
+    open(log_file, 'a').close()
     # make logger
     logger = logging.getLogger("my_logger")
     logger.setLevel(logging.DEBUG) # should this be DEBUG?
@@ -51,22 +51,23 @@ def make_log(work_dir):
     logger.addHandler(ch)
     logger.addHandler(fh)
     logger.propagate = False
+    logger.info("####################### STARTING NEW LOG #######################")
 
 # first check for series_dict to find the appropriate image series from the dicom folder
 # matching strings format is [[strs to match AND], OR [strs to match AND]
 def make_serdict(reg_atlas, dcm_dir):
     t1_str = [["t1"]]
-    t1_not = ["post", " gad", "flair", "+", " pg ", "brainlab"]  # try to eliminate "Gad sag bravo T1 brainlab"
+    t1_not = ["post", " gad", "flair", "+", " pg ", "brainlab"]
     t2_str = [["t2"]]
-    t2_not = ["flair", "optic", "motor", "track"]
-    flair_str = [["ax", "flair"]]  # do we always want ax here??
-    flair_not = []
+    t2_not = ["flair", "optic", "motor", "track", "tract", "radiation", "reform"]
+    flair_str = [["flair"]]
+    flair_not = ["t1", "reform"]
     dwi_str = [["ax", "dwi"]]
     dwi_not = []
-    adc_str = [["ax", "adc"], ["apparent", "diffusion"]]
+    adc_str = [["ax", "adc"], ["apparent", "diffusion"], ["avdc"]]
     adc_not = ["exp"]
-    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "]]
-    t1gad_not = ["pre"]
+    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "], ["t1", "gad"]]
+    t1gad_not = ["pre", "without", "w/o", "reform"]
     swi_str = [["isi"], ["swan"]]
     swi_not = ["ref", "filt", "pha", "rf"]
     asl_str = [["asl"]]
@@ -916,28 +917,28 @@ def tumor_seg(ser_dict):
     return ser_dict
 
 # print and save series dict
-def print_series_dict(series_dict):
+def print_series_dict(series_dict, repeat=False):
     dcm_dir = series_dict["info"]["dcmdir"]
     # first save as a numpy file
-    np.save(os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata.npy"), series_dict)
-    # now save a human readable format
-    # first need to remove binary entries from dict, also will only print the first dicom path from the list
-    def remove_nonstr_from_dict(a_dict):
-        new_dict = {}
-        for k, v in a_dict.items():
-            if isinstance(v, dict):
-                v = remove_nonstr_from_dict(v)
-            if isinstance(v, (int, long, float, complex, str, list, dict)):
-                if k == "dicoms" and isinstance(v, list) and v: # ensure dicoms is a list and is not empty
-                    new_dict[k] = v[0]
-                else:
-                    new_dict[k] = v
-        return new_dict
-    filename_out = os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata_HR.txt")
-    # json attempt fails
-    #with open(filename_out, 'w') as f:
-    #    f.write("%s" % json.dumps(series_dict, indent=2, sort_keys=True))
-    # yaml attempt works but ugly, need to remove non-string entries in nested dict somehow
-    with open(filename_out, 'w') as f:
-        f.write("%s" % yaml.dump(remove_nonstr_from_dict(series_dict)))
+    serdict_outfile = os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata.npy")
+    if not os.path.isfile(serdict_outfile) or repeat:
+        np.save(serdict_outfile, series_dict)
+    # save human readable serdict file with binary data removed
+    hr_serdict_outfile = os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata_HR.txt")
+    if not os.path.isfile(hr_serdict_outfile) or repeat:
+        # remove binary entries from dict, also will only print the first dicom path from the list
+        def remove_nonstr_from_dict(a_dict):
+            new_dict = {}
+            for k, v in a_dict.items():
+                if isinstance(v, dict):
+                    v = remove_nonstr_from_dict(v)
+                if isinstance(v, (int, long, float, complex, str, list, dict)):
+                    if k == "dicoms" and isinstance(v, list) and v:  # ensure dicoms is a list and is not empty
+                        new_dict[k] = v[0]
+                    else:
+                        new_dict[k] = v
+            return new_dict
+        hr_serdict = remove_nonstr_from_dict(series_dict)
+        with open(hr_serdict_outfile, 'w') as f:
+            f.write("%s" % yaml.dump(hr_serdict))
     return series_dict
