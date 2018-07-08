@@ -109,6 +109,8 @@ def unzip_file(dicom_zip):
 def get_series(dicom_dir):
     # logging
     logger = logging.getLogger("my_logger")
+    logger.info("GETTING SERIES LIST:")
+    logger.info("- DICOM directory = " + dicom_dir)
     # indo prep
     idno = os.path.basename(os.path.dirname(dicom_dir))
     # define variables
@@ -797,67 +799,43 @@ def brain_mask(ser_dict):
     dcm_dir = ser_dict["info"]["dcmdir"]
     # BET brain masking based on combination of t2 and t1
     logger.info("BRAIN MASKING:")
-    t1gadmask = "none"
-    flairmask = "none"
-    # make brain mask based on flair
-    if os.path.isfile(ser_dict["FLAIR"]["filename"]):
-        flairmask = os.path.join(os.path.dirname(dcm_dir), idno + "_FLAIR_w_mask.nii.gz")
-        if not os.path.isfile(flairmask):
-            logger.info("- making brain mask based on FLAIR")
-            bet = BET()
-            bet.inputs.in_file = ser_dict["FLAIR"]["filename_reg"]
-            bet.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), idno + "_FLAIR_w")
-            bet.inputs.mask = True
-            bet.inputs.no_output = True
-            bet.inputs.frac = 0.5
-            bet.terminal_output = "none"
-            logger.debug(bet.cmdline)
-            _ = bet.run()
+
+    # for loop for masking different contrasts
+    to_mask = ["FLAIR", "T1gad", "DWI"]  # list of contrasts to mask
+    masks = []  # list of completed masks
+    for contrast in to_mask:
+        # if original and registered files exist for this contrast
+        if os.path.isfile(ser_dict[contrast]["filename"]) and os.path.isfile(ser_dict[contrast]["filename_reg"]):
+            maskfile = os.path.join(os.path.dirname(dcm_dir), idno + "_" + contrast + "_w_mask.nii.gz")
+            if not os.path.isfile(maskfile):
+                logger.info("- making brain mask based on " + contrast)
+                bet = BET()
+                bet.inputs.in_file = ser_dict[contrast]["filename_reg"]
+                bet.inputs.out_file = ser_dict[contrast]["filename_reg"]  # no output prevents overwrite
+                bet.inputs.mask = True
+                bet.inputs.no_output = True
+                bet.inputs.frac = 0.5
+                bet.terminal_output = "none"
+                logger.debug(bet.cmdline)
+                _ = bet.run()
+                if os.path.isfile(maskfile):
+                    masks.append(maskfile)
+            else:
+                logger.info("- " + contrast + " brain mask already exists at " + maskfile)
+                masks.append(maskfile)
         else:
-            logger.info("- FLAIR brain mask already exists at " + flairmask)
-    else:
-        logger.info("- could not find registered FLAIR, skipping FLAIR brain masking")
-    # make another brain mask based on T1gad
-    t1gadregname = os.path.join(os.path.dirname(dcm_dir), idno + "_T1gad_w.nii.gz")
-    if os.path.isfile(ser_dict["T1gad"]["filename"]) and os.path.isfile(t1gadregname):
-        t1gadmask = os.path.join(os.path.dirname(dcm_dir), idno + "_T1gad_w_mask.nii.gz")
-        if not os.path.isfile(t1gadmask):
-            logger.info("- making brain mask based on T1gad")
-            bet = BET()
-            bet.inputs.in_file = ser_dict["T1gad"]["filename_reg"]
-            bet.inputs.out_file = t1gadregname
-            bet.inputs.mask = True
-            bet.inputs.no_output = True
-            bet.terminal_output = "none"
-            logger.debug(bet.cmdline)
-            _ = bet.run()
-        else:
-            logger.info("- T1gad brain mask already exists at " + t1gadmask)
-    else:
-        logger.info("- could not find registered T1gad, skipping T1gad brain masking")
-    # combine brain masks if both exist, if not use one or other
-    if os.path.isfile(t1gadmask) and os.path.isfile(flairmask):
-        mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
-        if not os.path.isfile(mask):
-            logger.info("- making combined T1gad and Flair brain mask at " + mask)
-            mask_cmd = ApplyMask()
-            mask_cmd.inputs.in_file = t1gadmask
-            mask_cmd.inputs.mask_file = flairmask
-            mask_cmd.inputs.out_file = mask
-            mask_cmd.terminal_output = "none"
-            mask_cmd.inputs.output_datatype = "input"
-            logger.debug(mask_cmd.cmdline)
-            _ = mask_cmd.run()
-        else:
-            logger.info("- combined T1gad and FLAIR brain mask already exists at " + mask)
-    elif os.path.isfile(t1gadmask):
-        mask = t1gadmask
-    elif os.path.isfile(flairmask):
-        mask = flairmask
-    else:
-        mask = "none"
+            logger.info("- could not find registered " + contrast + ", skipping brain masking for this contrast")
+
+    # combine brain masks using majority voting
+    combined_mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
+    if not os.path.isfile(combined_mask) and masks:  # if combined mask file does not exist, and indivudual masks exist
+        logger.info("- making combined brain mask at " + combined_mask)
+        majority_cmd = "ImageMath 3 " + combined_mask + " MajorityVoting " + " ".join(masks)
+        logger.debug(majority_cmd)
+        _ = subprocess.call(majority_cmd, shell=True)
+
     # now apply to all other images if mask exists
-    if os.path.isfile(mask):
+    if os.path.isfile(combined_mask):
         for sers in ser_dict:
             if "filename_reg" in ser_dict[sers]:  # check that filename_reg entry exists
                 os.path.join(os.path.dirname(dcm_dir), idno + "_" + sers + "_wm.nii.gz")
@@ -869,7 +847,7 @@ def brain_mask(ser_dict):
                         # apply mask using fsl maths
                         mask_cmd = ApplyMask()
                         mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
-                        mask_cmd.inputs.mask_file = mask
+                        mask_cmd.inputs.mask_file = combined_mask
                         mask_cmd.inputs.out_file = ser_masked
                         mask_cmd.terminal_output = "none"
                         logger.debug(mask_cmd.cmdline)
@@ -884,6 +862,8 @@ def brain_mask(ser_dict):
                     logger.info("- skipping masking for " + sers + " as file does not exist")
             else:
                 logger.info("- no filename_reg entry exists for series " + sers)
+    else:
+        logger.info("- combined mask file not found, expected location is: " + combined_mask)
     return ser_dict
 
 # create tumor segmentation
