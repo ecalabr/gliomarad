@@ -58,8 +58,10 @@ dcm_data_dir = "/media/ecalabr/data/gbm/"
 dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
 dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
 
-# iterate through all dicom zip files
-dcms = dcms[:61] #[46:]  #0:36 done
+# iterate through all dicom folders or a subset, or specific ones using options below
+#dcms = dcms[:61] #[46:]  #0:36 done
+#dcms = ["/media/ecalabr/data/gbm/12182783/1.2.124.113532.80.22017.45499.20180402.142550.12237730"]
+
 if not isinstance(dcms, list):
     dcms = [dcms]
 for i, dcm in enumerate(dcms, 1):

@@ -2,26 +2,27 @@ import os
 from glob import glob
 
 # main directory containing subdirs with processed data
-data_dir = "/media/ecalabr/data/gbm"
+data_dir = "/media/ecalabr/data/qc_complete"
 
 # list all subdirs with the processed data
 direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
 direcs = sorted(direcs, key=lambda x: int(os.path.basename(x)))
 
 # set skip for already edited masks here
-skip = 63
+skip = 0
 n_total = len(direcs)
-direcs = direcs[skip-1:]
+direcs = direcs[skip:]
 if isinstance(direcs, str):
     direcs = [direcs]
 
-#for direc in direcs:
-#    print(direc)
+# manual direcs here
+#direcs = ['/media/ecalabr/data/gbm/11936344']
 
 # run ITK-snap on each one
 for i, direc in enumerate(direcs, 1):
     t1gad = glob(direc + "/*T1gad_w.nii.gz")
-    mask = glob(direc + "/*combined_brain_mask.nii.gz")
+    #mask = glob(direc + "/*combined_brain_mask.nii.gz")
+    mask = glob(direc + "/*tumor_seg.nii.gz")
     if t1gad and mask:
         t1gad = t1gad[0]
         mask = mask[0]

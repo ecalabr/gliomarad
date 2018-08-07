@@ -1,3 +1,4 @@
 implement integration of - move all tumor segmentation to the end so the model doesnt have to be loaded each time (attempted)
 incorporate topup DTI files when/where they exist
 make nets for image segmentation and synthetic CT
+still issues with numbering keeper series, 11273473
