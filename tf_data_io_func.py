@@ -1,4 +1,3 @@
-import tensorflow as tf
 import os
 import sys
 from glob import glob
@@ -75,7 +74,45 @@ def _nonzero_slice_inds(input_numpy):
     return inds
 
 
-def _load_multicon_and_labels(study_directory):
+def _augment_image(input_data, data_format, params=(np.random.random()*90., np.random.random()>0.5), order=1):
+    """
+    Takes input numpy array and a data format and performs data augmentation with random rotations and flips
+    :param input_data: a 4D numpy array containing image data in the specified TF data format
+    :param data_format: the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param params: A list or tuple of user specified values in format [rotation=float(degrees), flip=bool]
+    :param order: an int from 0-5, the order for spline interpolation, default is 1 (linear)
+    :return:
+        output_data - a numpy array or tuple of numpy arrays containing the augmented data
+    """
+
+    # sanity checks
+    if type(input_data) is not np.ndarray: sys.exit("Input must be numpy array or list/tuple of numpy arrays")
+    if data_format not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
+    if not isinstance(params, (list, tuple)): sys.exit("Params must be a list or tuple if specified")
+    if not isinstance(params[0], (float, int)): sys.exit("First entry in params must be a float or int")
+    if not isinstance(params[1], bool): sys.exit("Second entry in params must be a boolean")
+    if not order in range(6): sys.exit("Spline interpolation order must be in range 0-3")
+
+    # apply rotation
+    if data_format == 'channels_last':
+        axes = (2, 3)
+    else:
+        axes = (1, 2)
+    output_data = interp.rotate(input_data, float(params[0]), axes=axes, reshape=False, order=order)
+
+    # apply flip
+    if params[1]:
+        output_data = np.flip(output_data, axis=axes[0])
+
+    return output_data
+
+
+def load_multicon_and_labels(study_directory):
+    """
+    Load multicontrast image data and a label image.
+    :param study_directory: A directory containing the desired image data.
+    :return: a tuple of np ndarrays containing the image data and labels in the specified tf data format
+    """
 
     # sanity checks
     if not os.path.isdir(study_directory): sys.exit("Specified study_directory does not exist")
@@ -90,124 +127,64 @@ def _load_multicon_and_labels(study_directory):
 
     # augment
     params = (np.random.random() * 90., np.random.random() > 0.5)
-    data = _augment_image(data, params=params, data_format='channels_last')
-    labels = _augment_image(labels, params=params, data_format='channels_last')
+    data = _augment_image(data, params=params, data_format='channels_last', order=1)
+    labels = _augment_image(labels, params=params, data_format='channels_last', order=0)  # NN interp for labels
 
     return data, labels
 
 
-def _augment_image(input_data, data_format, params=(np.random.random() * 90., np.random.random() > 0.5)):
+def load_multicon_and_regression(study_directory):
     """
-    Takes input numpy array and a data format and performs data augmentation with random rotations and flips
-    :param input_data: a 4D numpy array or list/tuple of arrays containing image data in the specified TF data format
-    :param data_format: the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param params: A list or tuple of user specified values in format [rotation=float(degrees), flip=bool]
-    :return:
-        output_data - a numpy array or tuple of numpy arrays containing the augmented data
+    Load multicontrast image data and a regression image target.
+    :param study_directory: A directory containing the desired image data.
+    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
     # sanity checks
-    if isinstance(input_data, (list, tuple)):
-        if not all([type(x) is np.ndarray for x in input_data]):
-            sys.exit("Input data list/tuple must be all np arrays")
-        else:
-            data = input_data[0]
-            labels = input_data[1]
-    elif type(input_data) is not np.ndarray: sys.exit("Input must be numpy array or list/tuple of numpy arrays")
-    else:
-        data = input_data
-        labels = None
-    if data_format not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
-    if not isinstance(params, (list, tuple)): sys.exit("Params must be a list or tuple if specified")
-    if not isinstance(params[0], (float, int)): sys.exit("First entry in params must be a float or int")
-    if not isinstance(params[1], bool): sys.exit("Second entry in params must be a boolean")
+    if not os.path.isdir(study_directory): sys.exit("Specified study_directory does not exist")
 
-    # apply rotation
-    if data_format == 'channels_last':
-        axes = (2, 3)
-    else:
-        axes = (1, 2)
-    data = interp.rotate(data, float(params[0]), axes=axes, reshape=False, order=1)  # bicubic interp
-    if labels is not None:
-        labels = interp.rotate(labels, float(params[0]), axes=axes, reshape=False, order=1)  # NN interp
+    # load multicontrast data
+    data_prefixes = ['FLAIR_wm', 'T1_wm', 'T1gad_wm', 'T2_wm']
+    data, nzi = _load_single_study(study_directory, data_prefixes, data_format='channels_last')
 
-    # apply flip
-    if params[1]:
-        data = np.flip(data, axis=axes[0])
-        if labels:
-            labels = np.flip(labels, axis=axes[0])
+    # load labels data
+    labels_prefix = ['ASL_wm']
+    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format='channels_last', slice_trim=nzi)
 
-    # recombine arrays into tuple if two were given, otherwise just return one array
-    if labels is not None:
-        data = (data, labels)
+    # augment
+    params = (np.random.random() * 90., np.random.random() > 0.5)
+    data = _augment_image(data, params=params, data_format='channels_last', order=1)
+    labels = _augment_image(labels, params=params, data_format='channels_last', order=1)  # linear interp for regression
 
-    return data
+    return data, labels
 
 
-### Temporary code
+def display_tf_dataset(dataset_data):
+    """
+    Displays tensorflow dataset output images and labels/regression images.
+    :param dataset_data: output from tensorflow dataset function containing images and labels/regression image
+    :return: displays images for 3 seconds then continues
+    """
 
-BUFFER_SIZE = 12
-SHUFFLE_SIZE = 6
-NUM_THREADS = 16
+    fig = plt.figure()
 
-#main_data_dir = '/media/ecalabr/data2/io_test'
-#study_numbers = '11045377', '11053877', '11065772'
+    def close_event():
+        plt.close()
 
-main_data_dir = '/media/ecalabr/data2/qc_complete'
-study_numbers = ['10672000', '10846904', '10940662', '11038642', '11129704', '11196914', '11318417', '11419123',
-                 '11490693', '11597627', '11771760', '11914431', '12022810', '12133297', '12288677', '10673199',
-                 '10848682', '10944302', '11040352', '11134115', '11218876', '11322899', '11423959', '11498167',
-                 '11650104', '11775500', '11922167', '12054419', '12141357', '12299574', '10753655', '10855761',
-                 '10957443', '11045377', '11140487', '11247744', '11325665', '11435751', '11500491', '11665288',
-                 '11791685', '11936344', '12057904', '12168079', '12303318', '10754135', '10869237', '10965515',
-                 '11053877', '11149024', '11252810', '11331683', '11436869', '11519429', '11666513', '11800774',
-                 '11946017', '12058076', '12181551', '12309838', '10757830', '10871864', '10972773', '11065772',
-                 '11150443', '11271681', '11362040', '11440727', '11534009', '11668634', '11808193', '11973818',
-                 '12062889', '12182783', '12319781', '10766003', '10887875', '10981713', '11086362', '11171727',
-                 '11273473', '11367916', '11466129', '11541506', '11671585', '11849170', '11996514', '12067216',
-                 '12204550', '10774926', '10908346', '11010654', '11087024', '11179085', '11273740', '11371239',
-                 '11466591', '11541709', '11684227', '11851391', '11999752', '12073358', '12208812', '10828712',
-                 '10908535', '11014236', '11097040', '11187345', '11280555', '11372974', '11469772', '11543758',
-                 '11688244', '11856683', '12001619', '12092613', '12247111', '10832837', '10908765', '11016986',
-                 '11117844', '11191958', '11284029', '11392645', '11478485', '11566163', '11720435', '11879297',
-                 '12006472', '12104287', '12267857', '10834262', '10926580', '11034531', '11120271', '11193909',
-                 '11316744', '11418822', '11482456', '11585757', '11734883', '11901030', '12014144', '12107086',
-                 '12286876']
+    timer = fig.canvas.new_timer(interval=3000)
+    timer.add_callback(close_event)
+    splt = fig.subplots(nrows=2, ncols=3)
+    # image data
+    image_data = dataset_data[0]
+    for z in range(4):
+        splt[np.unravel_index(z, [2, 3])].imshow(np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1), cmap='gray')
+        splt[np.unravel_index(z, [2, 3])].set_title('Data Image ' + str(z + 1))
+    # label data
+    label_data = dataset_data[1]
+    splt[1, 2].imshow(np.swapaxes(np.squeeze(label_data), 0, 1), cmap='gray')
+    splt[1, 2].set_title('Labels')
+    timer.start()
+    plt.show()
 
-study_dirs = [os.path.join(main_data_dir, s) for s in study_numbers]
+    return
 
-
-# need to add batching and labels input
-
-study_dirs = tf.constant(study_dirs)
-dataset = tf.data.Dataset.from_tensor_slices(study_dirs)
-dataset = dataset.map(lambda x: tf.py_func(_load_multicon_and_labels, [x], (tf.float32, tf.float32)), num_parallel_calls=NUM_THREADS)
-dataset = dataset.prefetch(BUFFER_SIZE)
-dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
-dataset = dataset.shuffle(SHUFFLE_SIZE)
-iterator = dataset.make_one_shot_iterator()
-get_next = iterator.get_next()
-
-with tf.Session() as sess:
-    sess.run(get_next)
-    for i in range(10000):
-        data_slice = sess.run(get_next)
-        if i%250 == 0:
-            print(i)
-            fig = plt.figure()
-            def close_event():
-                plt.close()
-            timer = fig.canvas.new_timer(interval = 3000)
-            timer.add_callback(close_event)
-            splt = fig.subplots(nrows=2, ncols=3)
-            # image data
-            image_data = data_slice[0]
-            for z in range(4):
-                splt[np.unravel_index(z, [2,3])].imshow(np.swapaxes(np.squeeze(image_data[z,:,:]), 0, 1), cmap='gray')
-                splt[np.unravel_index(z, [2,3])].set_title('Data Image ' + str(z+1))
-            # label data
-            label_data = data_slice[1]
-            splt[1,2].imshow(np.swapaxes(np.squeeze(label_data), 0, 1), cmap='gray')
-            splt[1,2].set_title('Labels')
-            timer.start()
-            plt.show()
