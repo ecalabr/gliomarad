@@ -8,13 +8,14 @@ from matplotlib import pyplot as plt
 import scipy.ndimage.interpolation as interp
 
 
-def _load_single_study(study_dir, file_prefixes, data_format='channels_last'):
+def _load_single_study(study_dir, file_prefixes, data_format='channels_last', slice_trim=None):
     """
     Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
     returns a 4D numpy array containing the image data.
     :param study_dir: A string - the full path to the study directory
     :param file_prefixes: A string or list of strings - the file prefixes for the images to be loaded
     :param data_format: the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param slice_trim: A list/tuple containing 2 ints, the first and last slice to use for trimming. None = auto trim
     :return:
         output - a 4D numpy array containing the image data
     """
@@ -24,7 +25,7 @@ def _load_single_study(study_dir, file_prefixes, data_format='channels_last'):
     if not isinstance(file_prefixes, (str, list)): sys.exit("file_prefixes must be a string or list of strings")
     if isinstance(file_prefixes, str): file_prefixes = [file_prefixes]
     if data_format not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
-    if not isinstance(aug, (bool, list)): sys.exit("aug parameter must be a boolean or list")
+    if slice_trim is not None and not isinstance(slice_trim, (list, tuple)): sys.exit("slice_trim must be list/tuple")
 
     # convert from directory name to image names
     images = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
@@ -35,10 +36,14 @@ def _load_single_study(study_dir, file_prefixes, data_format='channels_last'):
     for ind, image in enumerate(images):
         if ind == 0:  # find dimensions after trimming zero slices and preallocate 4d array
             first_image = nib.load(images[0]).get_fdata()
-            nz_inds = _nonzero_slice_inds(first_image)
+            if slice_trim:
+                nz_inds = slice_trim
+            else:
+                nz_inds = _nonzero_slice_inds(first_image)
+            first_image = first_image[:, :, nz_inds[0]:nz_inds[1]]
             output_shape = list(first_image.shape)[0:3] + [len(images)]
             output = np.zeros(output_shape, np.float32)
-            output[:, :, :, 0] = first_image[:, :, nz_inds[0]:nz_inds[1]]
+            output[:, :, :, 0] = first_image
         else:
             output[:, :, :, ind] = nib.load(images[ind]).get_fdata()[:, :, nz_inds[0]:nz_inds[1]]
 
@@ -48,7 +53,7 @@ def _load_single_study(study_dir, file_prefixes, data_format='channels_last'):
     else:
         output = np.transpose(output, axes=(2, 0, 1, 3))
 
-    return output
+    return output, nz_inds
 
 
 def _nonzero_slice_inds(input_numpy):
@@ -77,11 +82,16 @@ def _load_multicon_and_labels(study_directory):
 
     # load multicontrast data
     data_prefixes = ['FLAIR_wm', 'T1_wm', 'T1gad_wm', 'T2_wm']
-    data = _load_single_study(study_directory, data_prefixes, data_format='channels_last')
+    data, nzi = _load_single_study(study_directory, data_prefixes, data_format='channels_last')
 
     # load labels data
     labels_prefix = ['ASL_wm']
-    labels = _load_single_study(study_directory, labels_prefix, data_format='channels_last')
+    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format='channels_last', slice_trim=nzi)
+
+    # augment
+    params = (np.random.random() * 90., np.random.random() > 0.5)
+    data = _augment_image(data, params=params, data_format='channels_last')
+    labels = _augment_image(labels, params=params, data_format='channels_last')
 
     return data, labels
 
@@ -118,7 +128,7 @@ def _augment_image(input_data, data_format, params=(np.random.random() * 90., np
     else:
         axes = (1, 2)
     data = interp.rotate(data, float(params[0]), axes=axes, reshape=False, order=1)  # bicubic interp
-    if labels:
+    if labels is not None:
         labels = interp.rotate(labels, float(params[0]), axes=axes, reshape=False, order=1)  # NN interp
 
     # apply flip
@@ -128,7 +138,7 @@ def _augment_image(input_data, data_format, params=(np.random.random() * 90., np
             labels = np.flip(labels, axis=axes[0])
 
     # recombine arrays into tuple if two were given, otherwise just return one array
-    if labels:
+    if labels is not None:
         data = (data, labels)
 
     return data
@@ -140,8 +150,8 @@ BUFFER_SIZE = 12
 SHUFFLE_SIZE = 6
 NUM_THREADS = 16
 
-main_data_dir = '/media/ecalabr/data2/io_test'
-study_numbers = '11045377', '11053877', '11065772'
+#main_data_dir = '/media/ecalabr/data2/io_test'
+#study_numbers = '11045377', '11053877', '11065772'
 
 main_data_dir = '/media/ecalabr/data2/qc_complete'
 study_numbers = ['10672000', '10846904', '10940662', '11038642', '11129704', '11196914', '11318417', '11419123',
@@ -171,20 +181,33 @@ study_dirs = [os.path.join(main_data_dir, s) for s in study_numbers]
 
 study_dirs = tf.constant(study_dirs)
 dataset = tf.data.Dataset.from_tensor_slices(study_dirs)
-dataset = dataset.map(lambda x: tf.py_func(_load_multicon_and_labels, [x], tf.float32), num_parallel_calls=NUM_THREADS)
+dataset = dataset.map(lambda x: tf.py_func(_load_multicon_and_labels, [x], (tf.float32, tf.float32)), num_parallel_calls=NUM_THREADS)
 dataset = dataset.prefetch(BUFFER_SIZE)
-dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
+dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
 dataset = dataset.shuffle(SHUFFLE_SIZE)
 iterator = dataset.make_one_shot_iterator()
 get_next = iterator.get_next()
 
 with tf.Session() as sess:
     sess.run(get_next)
-    for i in range(2000):
+    for i in range(10000):
         data_slice = sess.run(get_next)
         if i%250 == 0:
             print(i)
+            fig = plt.figure()
+            def close_event():
+                plt.close()
+            timer = fig.canvas.new_timer(interval = 3000)
+            timer.add_callback(close_event)
+            splt = fig.subplots(nrows=2, ncols=3)
+            # image data
             image_data = data_slice[0]
-            concat = image_data.reshape(-1, image_data.shape[2])
-            imgplot = plt.imshow(np.swapaxes(concat, 0, 1))
+            for z in range(4):
+                splt[np.unravel_index(z, [2,3])].imshow(np.swapaxes(np.squeeze(image_data[z,:,:]), 0, 1), cmap='gray')
+                splt[np.unravel_index(z, [2,3])].set_title('Data Image ' + str(z+1))
+            # label data
+            label_data = data_slice[1]
+            splt[1,2].imshow(np.swapaxes(np.squeeze(label_data), 0, 1), cmap='gray')
+            splt[1,2].set_title('Labels')
+            timer.start()
             plt.show()
