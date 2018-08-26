@@ -208,8 +208,11 @@ def upsample_layer(inputs, filters, kernel_size, strides, data_format):
         tf.layers.conv2d_transpose or tf.layers.conv3d_transpose layer depending on length of strides argument
     """
 
-    # if an int or list/tuple of len 2 is passed to strides, then return 2d function
-    if isinstance(strides, int) or len(strides) < 3:
+    # if strides is an int, assume 2D
+    if isinstance(strides, int): strides = [strides, strides]
+
+    # if list/tuple of len 2 is passed to strides, then return 2d function
+    if len(strides) < 3:
         return tf.layers.conv2d_transpose(
             inputs=inputs,
             filters=filters,
@@ -284,6 +287,56 @@ def residual_layer(tensor, n_filters=64, k_size=(3, 3), strides=(1, 1), dilation
     # add shortcut to outputs and one final activation
     tensor = tf.add(tensor, shortcut)
     tensor = activation(tensor)
+
+    return tensor
+
+
+# Simple residual layer
+def upsample_residual_layer(tensor, n_filters=64, k_size=(3, 3), strides=(1, 1), dilation=(1, 1),
+                   is_training=False, data_format="channels_last"):
+    """
+    Creates a single simple residual block with batch normalization and activation followed by stride 2 upsampling
+    Modeled after: https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py
+    Args:
+        tensor: a tensorflow tensor - the input data tensor
+        n_filters: an int - the number of filters for the layers
+        k_size: an int or list/tuple - the size of the convolution kernel for the residual layers
+        strides: an int or list/tuple - the stride for the convolutions of the first convolution layer
+        dilation: an int or list/tuple - the dilation rate for the convolution
+        is_training: a boolean - whether or not the model is training
+        data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
+    Returns:
+        tensor: a tensorflow tensor - the output of the layer
+    """
+    # define shortcut
+    shortcut = tensor
+
+    # determine if strided
+    if not isinstance(strides, (list, tuple)):
+        strides = [strides] * 2
+    strided = True if any(stride > 1 for stride in strides) else False
+
+    # handle identity versus projection shortcut for outputs of different dimension
+    if strided: # if strides are 2 for example, then project shortcut to output size
+        # accomplish projection with a 1x1 convolution
+        shortcut = conv2d_fixed_pad(tensor, n_filters, 1, strides, dilation=dilation, data_format=data_format)
+        shortcut = batch_norm(shortcut, is_training)
+
+    # Convolution block 1
+    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation=dilation, data_format=data_format)
+    tensor = batch_norm(tensor, is_training, data_format=data_format)
+    tensor = activation(tensor)
+
+    # Convolution block 2 (force strides==1)
+    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides=1, dilation=dilation, data_format=data_format)
+    tensor = batch_norm(tensor, is_training, data_format=data_format)
+
+    # add shortcut to outputs and one final activation
+    tensor = tf.add(tensor, shortcut)
+    tensor = activation(tensor)
+
+    # upsample
+    tensor = upsample_layer(tensor, n_filters, k_size, [2, 2], data_format)
 
     return tensor
 
@@ -567,7 +620,9 @@ def MSNet(tensor, is_training, n_classes, k_size=(1, 3, 3), base_filters=32, dat
 # autoencoder residual unet
 def resid_unet(tensor, is_training, n_blocks=17, ds=(2, 5, 9, 13),
            base_filters=64, k_size=(3,3), data_format="channels_last"):
-    """Creates a ResNet using n=n_blocks simple resnet blocks and n=ds downsampling layers
+    """
+    Creates a ResNet Unet simimlar to https://arxiv.org/pdf/1704.07239.pdf
+    using n=n_blocks simple resnet blocks and n=ds downsampling layers
     Args:
         tensor: a tensorflow tensor - the input data tensor
         is_training: a boolean - whether or not the model is training
@@ -613,7 +668,8 @@ def resid_unet(tensor, is_training, n_blocks=17, ds=(2, 5, 9, 13),
             if i in ds:
                 strides = 2
                 filters = filters / 2
-                tensor = upsample_residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+                tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+                #tensor = upsample_residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
                 tensor = tf.identity(tensor, "decoder_block_layer_" + str(i).zfill(len(str(n_blocks * 2))))
             else:
                 strides = 1
@@ -626,5 +682,117 @@ def resid_unet(tensor, is_training, n_blocks=17, ds=(2, 5, 9, 13),
         tensor = tf.identity(tensor, "final_conv")
         tensor = batch_norm(tensor, is_training, data_format)
         tensor = activation(tensor)
+
+        return tensor
+
+
+# autoencoder residual unet for regression
+def res_unet_reg(tensor, is_training, base_filters=16, k_size=(3, 3), data_format="channels_last"):
+    """
+    Creates a ResNet Unet simimlar to https://arxiv.org/pdf/1704.07239.pdf
+    using n=n_blocks simple resnet blocks and n=ds downsampling layers
+    Args:
+        tensor: a tensorflow tensor - the input data tensor
+        is_training: a boolean - whether or not the model is training
+        base_filters: an int - the number of filters for the first layer of the network (auto scaled for deeper layers)
+        k_size: an int - the size of the convolution kernel for the residual layers
+        data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
+    Returns:
+        logits: a tensorflow tensor - unscaled logits of size n_classes
+    """
+
+    # set variable scope
+    with tf.variable_scope("resid_unet"):
+        # set default values
+        ksize = list(k_size) if isinstance(k_size, (tuple, list)) else [k_size] * 2
+        filters = base_filters
+        dilation = [1, 1]
+        strides = [1, 1]
+
+        # initial convolutional layer
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = tf.identity(tensor, "init_conv_1")
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+
+        # encoder residual block layer 1
+        tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "encoder_block_layer_1_1")
+
+        # long range skip 1
+        skip_1 = tf.identity(tensor, "skip_1")
+
+        # downsample 1
+        tensor = residual_layer(tensor, filters, ksize, [2, 2], dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "downsample_block_1")
+        filters = filters * 2
+
+        # encoder residual block layer 2
+        tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "encoder_block_layer_2_1")
+
+        # long range skip 2
+        skip_2 = tf.identity(tensor, "skip_2")
+
+        # downsample 2
+        tensor = residual_layer(tensor, filters, ksize, [2, 2], dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "downsample_block_2")
+        filters = filters * 2
+
+        # encoder residual block layer 3
+        tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "encoder_block_layer_3_1")
+
+        # long range skip 3
+        skip_3 = tf.identity(tensor, "skip_3")
+
+        # downsample 3
+        tensor = residual_layer(tensor, filters, ksize, [2, 2], dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "downsample_block_3")
+        filters = filters * 2
+
+        # encoder residual block layer 4
+        tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "encoder_block_layer_4_1")
+
+        # upsample 3
+        tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+        tensor = tf.identity(tensor, "upsample_3")
+
+        # fuse 3
+        tensor = tf.concat([tensor, skip_3], name="concatenate_3", axis=-1 if data_format == "channels_last" else 1)
+        filters = filters / 2
+
+        # decoder residual block layer 3
+        tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "decoder_block_layer_3_1")
+
+        # upsample 2
+        tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+        tensor = tf.identity(tensor, "upsample_2")
+
+        # fuse 2
+        tensor = tf.concat([tensor, skip_2], name="concatenate_2", axis=-1 if data_format == "channels_last" else 1)
+        filters = filters / 2
+
+        # decoder residual block layer 2
+        tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "decoder_block_layer_2_1")
+
+        # upsample 1
+        tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+        tensor = tf.identity(tensor, "upsample_1")
+
+        # fuse 1
+        tensor = tf.concat([tensor, skip_1], name="concatenate_1", axis=-1 if data_format == "channels_last" else 1)
+        filters = filters / 2
+
+        # decoder residual block layer 1
+        tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
+        tensor = tf.identity(tensor, "decoder_block_layer_1_1")
+
+        # 1x1 convolutional layer for output
+        tensor = conv2d_fixed_pad(tensor, 1, [1, 1], strides, dilation, data_format)
+        tensor = tf.identity(tensor, "final_conv_1")
 
         return tensor

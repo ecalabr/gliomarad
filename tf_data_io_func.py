@@ -21,17 +21,14 @@ def _load_single_study(study_dir, file_prefixes, data_format='channels_last', sl
 
     # sanity checks
     if not os.path.isdir(study_dir): sys.exit("Specified study_dir does not exist")
-    if not isinstance(file_prefixes, (str, list)): sys.exit("file_prefixes must be a string or list of strings")
-    if isinstance(file_prefixes, str): file_prefixes = [file_prefixes]
     if data_format not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
     if slice_trim is not None and not isinstance(slice_trim, (list, tuple)): sys.exit("slice_trim must be list/tuple")
-
-    # convert from directory name to image names
     images = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
-    output = []
-    nz_inds = [0, -1]
+    if not images: sys.exit("No matching image files found for file prefixes: " + str(images))
 
     # load images and concatenate into a 4d numpy array
+    output = []
+    nz_inds = [0, -1]
     for ind, image in enumerate(images):
         if ind == 0:  # find dimensions after trimming zero slices and preallocate 4d array
             first_image = nib.load(images[0]).get_fdata()
@@ -107,22 +104,24 @@ def _augment_image(input_data, data_format, params=(np.random.random()*90., np.r
     return output_data
 
 
-def load_multicon_and_labels(study_directory):
+def load_multicon_and_labels(study_directory, data_prefixes, labels_prefix):
     """
     Load multicontrast image data and a label image.
     :param study_directory: A directory containing the desired image data.
+    :param data_prefixes: a list of filenames - the data files to be loaded
+    :param labels_prefix: a list containing one string, the labels to be loaded
     :return: a tuple of np ndarrays containing the image data and labels in the specified tf data format
     """
 
     # sanity checks
     if not os.path.isdir(study_directory): sys.exit("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in data_prefixes]): sys.exit("Data prefixes must be strings")
+    if not all([isinstance(a, str) for a in labels_prefix]): sys.exit("Labels prefixes must be strings")
 
     # load multicontrast data
-    data_prefixes = ['FLAIR_wm', 'T1_wm', 'T1gad_wm', 'T2_wm']
     data, nzi = _load_single_study(study_directory, data_prefixes, data_format='channels_last')
 
     # load labels data
-    labels_prefix = ['ASL_wm']
     labels, nzi = _load_single_study(study_directory, labels_prefix, data_format='channels_last', slice_trim=nzi)
 
     # augment
@@ -133,22 +132,24 @@ def load_multicon_and_labels(study_directory):
     return data, labels
 
 
-def load_multicon_and_regression(study_directory):
+def load_multicon_and_regression(study_directory, data_prefixes, labels_prefix):
     """
     Load multicontrast image data and a regression image target.
     :param study_directory: A directory containing the desired image data.
+    :param data_prefixes: a list of filenames - the data files to be loaded
+    :param labels_prefix: a list containing one string, the labels to be loaded
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
     # sanity checks
     if not os.path.isdir(study_directory): sys.exit("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in data_prefixes]): sys.exit("Data prefixes must be strings")
+    if not all([isinstance(a, str) for a in labels_prefix]): sys.exit("Labels prefixes must be strings")
 
     # load multicontrast data
-    data_prefixes = ['FLAIR_wm', 'T1_wm', 'T1gad_wm', 'T2_wm']
     data, nzi = _load_single_study(study_directory, data_prefixes, data_format='channels_last')
 
     # load labels data
-    labels_prefix = ['ASL_wm']
     labels, nzi = _load_single_study(study_directory, labels_prefix, data_format='channels_last', slice_trim=nzi)
 
     # augment
@@ -166,23 +167,28 @@ def display_tf_dataset(dataset_data):
     :return: displays images for 3 seconds then continues
     """
 
-    fig = plt.figure()
-
+    # make figure and configure close event timer
+    fig = plt.figure(figsize=(10,4))
     def close_event():
         plt.close()
-
     timer = fig.canvas.new_timer(interval=3000)
     timer.add_callback(close_event)
-    splt = fig.subplots(nrows=2, ncols=3)
+
     # image data
     image_data = dataset_data[0]
-    for z in range(4):
-        splt[np.unravel_index(z, [2, 3])].imshow(np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1), cmap='gray')
-        splt[np.unravel_index(z, [2, 3])].set_title('Data Image ' + str(z + 1))
+    nplots = image_data.shape[0]+1
+    for z in range(image_data.shape[0]):
+        ax = fig.add_subplot(1, nplots, z+1)
+        ax.imshow(np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1), cmap='gray')
+        ax.set_title('Data Image ' + str(z + 1))
+
     # label data
     label_data = dataset_data[1]
-    splt[1, 2].imshow(np.swapaxes(np.squeeze(label_data), 0, 1), cmap='gray')
-    splt[1, 2].set_title('Labels')
+    ax = fig.add_subplot(1, nplots, nplots)
+    ax.imshow(np.swapaxes(np.squeeze(label_data), 0, 1), cmap='gray')
+    ax.set_title('Labels')
+
+    # start timer and show plot
     timer.start()
     plt.show()
 
