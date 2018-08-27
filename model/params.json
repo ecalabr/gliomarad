@@ -1,0 +1,24 @@
+{
+  "data_dir": "/media/ecalabr/data2/qc_complete",
+  "data_prefix": ["T1_wm", "T2_wm", "FLAIR_wm", "DWI_wm", "ASL_wm"],
+  "label_prefix": ["T1gad_wm"],
+
+  "model_name": "res_unet_reg",
+  "base_filters": 16,
+  "kernel_size": [3, 3],
+  "data_format": "channels_last",
+
+  "buffer_size": 12,
+  "shuffle_size": 6,
+  "batch_size": 4,
+  "num_threads": 16,
+  "train_fract": 0.1,
+  "learning_rate": 1e-3,
+  "num_epochs": 10,
+  "dropout_rate": 0.3,
+
+  "save_summary_steps": 100
+}
+
+
+
