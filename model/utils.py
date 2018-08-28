@@ -15,12 +15,16 @@ class Params:
 
     # declare attributes
     data_dir = None
+    model_dir = None
+    restore_dir = None
     data_prefix = None
     label_prefix = None
+
     model_name = None
     base_filters = None
     kernel_size = None
     data_format = None
+
     buffer_size = None
     shuffle_size = None
     batch_size = None
@@ -29,6 +33,7 @@ class Params:
     learning_rate = None
     num_epochs = None
     dropout_rate = None
+
     save_summary_steps = None
 
     def __init__(self, json_path):

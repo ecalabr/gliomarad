@@ -1,5 +1,7 @@
 {
   "data_dir": "/media/ecalabr/data2/qc_complete",
+  "model_dir": "/media/ecalabr/data2/model",
+  "restore_dir": "/media/ecalabr/data2/model",
   "data_prefix": ["T1_wm", "T2_wm", "FLAIR_wm", "DWI_wm", "ASL_wm"],
   "label_prefix": ["T1gad_wm"],
 
@@ -8,7 +10,7 @@
   "kernel_size": [3, 3],
   "data_format": "channels_last",
 
-  "buffer_size": 12,
+  "buffer_size": 1,
   "shuffle_size": 6,
   "batch_size": 4,
   "num_threads": 16,

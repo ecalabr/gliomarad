@@ -202,7 +202,7 @@ def input_fn(is_training, params):
     # Study dirs and prefixes setup
     study_dirs = glob(params.data_dir + '/*/')
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
-    #eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
+    eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
     params.data_prefix = tf.constant(params.data_prefix)
     params.label_prefix = tf.constant(params.label_prefix)
 
@@ -215,17 +215,17 @@ def input_fn(is_training, params):
         dataset = dataset.prefetch(params.buffer_size)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         dataset = dataset.shuffle(params.shuffle_size)
-        # dataset = dataset.batch(params.batch_size)
+        dataset = dataset.batch(params.batch_size)
     else:
         # tf.dataset setup for testing/evaluation
-        dataset = tf.data.Dataset.from_tensor_slices(train_dirs)
+        dataset = tf.data.Dataset.from_tensor_slices(eval_dirs)
         dataset = dataset.map(
             lambda x: tf.py_func(load_multicon_and_labels, [x, params.data_prefix, params.label_prefix],
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
         dataset = dataset.prefetch(params.buffer_size)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         dataset = dataset.shuffle(params.shuffle_size)
-        # dataset = dataset.batch(params.batch_size)
+        dataset = dataset.batch(params.batch_size)
 
     # make iterator and query the output of the iterator for input to the model
     iterator = dataset.make_initializable_iterator()
