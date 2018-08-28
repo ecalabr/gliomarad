@@ -2,21 +2,17 @@
 
 import logging
 import os
-
-from tqdm import trange
 import tensorflow as tf
 
 from model.utils import save_dict_to_json
 
 
-def evaluate_sess(sess, model_spec, num_steps, writer=None, params=None):
+def evaluate_sess(sess, model_spec, writer=None):
     """Train the model on `num_steps` batches.
     Args:
         sess: (tf.Session) current session
         model_spec: (dict) contains the graph operations or nodes needed for training
-        num_steps: (int) train for this number of batches
         writer: (tf.summary.FileWriter) writer for summaries. Is None if we don't log anything
-        params: (Params) hyperparameters
     """
     update_metrics = model_spec['update_metrics']
     eval_metrics = model_spec['metrics']
@@ -27,8 +23,11 @@ def evaluate_sess(sess, model_spec, num_steps, writer=None, params=None):
     sess.run(model_spec['metrics_init_op'])
 
     # compute metrics over the dataset
-    for _ in range(num_steps):
-        sess.run(update_metrics)
+    while True:
+        try:
+            sess.run(update_metrics)
+        except tf.errors.OutOfRangeError:
+            break
 
     # Get the values of the metrics
     metrics_values = {k: v[0] for k, v in eval_metrics.items()}

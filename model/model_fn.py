@@ -4,13 +4,13 @@ from net_builder import *
 def model_fn(inputs, params, mode):
     """
     The tensorflow model function.
-    :param inputs: (dict) contains the inputs of the graph (features, labels...)
+    :param inputs: (dict) contains the inputs of the graph (features, labels...) and init ops
     :param params: (class: Params) contains hyperparameters of the model (ex: `params.learning_rate`)
     :param mode: (str) whether or not the model is training, evaluating etc ('train', 'eval')
-    :return: model_spec - the model function for tensorflow training/evaluation
+    :return: model_spec (dict) contains all the data/nodes and ops for tensorflow training/evaluation
     """
 
-    # separate labels and features
+    # separate out labels and features
     labels = inputs["labels"]
     features = inputs["features"]
 
@@ -52,11 +52,8 @@ def model_fn(inputs, params, mode):
     tf.summary.scalar('loss', loss)
     tf.summary.scalar('error', error)
 
-    # It contains nodes or operations in the graph that will be used for training and evaluation
-    model_spec = {
-        'features': features,
-        'labels': labels
-    }
+    # Define model_spec. It contains all nodes or operations in the graph that will be used for training and evaluation
+    model_spec = inputs
     variable_init_op = tf.group(*[tf.global_variables_initializer(), tf.tables_initializer()])
     model_spec['variable_init_op'] = variable_init_op
     model_spec["predictions"] = predictions

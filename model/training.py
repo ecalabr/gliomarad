@@ -2,20 +2,16 @@
 
 import logging
 import os
-
-from tqdm import trange
 import tensorflow as tf
-
 from model.utils import save_dict_to_json
 from model.evaluation import evaluate_sess
 
 
-def train_sess(sess, model_spec, num_steps, writer, params):
+def train_sess(sess, model_spec, writer, params):
     """Train the model on `num_steps` batches
     Args:
         sess: (tf.Session) current session
         model_spec: (dict) contains the graph operations or nodes needed for training
-        num_steps: (int) train for this number of batches
         writer: (tf.summary.FileWriter) writer for summaries
         params: (Params) hyperparameters
     """
@@ -28,24 +24,26 @@ def train_sess(sess, model_spec, num_steps, writer, params):
     global_step = tf.train.get_global_step()
 
     # Load the training dataset into the pipeline and initialize the metrics local variables
-    sess.run(model_spec['iterator_init_op']) ################THIS DOESNT EXIST
+    sess.run(model_spec['iterator_init_op'])
     sess.run(model_spec['metrics_init_op'])
 
-    # Use tqdm for progress bar
-    t = trange(num_steps)
-    for i in t:
-        # Evaluate summaries for tensorboard only once in a while
-        if i % params.save_summary_steps == 0:
-            # Perform a mini-batch update
-            _, _, loss_val, summ, global_step_val = sess.run([train_op, update_metrics, loss,
-                                                              summary_op, global_step])
-            # Write summaries for tensorboard
-            writer.add_summary(summ, global_step_val)
-        else:
-            _, _, loss_val = sess.run([train_op, update_metrics, loss])
-        # Log the loss in the tqdm progress bar
-        t.set_postfix(loss='{:05.3f}'.format(loss_val))
-
+    # run through the entire dataset iterator
+    n=1
+    while True:
+        try:
+            # log to tensorboard only every summary steps
+            if n % params.save_summary_steps == 0:
+                # Perform a mini-batch update
+                _, _, loss_val, summ, global_step_val = sess.run([train_op, update_metrics, loss,
+                                                                  summary_op, global_step])
+                # Write summaries for tensorboard
+                writer.add_summary(summ, global_step_val)
+            else:
+                _, _, loss_val = sess.run([train_op, update_metrics, loss])
+                logging.info("Batch = " + str(n).zfill(5) + "Loss = " + str(loss_val))
+            n=n+1
+        except tf.errors.OutOfRangeError:
+            break
 
     metrics_values = {k: v[0] for k, v in metrics.items()}
     metrics_val = sess.run(metrics_values)
@@ -86,22 +84,19 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
 
         best_eval_acc = 0.0
         for epoch in range(begin_at_epoch, begin_at_epoch + params.num_epochs):
-            # Run one epoch
+            # Train for one epoch
             logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + params.num_epochs))
-            # Compute number of batches in one epoch (one full pass over the training set)
-            num_steps = (params.train_size + params.batch_size - 1) // params.batch_size
-            train_sess(sess, train_model_spec, num_steps, train_writer, params)
+            train_sess(sess, train_model_spec, train_writer, params)
 
             # Save weights
             last_save_path = os.path.join(model_dir, 'last_weights', 'after-epoch')
             last_saver.save(sess, last_save_path, global_step=epoch + 1)
 
             # Evaluate for one epoch on validation set
-            num_steps = (params.eval_size + params.batch_size - 1) // params.batch_size
-            metrics = evaluate_sess(sess, eval_model_spec, num_steps, eval_writer)
+            metrics = evaluate_sess(sess, eval_model_spec, eval_writer)
 
             # If best_eval, best_save_path
-            eval_acc = metrics['accuracy']
+            eval_acc = metrics['mean_error']
             if eval_acc >= best_eval_acc:
                 # Store new best accuracy
                 best_eval_acc = eval_acc
