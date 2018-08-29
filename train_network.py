@@ -23,4 +23,4 @@ with tf.Session() as sess:
             n = n+1
             print("Processing slice " + str(n) + " epoch " + str(i+1))
             if n % 250 == 0:
-                display_tf_dataset(data_slice)
+                display_tf_dataset(data_slice, params.data_format)

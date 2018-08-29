@@ -15,14 +15,14 @@ def model_fn(inputs, params, mode):
     features = inputs["features"]
 
     # MODEL: define the layers of the model
-    with tf.variable_scope('model'):
+    with tf.variable_scope('model', reuse=tf.AUTO_REUSE):
         # generate the model and compute the output predictions
         predictions = net_builder(features, params, (mode == 'train'))
 
     # Define loss and accuracy (we need to apply a mask to account for padding)
     losses = tf.losses.mean_squared_error(labels, predictions)
-    mask = labels > 0
-    losses = tf.boolean_mask(losses, mask)
+    #mask = labels > 0
+    #losses = tf.boolean_mask(losses[:], mask)
     loss = tf.reduce_mean(losses)
     error = tf.reduce_mean(tf.cast(tf.metrics.mean_absolute_error(labels=labels, predictions=predictions), tf.float32))
 

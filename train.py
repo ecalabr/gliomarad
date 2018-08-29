@@ -18,7 +18,7 @@ parser.add_argument('--param_file', default='/media/ecalabr/data2/model/params.j
 
 if __name__ == '__main__':
     # Set the random seed for the whole graph for reproductible experiments
-    tf.set_random_seed(230)
+    #tf.set_random_seed(230)
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
@@ -27,24 +27,25 @@ if __name__ == '__main__':
 
     # Check that we are not overwriting some previous experiment
     # Comment these lines if you are developing your model and don't care about overwritting
-    model_dir_has_best_weights = os.path.isdir(params.model_dir)
-    overwritting = model_dir_has_best_weights and args.restore_dir is None
-    assert not overwritting, "Weights found in model_dir, aborting to avoid overwrite"
+    #model_dir_has_best_weights = os.path.isdir(params.model_dir)
+    #overwritting = model_dir_has_best_weights and args.restore_dir is None
+    #assert not overwritting, "Weights found in model_dir, aborting to avoid overwrite"
 
     # Set the logger
-    set_logger(os.path.join(args.model_dir, 'train.log'))
+    set_logger(os.path.join(params.model_dir, 'train.log'))
 
     # Create the two iterators over the two datasets
     train_inputs = input_fn(is_training=True, params=params)
     eval_inputs = input_fn(is_training=False, params=params)
     logging.info("- done.")
 
+
     # Define the models (2 different set of nodes that share weights for train and eval)
     logging.info("Creating the model...")
-    train_model_spec = model_fn('train', train_inputs, params)
-    eval_model_spec = model_fn('eval', eval_inputs, params)
+    train_model_spec = model_fn(train_inputs, params, mode='train')
+    eval_model_spec = model_fn(eval_inputs, params, mode='eval')
     logging.info("- done.")
 
     # Train the model
     logging.info("Starting training for {} epoch(s)".format(params.num_epochs))
-    train_and_evaluate(train_model_spec, eval_model_spec, args.model_dir, params, args.restore_dir)
+    train_and_evaluate(train_model_spec, eval_model_spec, params.model_dir, params, params.restore_dir)

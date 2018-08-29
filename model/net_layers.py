@@ -15,9 +15,12 @@ def batch_norm(tensor, is_training, data_format="channels_last"):
     Returns:
         tf.layers.batch_normalization layer with appropriate parameters
     """
+    # define axis based on data_format
+    axis = -1 if data_format == "channels_last" else 1
+
     return tf.layers.batch_normalization(
         inputs=tensor,
-        axis=-1, # channels last, assume last channel is correct axis
+        axis=axis, # channels last, assume last channel is correct axis
         momentum=0.99,
         epsilon=0.001,
         center=True,
@@ -40,7 +43,7 @@ def batch_norm(tensor, is_training, data_format="channels_last"):
         fused=True, # use fused batch norm for performance tensorflow.org/performance/performance_guide#common_fused_ops
         virtual_batch_size=None,
         adjustment=None,
-        data_format=data_format)
+        )
 
 
 def activation(tensor, acti_type="leaky_relu"): # add optional type argument
@@ -79,6 +82,9 @@ def fixed_padding(inputs, kernel_size, strides, data_format="channels_last"):
     Returns:
         A tensor with the same format as the input with the data either intact or padded (if kernel_size > 1)
     """
+    # determine signle dimension kernel size (assumes isotropic kernel)
+    if isinstance(kernel_size, (list, tuple)): kernel_size = kernel_size[0]
+
     # determine pad start and end
     pad_total = kernel_size - 1
     p_beg = pad_total // 2

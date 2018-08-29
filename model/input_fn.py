@@ -8,7 +8,7 @@ import scipy.ndimage.interpolation as interp
 import tensorflow as tf
 
 
-def _load_single_study(study_dir, file_prefixes, data_format='channels_last', slice_trim=None):
+def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None):
     """
     Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
     returns a 4D numpy array containing the image data.
@@ -44,7 +44,7 @@ def _load_single_study(study_dir, file_prefixes, data_format='channels_last', sl
             output[:, :, :, ind] = nib.load(images[ind]).get_fdata()[:, :, nz_inds[0]:nz_inds[1]]
 
     # permute data to desired data format
-    if data_format == 'channels_last':
+    if data_format == 'channels_first':
         output = np.transpose(output, axes=(2, 3, 0, 1))
     else:
         output = np.transpose(output, axes=(2, 0, 1, 3))
@@ -90,9 +90,9 @@ def _augment_image(input_data, data_format, params=(np.random.random()*90., np.r
 
     # apply rotation
     if data_format == 'channels_last':
-        axes = (2, 3)
-    else:
         axes = (1, 2)
+    else:
+        axes = (2, 3)
     output_data = interp.rotate(input_data, float(params[0]), axes=axes, reshape=False, order=order)
 
     # apply flip
@@ -102,12 +102,13 @@ def _augment_image(input_data, data_format, params=(np.random.random()*90., np.r
     return output_data
 
 
-def load_multicon_and_labels(study_directory, data_prefixes, labels_prefix, label_interp=1):
+def load_multicon_and_labels(study_directory, data_prefixes, labels_prefix, data_format, label_interp=1):
     """
     Load multicontrast image data and a regression image target.
     :param study_directory: (str) A directory containing the desired image data.
     :param data_prefixes: (list) a list of filenames - the data files to be loaded
     :param labels_prefix: (list) a list containing one string, the labels to be loaded
+    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param label_interp: (int) in range 0-5, the order of spline interp for labels during augmentation
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
@@ -119,20 +120,21 @@ def load_multicon_and_labels(study_directory, data_prefixes, labels_prefix, labe
     if not label_interp in range(6): sys.exit("Spline interpolation order must be in range 0-3")
 
     # load multicontrast data
-    data, nzi = _load_single_study(study_directory, data_prefixes, data_format='channels_last')
+    data, nzi = _load_single_study(study_directory, data_prefixes, data_format=data_format)
 
     # load labels data
-    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format='channels_last', slice_trim=nzi)
+    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format=data_format, slice_trim=nzi)
 
     return data, labels
 
 
-def load_multicon_and_labels_aug(study_directory, data_prefixes, labels_prefix, label_interp=1):
+def load_multicon_and_labels_aug(study_directory, data_prefixes, labels_prefix, data_format, label_interp=1):
     """
     Load multicontrast image data and a regression image target.
     :param study_directory: (str) A directory containing the desired image data.
     :param data_prefixes: (list) a list of filenames - the data files to be loaded
     :param labels_prefix: (list) a list containing one string, the labels to be loaded
+    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param label_interp: (int) in range 0-5, the order of spline interp for labels during augmentation
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
@@ -144,23 +146,24 @@ def load_multicon_and_labels_aug(study_directory, data_prefixes, labels_prefix, 
     if not label_interp in range(6): sys.exit("Spline interpolation order must be in range 0-3")
 
     # load multicontrast data
-    data, nzi = _load_single_study(study_directory, data_prefixes, data_format='channels_last')
+    data, nzi = _load_single_study(study_directory, data_prefixes, data_format=data_format)
 
     # load labels data
-    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format='channels_last', slice_trim=nzi)
+    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format=data_format, slice_trim=nzi)
 
 
     params = (np.random.random() * 90., np.random.random() > 0.5)
-    data = _augment_image(data, params=params, data_format='channels_last', order=1)
-    labels = _augment_image(labels, params=params, data_format='channels_last', order=1)  # linear interp for regression
+    data = _augment_image(data, params=params, data_format=data_format, order=1)
+    labels = _augment_image(labels, params=params, data_format=data_format, order=1)  # linear interp for regression
 
     return data, labels
 
 
-def display_tf_dataset(dataset_data):
+def display_tf_dataset(dataset_data, data_format):
     """
     Displays tensorflow dataset output images and labels/regression images.
     :param dataset_data: (tf.tensor) output from tf dataset function containing images and labels/regression image
+    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :return: displays images for 3 seconds then continues
     """
 
@@ -172,17 +175,24 @@ def display_tf_dataset(dataset_data):
     timer.add_callback(close_event)
 
     # image data
-    image_data = dataset_data["features"]  #dataset_data[0]
-    nplots = image_data.shape[0]+1
-    for z in range(image_data.shape[0]):
-        ax = fig.add_subplot(1, nplots, z+1)
-        ax.imshow(np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1), cmap='gray')
+    image_data = dataset_data["features"]  # dataset_data[0]
+    if len(image_data.shape) > 3:
+        image_data = np.squeeze(image_data[0, :, :, :])  # handle batch data
+    nplots = image_data.shape[0] + 1 if data_format == 'channels_first' else image_data.shape[2] + 1
+    channels = image_data.shape[0] if data_format == 'channels_first' else image_data.shape[2]
+    for z in range(channels):
+        ax = fig.add_subplot(1, nplots, z + 1)
+        img = np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1) if data_format == 'channels_first' else np.squeeze(
+            image_data[:, :, z])
+        ax.imshow(img, cmap='gray')
         ax.set_title('Data Image ' + str(z + 1))
 
     # label data
-    label_data = dataset_data["labels"]  #dataset_data[1]
+    label_data = dataset_data["labels"]  # dataset_data[1]
+    if len(label_data.shape) > 3: label_data = np.squeeze(label_data[0, :, :, :])  # handle batch data
     ax = fig.add_subplot(1, nplots, nplots)
-    ax.imshow(np.swapaxes(np.squeeze(label_data), 0, 1), cmap='gray')
+    img = np.swapaxes(np.squeeze(label_data), 0, 1) if data_format == 'channels_first' else np.squeeze(label_data)
+    ax.imshow(img, cmap='gray')
     ax.set_title('Labels')
 
     # start timer and show plot
@@ -203,14 +213,13 @@ def input_fn(is_training, params):
     study_dirs = glob(params.data_dir + '/*/')
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
     eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
-    params.data_prefix = tf.constant(params.data_prefix)
-    params.label_prefix = tf.constant(params.label_prefix)
 
     if is_training:
         # tf.dataset setup for training
         dataset = tf.data.Dataset.from_tensor_slices(train_dirs)
         dataset = dataset.map(  # for training use data augmentation
-            lambda x: tf.py_func(load_multicon_and_labels_aug, [x, params.data_prefix, params.label_prefix],
+            lambda x: tf.py_func(load_multicon_and_labels_aug,
+                                 [x, params.data_prefix, params.label_prefix, params.data_format],
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
         dataset = dataset.prefetch(params.buffer_size)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
@@ -220,7 +229,8 @@ def input_fn(is_training, params):
         # tf.dataset setup for testing/evaluation
         dataset = tf.data.Dataset.from_tensor_slices(eval_dirs)
         dataset = dataset.map(
-            lambda x: tf.py_func(load_multicon_and_labels, [x, params.data_prefix, params.label_prefix],
+            lambda x: tf.py_func(load_multicon_and_labels,
+                                 [x, params.data_prefix, params.label_prefix, params.data_format],
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
         dataset = dataset.prefetch(params.buffer_size)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
@@ -232,8 +242,15 @@ def input_fn(is_training, params):
     get_next = iterator.get_next()
     init_op = iterator.initializer
 
+    # set shapes
+    get_next_features = get_next['features']
+    get_next_features.set_shape([params.batch_size, params.data_height, params.data_width, len(params.data_prefix)])
+    get_next_labels = get_next['labels']
+    get_next_labels.set_shape([params.batch_size, params.data_height, params.data_width, len(params.label_prefix)])
+
     # Build and return a dictionnary containing the nodes / ops
-    inputs = {'features': get_next['features'], 'labels':get_next['labels'], 'iterator_init_op': init_op}
+    #inputs = {'features': get_next['features'], 'labels':get_next['labels'], 'iterator_init_op': init_op}
+    inputs = {'features': get_next_features, 'labels': get_next_labels, 'iterator_init_op': init_op}
 
     return inputs
 

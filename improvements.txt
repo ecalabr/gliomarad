@@ -2,3 +2,9 @@ implement integration of - move all tumor segmentation to the end so the model d
 incorporate topup DTI files when/where they exist
 make nets for image segmentation and synthetic CT
 still issues with numbering keeper series, 11273473
+
+
+make sure params checks for undefined params
+loss masking
+tf.reuse
+image padding to divisible dimension

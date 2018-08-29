@@ -245,7 +245,7 @@ def resid_unet(tensor, is_training, n_blocks=17, ds=(2, 5, 9, 13),
 
 
 # autoencoder residual unet for regression
-def res_unet_reg(tensor, is_training, base_filters=16, k_size=(3, 3), data_format="channels_last"):
+def res_unet_reg(tensor, is_training, base_filters, k_size, data_format):
     """
     Creates a ResNet Unet simimlar to https://arxiv.org/pdf/1704.07239.pdf
     using n=n_blocks simple resnet blocks and n=ds downsampling layers
@@ -281,9 +281,9 @@ def res_unet_reg(tensor, is_training, base_filters=16, k_size=(3, 3), data_forma
         skip_1 = tf.identity(tensor, "skip_1")
 
         # downsample 1
+        filters = filters * 2
         tensor = residual_layer(tensor, filters, ksize, [2, 2], dilation, is_training, data_format)
         tensor = tf.identity(tensor, "downsample_block_1")
-        filters = filters * 2
 
         # encoder residual block layer 2
         tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
@@ -293,9 +293,9 @@ def res_unet_reg(tensor, is_training, base_filters=16, k_size=(3, 3), data_forma
         skip_2 = tf.identity(tensor, "skip_2")
 
         # downsample 2
+        filters = filters * 2
         tensor = residual_layer(tensor, filters, ksize, [2, 2], dilation, is_training, data_format)
         tensor = tf.identity(tensor, "downsample_block_2")
-        filters = filters * 2
 
         # encoder residual block layer 3
         tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
@@ -305,45 +305,48 @@ def res_unet_reg(tensor, is_training, base_filters=16, k_size=(3, 3), data_forma
         skip_3 = tf.identity(tensor, "skip_3")
 
         # downsample 3
+        filters = filters * 2
         tensor = residual_layer(tensor, filters, ksize, [2, 2], dilation, is_training, data_format)
         tensor = tf.identity(tensor, "downsample_block_3")
-        filters = filters * 2
 
         # encoder residual block layer 4
         tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
         tensor = tf.identity(tensor, "encoder_block_layer_4_1")
 
         # upsample 3
+        filters = filters / 2
         tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
         tensor = tf.identity(tensor, "upsample_3")
 
         # fuse 3
-        tensor = tf.concat([tensor, skip_3], name="concatenate_3", axis=-1 if data_format == "channels_last" else 1)
-        filters = filters / 2
+        #tensor = tf.concat([tensor, skip_3], name="concatenate_3", axis=-1 if data_format == "channels_last" else 1)
+        tensor = tf.add(tensor, skip_3, name="fuse_3")
 
         # decoder residual block layer 3
         tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
         tensor = tf.identity(tensor, "decoder_block_layer_3_1")
 
         # upsample 2
+        filters = filters / 2
         tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
         tensor = tf.identity(tensor, "upsample_2")
 
         # fuse 2
-        tensor = tf.concat([tensor, skip_2], name="concatenate_2", axis=-1 if data_format == "channels_last" else 1)
-        filters = filters / 2
+        #tensor = tf.concat([tensor, skip_2], name="concatenate_2", axis=-1 if data_format == "channels_last" else 1)
+        tensor = tf.add(tensor, skip_2, name="fuse_2")
 
         # decoder residual block layer 2
         tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)
         tensor = tf.identity(tensor, "decoder_block_layer_2_1")
 
         # upsample 1
+        filters = filters / 2
         tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
         tensor = tf.identity(tensor, "upsample_1")
 
         # fuse 1
-        tensor = tf.concat([tensor, skip_1], name="concatenate_1", axis=-1 if data_format == "channels_last" else 1)
-        filters = filters / 2
+        #tensor = tf.concat([tensor, skip_1], name="concatenate_1", axis=-1 if data_format == "channels_last" else 1)
+        tensor = tf.add(tensor, skip_1, name="fuse_1")
 
         # decoder residual block layer 1
         tensor = residual_layer(tensor, filters, ksize, strides, dilation, is_training, data_format)

@@ -4,6 +4,8 @@
   "restore_dir": "/media/ecalabr/data2/model",
   "data_prefix": ["T1_wm", "T2_wm", "FLAIR_wm", "DWI_wm", "ASL_wm"],
   "label_prefix": ["T1gad_wm"],
+  "data_height": 193,
+  "data_width": 229,
 
   "model_name": "res_unet_reg",
   "base_filters": 16,

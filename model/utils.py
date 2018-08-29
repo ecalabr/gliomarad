@@ -19,6 +19,8 @@ class Params:
     restore_dir = None
     data_prefix = None
     label_prefix = None
+    data_height = None
+    data_width = None
 
     model_name = None
     base_filters = None
