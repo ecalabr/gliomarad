@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sys
 
 
 class Params:
@@ -13,7 +14,7 @@ class Params:
     params.learning_rate = 0.5  # change the value of learning_rate in params
     """
 
-    # declare attributes
+    # declare attributes as None initially. All attributes defined here must be fed values from params.json.
     data_dir = None
     model_dir = None
     restore_dir = None
@@ -21,6 +22,8 @@ class Params:
     label_prefix = None
     data_height = None
     data_width = None
+    augment_train_data = None
+    label_interp = None
 
     model_name = None
     base_filters = None
@@ -40,6 +43,7 @@ class Params:
 
     def __init__(self, json_path):
         self.update(json_path)
+        self.check()
 
     def save(self, json_path):
         """Saves parameters to json file"""
@@ -51,6 +55,13 @@ class Params:
         with open(json_path) as f:
             params = json.load(f)
             self.__dict__.update(params)
+
+    def check(self):
+        """Checks that all required parameters are defined in params.json file"""
+        members = [getattr(self, attr) for attr in dir(self) if
+                   not callable(getattr(self, attr)) and not attr.startswith("__")]
+        if any([member is None for member in members]):
+            raise ValueError("One or more parameters is not defined in params.json")
 
     @property
     def dict(self):

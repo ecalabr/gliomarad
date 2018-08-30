@@ -4,7 +4,9 @@ make nets for image segmentation and synthetic CT
 still issues with numbering keeper series, 11273473
 
 
-make sure params checks for undefined params
 loss masking
-tf.reuse
+understand tf.reuse
 image padding to divisible dimension
+implement zero padding function to data input_fn
+see if tf.py_func will pass params class, and if so pass this through to the lower level data IO functions
+consider making one data loading function with optional augmentation

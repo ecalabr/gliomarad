@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 from glob import glob
 import numpy as np
 import nibabel as nib
@@ -86,7 +87,7 @@ def _augment_image(input_data, data_format, params=(np.random.random()*90., np.r
     if not isinstance(params, (list, tuple)): sys.exit("Params must be a list or tuple if specified")
     if not isinstance(params[0], (float, int)): sys.exit("First entry in params must be a float or int")
     if not isinstance(params[1], bool): sys.exit("Second entry in params must be a boolean")
-    if not order in range(6): sys.exit("Spline interpolation order must be in range 0-3")
+    if order not in range(6): sys.exit("Spline interpolation order must be in range 0-3")
 
     # apply rotation
     if data_format == 'channels_last':
@@ -102,59 +103,77 @@ def _augment_image(input_data, data_format, params=(np.random.random()*90., np.r
     return output_data
 
 
-def load_multicon_and_labels(study_directory, data_prefixes, labels_prefix, data_format, label_interp=1):
+def _zero_pad_image(input_data, out_dims, axes):
     """
-    Load multicontrast image data and a regression image target.
-    :param study_directory: (str) A directory containing the desired image data.
-    :param data_prefixes: (list) a list of filenames - the data files to be loaded
-    :param labels_prefix: (list) a list containing one string, the labels to be loaded
-    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    Zero pads an input image to the specified dimensions.
+    :param input_data: (np.ndarray) the image data to be padded
+    :param out_dims: (list(int)) the desired output dimensions.
+    :param axes: (list(int)) the axes for padding. Must have same length as out_dims
+    :return: (np.ndarray) the zero padded image
+    """
+
+    # sanity checks
+    if type(input_data) is not np.ndarray: sys.exit("Input must be a numpy array")
+    if not all([isinstance(out_dims, (tuple, list))] + [isinstance(val, int) for val in out_dims]): sys.exit(
+        "Output dims must be a list or tuple of ints")
+    if not all([isinstance(axes, (tuple, list))] + [isinstance(val, int) for val in axes]): sys.exit(
+        "Axes must be a list or tuple of ints")
+    if not len(out_dims) == len(axes): sys.exit("Output dimensions must have same length as axes")
+    if len(axes) != len(set(axes)): sys.exit("Axes cannot contain duplicate values")
+
+    # determine pad widths
+    pads = []
+    for dim in range(len(input_data.shape)):
+        pad = [0, 0]
+        if dim in axes:
+            total_pad = out_dims[axes.index(dim)] - input_data.shape[dim]
+            pad = [int(math.ceil(total_pad/2.)), int(math.floor(total_pad/2.))]
+        pads.append(pad)
+
+    # pad array with zeros (default)
+    input_data = np.pad(input_data, pads, 'constant')
+
+    return input_data
+
+
+def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, augment, label_interp=1):
+    """
+    Load multicontrast image data and target data/labels and perform augmentation if desired.
+    :param study_dir: (str) A directory containing the desired image data.
+    :param feature_prefx: (list) a list of filenames - the data files to be loaded
+    :param label_prefx: (list) a list containing one string, the labels to be loaded
+    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
+    :param augment: (str) whether or not to perform data augmentation, must be 'yes' or 'no'
     :param label_interp: (int) in range 0-5, the order of spline interp for labels during augmentation
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
     # sanity checks
-    if not os.path.isdir(study_directory): sys.exit("Specified study_directory does not exist")
-    if not all([isinstance(a, str) for a in data_prefixes]): sys.exit("Data prefixes must be strings")
-    if not all([isinstance(a, str) for a in labels_prefix]): sys.exit("Labels prefixes must be strings")
-    if not label_interp in range(6): sys.exit("Spline interpolation order must be in range 0-3")
+    if not os.path.isdir(study_dir): sys.exit("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): sys.exit("Data prefixes must be strings")
+    if not all([isinstance(a, str) for a in label_prefx]): sys.exit("Labels prefixes must be strings")
+    if data_fmt not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
+    if not all([isinstance(a, int) for a in out_dims]): sys.exit("data_dims must be a list/tuple of ints")
+    if augment not in ['yes', 'no']: sys.exit("Parameter augment must be 'yes' or 'no'")
+    if label_interp not in range(6): sys.exit("Spline interpolation order must be in range 0-3")
 
-    # load multicontrast data
-    data, nzi = _load_single_study(study_directory, data_prefixes, data_format=data_format)
-
-    # load labels data
-    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format=data_format, slice_trim=nzi)
-
-    return data, labels
-
-
-def load_multicon_and_labels_aug(study_directory, data_prefixes, labels_prefix, data_format, label_interp=1):
-    """
-    Load multicontrast image data and a regression image target.
-    :param study_directory: (str) A directory containing the desired image data.
-    :param data_prefixes: (list) a list of filenames - the data files to be loaded
-    :param labels_prefix: (list) a list containing one string, the labels to be loaded
-    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param label_interp: (int) in range 0-5, the order of spline interp for labels during augmentation
-    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
-    """
-
-    # sanity checks
-    if not os.path.isdir(study_directory): sys.exit("Specified study_directory does not exist")
-    if not all([isinstance(a, str) for a in data_prefixes]): sys.exit("Data prefixes must be strings")
-    if not all([isinstance(a, str) for a in labels_prefix]): sys.exit("Labels prefixes must be strings")
-    if not label_interp in range(6): sys.exit("Spline interpolation order must be in range 0-3")
-
-    # load multicontrast data
-    data, nzi = _load_single_study(study_directory, data_prefixes, data_format=data_format)
+    # load multi-contrast data
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt)
 
     # load labels data
-    labels, nzi = _load_single_study(study_directory, labels_prefix, data_format=data_format, slice_trim=nzi)
+    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi)
 
+    # if augmentation is to be used generate random params for augmentation and run augment function
+    if augment == 'yes':
+        params = (np.random.random() * 90., np.random.random() > 0.5)
+        data = _augment_image(data, params=params, data_format=data_fmt, order=1)  # force linear interp for images
+        labels = _augment_image(labels, params=params, data_format=data_fmt, order=label_interp)
 
-    params = (np.random.random() * 90., np.random.random() > 0.5)
-    data = _augment_image(data, params=params, data_format=data_format, order=1)
-    labels = _augment_image(labels, params=params, data_format=data_format, order=1)  # linear interp for regression
+    # do data padding to desired dims
+    axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
+    data = _zero_pad_image(data, out_dims, axes)
+    labels = _zero_pad_image(labels, out_dims, axes)
 
     return data, labels
 
@@ -167,8 +186,10 @@ def display_tf_dataset(dataset_data, data_format):
     :return: displays images for 3 seconds then continues
     """
 
-    # make figure and configure close event timer
+    # make figure
     fig = plt.figure(figsize=(10,4))
+
+    # define close event and create timer
     def close_event():
         plt.close()
     timer = fig.canvas.new_timer(interval=3000)
@@ -201,6 +222,7 @@ def display_tf_dataset(dataset_data, data_format):
 
     return
 
+
 def input_fn(is_training, params):
     """
     Input function for UCSF GBM dataset
@@ -214,44 +236,40 @@ def input_fn(is_training, params):
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
     eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
 
+    # differences between training and non-training: augment, dirs
+    data_dims = [params.data_height, params.data_width]
     if is_training:
-        # tf.dataset setup for training
-        dataset = tf.data.Dataset.from_tensor_slices(train_dirs)
-        dataset = dataset.map(  # for training use data augmentation
-            lambda x: tf.py_func(load_multicon_and_labels_aug,
-                                 [x, params.data_prefix, params.label_prefix, params.data_format],
-                                 (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
-        dataset = dataset.prefetch(params.buffer_size)
-        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-        dataset = dataset.shuffle(params.shuffle_size)
-        dataset = dataset.batch(params.batch_size)
+        data_dirs = train_dirs
+        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, params.augment_train_data,
+                          params.label_interp]
     else:
-        # tf.dataset setup for testing/evaluation
-        dataset = tf.data.Dataset.from_tensor_slices(eval_dirs)
-        dataset = dataset.map(
-            lambda x: tf.py_func(load_multicon_and_labels,
-                                 [x, params.data_prefix, params.label_prefix, params.data_format],
-                                 (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
-        dataset = dataset.prefetch(params.buffer_size)
-        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-        dataset = dataset.shuffle(params.shuffle_size)
-        dataset = dataset.batch(params.batch_size)
+        data_dirs = eval_dirs
+        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, 'no']  # 'no' for aug
+
+    # generate tensorflow dataset object
+    dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
+    dataset = dataset.map(
+        lambda x: tf.py_func(load_multicon_and_labels,
+                             [x] + py_func_params,
+                             (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
+    dataset = dataset.prefetch(params.buffer_size)
+    dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
+    dataset = dataset.shuffle(params.shuffle_size)
+    dataset = dataset.batch(params.batch_size)
 
     # make iterator and query the output of the iterator for input to the model
     iterator = dataset.make_initializable_iterator()
     get_next = iterator.get_next()
     init_op = iterator.initializer
 
-    # set shapes
+    # manually set shapes for inputs
     get_next_features = get_next['features']
     get_next_features.set_shape([params.batch_size, params.data_height, params.data_width, len(params.data_prefix)])
     get_next_labels = get_next['labels']
     get_next_labels.set_shape([params.batch_size, params.data_height, params.data_width, len(params.label_prefix)])
 
-    # Build and return a dictionnary containing the nodes / ops
-    #inputs = {'features': get_next['features'], 'labels':get_next['labels'], 'iterator_init_op': init_op}
+    # Build and return a dictionary containing the nodes / ops
+    # inputs = {'features': get_next['features'], 'labels':get_next['labels'], 'iterator_init_op': init_op}
     inputs = {'features': get_next_features, 'labels': get_next_labels, 'iterator_init_op': init_op}
 
     return inputs
-
-

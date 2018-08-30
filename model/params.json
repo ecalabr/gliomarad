@@ -6,14 +6,16 @@
   "label_prefix": ["T1gad_wm"],
   "data_height": 193,
   "data_width": 229,
+  "augment_train_data": "yes",
+  "label_interp": 1,
 
   "model_name": "res_unet_reg",
   "base_filters": 16,
   "kernel_size": [3, 3],
   "data_format": "channels_last",
 
-  "buffer_size": 1,
-  "shuffle_size": 6,
+  "buffer_size": 4,
+  "shuffle_size": 500,
   "batch_size": 4,
   "num_threads": 16,
   "train_fract": 0.1,
