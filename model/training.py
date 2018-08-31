@@ -40,7 +40,7 @@ def train_sess(sess, model_spec, writer, params):
                 writer.add_summary(summ, global_step_val)
             else:
                 _, _, loss_val = sess.run([train_op, update_metrics, loss])
-                logging.info("Batch = " + str(n).zfill(5) + "Loss = " + str(loss_val))
+                logging.info("Batch = " + str(n).zfill(6) + " Loss = " + "%010.2f" % loss_val)
             n=n+1
         except tf.errors.OutOfRangeError:
             break
@@ -71,7 +71,7 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
         sess.run(train_model_spec['variable_init_op'])
 
         # Reload weights from directory if specified
-        if restore_from is not None:
+        if os.path.isdir(restore_from):
             logging.info("Restoring parameters from {}".format(restore_from))
             if os.path.isdir(restore_from):
                 restore_from = tf.train.latest_checkpoint(restore_from)

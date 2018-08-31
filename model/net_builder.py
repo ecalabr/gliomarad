@@ -359,6 +359,235 @@ def res_unet_reg(tensor, is_training, base_filters, k_size, data_format):
         return tensor
 
 
+def unet(tensor, is_training, base_filters, k_size, data_format):
+    """
+    Makes network like https://arxiv.org/pdf/1803.00131.pdf
+    :param tensor:
+    :param is_training:
+    :param base_filters:
+    :param k_size:
+    :param data_format:
+    :return:
+    """
+
+    # set variable scope
+    with tf.variable_scope("unet"):
+        # set default values
+        ksize = list(k_size) if isinstance(k_size, (tuple, list)) else [k_size] * 2
+        filters = base_filters
+        dilation = [1, 1]
+        strides = [1, 1]
+        pool_size = [2, 2]
+        pool_stride = [2, 2]
+
+        # Convolution layers 1
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_1_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_1_2")
+
+        # skip 1
+        skip1 = tf.identity(tensor, "skip_1")
+
+        # maxpool layer 1
+        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = tf.identity(tensor, "maxpool_1")
+        filters = base_filters * 2
+
+        # Convolution layers 2
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_2_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_2_2")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_2_3")
+
+        # skip 2
+        skip2 = tf.identity(tensor, "skip_2")
+
+        # maxpool layer 2
+        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = tf.identity(tensor, "maxpool_2")
+        filters = base_filters * 4
+
+        # Convolution layers 3
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_3_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_3_2")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_3_3")
+
+        # skip 3
+        skip3 = tf.identity(tensor, "skip_3")
+
+        # maxpool layer 3
+        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = tf.identity(tensor, "maxpool_3")
+        filters = base_filters * 8
+
+        # Convolution layers 4
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_4_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_4_2")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_4_3")
+
+        # skip 4
+        skip4 = tf.identity(tensor, "skip_4")
+
+        # maxpool layer 4
+        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = tf.identity(tensor, "maxpool_4")
+        filters = base_filters * 8
+
+        # convolution layers 5 (bottom)
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_5_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_5_2")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_5_3")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_5_4")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_5_5")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_5_6")
+
+        # deconvolution layer 1 and skip conncetion 4
+        filters = base_filters * 8
+        tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+        tensor = tf.add(tensor, skip4, name="skip_4")
+
+        # Convolution layers 5
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_6_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_6_2")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_6_3")
+
+        # deconvolution layer 2
+        filters = base_filters * 4
+        tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+        tensor = tf.add(tensor, skip3, name="skip_3")
+
+        # Convolution layers 6
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_7_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_7_2")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_7_3")
+
+        # deconvolution layer 3
+        filters = base_filters * 2
+        tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+        tensor = tf.add(tensor, skip2, name="skip_2")
+
+        # Convolution layers 7
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_8_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_8_2")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_8_3")
+
+        # deconvolution layer 3
+        filters = base_filters
+        tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format)
+        tensor = tf.add(tensor, skip1, name="skip_1")
+
+        # Convolution layers 8
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_9_1")
+
+        tensor = conv2d_fixed_pad(tensor, filters, ksize, strides, dilation, data_format)
+        tensor = batch_norm(tensor, is_training, data_format)
+        tensor = activation(tensor)
+        tensor = tf.identity(tensor, "conv_9_2")
+
+        # final convolutional layer
+        tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], data_format)
+        tensor = tf.identity(tensor, "final_conv_1")
+
+        return tensor
+
+
 def net_builder(features, params, is_training):
     """
     Builds the specified network.
@@ -370,13 +599,11 @@ def net_builder(features, params, is_training):
 
     # determine network
     if params.model_name == "res_unet_reg":
-        network = res_unet_reg(
-            features,
-            is_training,
-            base_filters=params.base_filters,
-            k_size=params.kernel_size,
-            data_format=params.data_format
-        )
+        network = res_unet_reg(features, is_training, base_filters=params.base_filters, k_size=params.kernel_size,
+                               data_format=params.data_format)
+    elif params.model_name == "unet":
+        network = unet(features, is_training, base_filters=params.base_filters, k_size=params.kernel_size,
+                       data_format=params.data_format)
     else:
         sys.exit("Specified network does not exist: " + params.model_name)
 

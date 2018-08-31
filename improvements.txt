@@ -4,9 +4,9 @@ make nets for image segmentation and synthetic CT
 still issues with numbering keeper series, 11273473
 
 
-loss masking
 understand tf.reuse
-image padding to divisible dimension
-implement zero padding function to data input_fn
-see if tf.py_func will pass params class, and if so pass this through to the lower level data IO functions
-consider making one data loading function with optional augmentation
+fix restore from functionality in training.py
+fix overwrite protection functionality for model dir
+loss value format for printing from evaluation evaluate_sess, metrics string (currently prints 00inf)
+understand and possibly implement boolean masking for loss
+variable learning rate

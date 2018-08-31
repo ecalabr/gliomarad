@@ -1,4 +1,5 @@
 from net_builder import *
+from utils import learning_rate_picker
 
 
 def model_fn(inputs, params, mode):
@@ -20,16 +21,17 @@ def model_fn(inputs, params, mode):
         predictions = net_builder(features, params, (mode == 'train'))
 
     # Define loss and accuracy (we need to apply a mask to account for padding)
-    losses = tf.losses.mean_squared_error(labels, predictions)
-    #mask = labels > 0
-    #losses = tf.boolean_mask(losses[:], mask)
+    mask = labels > 0
+    losses = tf.losses.mean_squared_error(tf.boolean_mask(labels, mask), tf.boolean_mask(predictions, mask))
+    #losses = tf.losses.mean_squared_error(labels, predictions)
     loss = tf.reduce_mean(losses)
-    error = tf.reduce_mean(tf.cast(tf.metrics.mean_absolute_error(labels=labels, predictions=predictions), tf.float32))
+    error = tf.reduce_mean(tf.cast(tf.losses.absolute_difference(labels=labels, predictions=predictions), tf.float32))
 
     # Define training step that minimizes the loss with the Adam optimizer
     if mode == 'train':
-        optimizer = tf.train.AdamOptimizer(params.learning_rate)
         global_step = tf.train.get_or_create_global_step()
+        learning_rate = learning_rate_picker(params.learning_rate, params.learning_rate_decay, global_step)
+        optimizer = tf.train.AdamOptimizer(learning_rate)
         train_op = optimizer.minimize(loss, global_step=global_step)
     else:
         train_op = None

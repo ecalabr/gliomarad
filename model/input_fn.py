@@ -114,7 +114,7 @@ def _zero_pad_image(input_data, out_dims, axes):
 
     # sanity checks
     if type(input_data) is not np.ndarray: sys.exit("Input must be a numpy array")
-    if not all([isinstance(out_dims, (tuple, list))] + [isinstance(val, int) for val in out_dims]): sys.exit(
+    if not all([np.issubdtype(val, np.integer) for val in out_dims]): sys.exit(
         "Output dims must be a list or tuple of ints")
     if not all([isinstance(axes, (tuple, list))] + [isinstance(val, int) for val in axes]): sys.exit(
         "Axes must be a list or tuple of ints")
@@ -154,7 +154,7 @@ def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, ou
     if not all([isinstance(a, str) for a in feature_prefx]): sys.exit("Data prefixes must be strings")
     if not all([isinstance(a, str) for a in label_prefx]): sys.exit("Labels prefixes must be strings")
     if data_fmt not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
-    if not all([isinstance(a, int) for a in out_dims]): sys.exit("data_dims must be a list/tuple of ints")
+    if not all([np.issubdtype(a, np.integer) for a in out_dims]): sys.exit("data_dims must be a list/tuple of ints")
     if augment not in ['yes', 'no']: sys.exit("Parameter augment must be 'yes' or 'no'")
     if label_interp not in range(6): sys.exit("Spline interpolation order must be in range 0-3")
 
@@ -166,7 +166,7 @@ def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, ou
 
     # if augmentation is to be used generate random params for augmentation and run augment function
     if augment == 'yes':
-        params = (np.random.random() * 90., np.random.random() > 0.5)
+        params = (np.random.random() * 30., np.random.random() > 0.5)
         data = _augment_image(data, params=params, data_format=data_fmt, order=1)  # force linear interp for images
         labels = _augment_image(labels, params=params, data_format=data_fmt, order=label_interp)
 
@@ -255,7 +255,8 @@ def input_fn(is_training, params):
     dataset = dataset.prefetch(params.buffer_size)
     dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
     dataset = dataset.shuffle(params.shuffle_size)
-    dataset = dataset.batch(params.batch_size)
+    # dataset = dataset.batch(params.batch_size)  # this is causing errors in conv transpose when batch size changes
+    dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
 
     # make iterator and query the output of the iterator for input to the model
     iterator = dataset.make_initializable_iterator()

@@ -12,7 +12,7 @@ from model.model_fn import model_fn
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--param_file', default='/media/ecalabr/data2/model/params.json',
+parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
                     help="Path to params.json")
 
 

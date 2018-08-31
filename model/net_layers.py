@@ -246,6 +246,39 @@ def upsample_layer(inputs, filters, kernel_size, strides, data_format):
         raise ValueError("strides must be an int or list/tuple of length 2 or 3, instead got " + str(strides))
 
 
+def maxpool_layer_2d(tensor, kernel_size, pool_size, strides, data_format, name=None):
+    """
+    Returns a maxpool 2d layer
+    :param tensor:
+    :param kernel_size:
+    :param pool_size:
+    :param strides:
+    :param data_format:
+    :param name:
+    :return:
+    """
+
+    # determine if strided
+    if not isinstance(strides, list):
+        strides = [strides] * 2
+    strided = True if any(stride > 1 for stride in strides) else False
+
+    if strided:
+        inputs = fixed_padding(tensor, kernel_size, strides, data_format)
+
+    # maxpool layer
+    maxpool = tf.layers.max_pooling2d(
+    inputs=tensor,
+    pool_size=pool_size,
+    strides=strides,
+    padding=('valid' if strided else 'same'),
+    data_format=data_format,
+    name=name
+    )
+
+    return maxpool
+
+
 ################################################################################
 # Layer building blocks
 ################################################################################

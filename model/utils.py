@@ -2,8 +2,7 @@
 
 import json
 import logging
-import sys
-
+import tensorflow as tf
 
 class Params:
     """
@@ -36,6 +35,7 @@ class Params:
     num_threads = None
     train_fract = None
     learning_rate = None
+    learning_rate_decay = None
     num_epochs = None
     dropout_rate = None
 
@@ -107,3 +107,27 @@ def save_dict_to_json(d, json_path):
         # We need to convert the values to float for json (it doesn't accept np.array, np.float, )
         d = {k: float(v) for k, v in d.items()}
         json.dump(d, f, indent=4)
+
+
+def learning_rate_picker(learning_rate, learning_rate_decay, global_step):
+    """
+    Takes a learning rate and a string specifying a learning rate decay method and returns a learning rate.
+    :param learning_rate: (float) the learning rate
+    :param learning_rate_decay (string) the learning rate decay method
+    :param global_step (tensorflow global step) the global step for the model
+    :return: A learning rate function using the specified starting rate
+    """
+
+    # sanity checks
+    if not isinstance(learning_rate, float): raise ValueError("Learning rate must be a float")
+    if not isinstance(learning_rate_decay, (str, unicode)): raise ValueError("Learning rate decay parameter must be a string")
+
+    # chooser for decay method
+    if learning_rate_decay == 'constant':
+        learning_rate_function = learning_rate
+    elif learning_rate_decay == 'exponential':
+        learning_rate_function = tf.train.exponential_decay(learning_rate, global_step, 10000, 0.96, staircase=True)
+    else:
+        raise NotImplementedError("Specified learning rate decay method is not implemented: " + learning_rate_decay)
+
+    return learning_rate_function
