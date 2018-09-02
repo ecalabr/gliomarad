@@ -1,5 +1,5 @@
 from net_builder import *
-from utils import learning_rate_picker
+from utils import learning_rate_picker, loss_picker
 
 
 def model_fn(inputs, params, mode):
@@ -20,10 +20,9 @@ def model_fn(inputs, params, mode):
         # generate the model and compute the output predictions
         predictions = net_builder(features, params, (mode == 'train'))
 
-    # Define loss and accuracy (we need to apply a mask to account for padding)
+    # Define loss using loss picker function and accuracy (we need to apply a mask to account for padding)
     mask = labels > 0
-    losses = tf.losses.mean_squared_error(tf.boolean_mask(labels, mask), tf.boolean_mask(predictions, mask))
-    #losses = tf.losses.mean_squared_error(labels, predictions)
+    losses = loss_picker(params.loss, labels, predictions, weights=mask)
     loss = tf.reduce_mean(losses)
     error = tf.reduce_mean(tf.cast(tf.losses.absolute_difference(labels=labels, predictions=predictions), tf.float32))
 
@@ -39,7 +38,9 @@ def model_fn(inputs, params, mode):
     # Metrics for evaluation using tf.metrics (average over whole dataset)
     with tf.variable_scope("metrics"):
         metrics = {
-            'mean_error': tf.metrics.mean_absolute_error(labels=labels, predictions=predictions),
+            'mean_absolute_error': tf.metrics.mean_absolute_error(labels=labels, predictions=predictions, weights=mask),
+            'mean_squared_error': tf.metrics.mean_squared_error(labels=labels, predictions=predictions, weights=mask),
+            'RMS_error': tf.metrics.root_mean_squared_error(labels=labels, predictions=predictions, weights=mask),
             'loss': tf.metrics.mean(loss)
         }
 

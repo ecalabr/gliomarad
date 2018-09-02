@@ -17,8 +17,8 @@ parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_p
 
 
 if __name__ == '__main__':
-    # Set the random seed for the whole graph for reproductible experiments
-    #tf.set_random_seed(230)
+    # Set the random seed for the whole graph for reproducible experiments
+    # tf.set_random_seed(230)
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
@@ -26,19 +26,21 @@ if __name__ == '__main__':
     params = Params(args.param_file)
 
     # Check that we are not overwriting some previous experiment
-    # Comment these lines if you are developing your model and don't care about overwritting
-    #model_dir_has_best_weights = os.path.isdir(params.model_dir)
-    #overwritting = model_dir_has_best_weights and args.restore_dir is None
-    #assert not overwritting, "Weights found in model_dir, aborting to avoid overwrite"
+    if params.overwrite != 'yes' and os.listdir(params.model_dir):
+        raise ValueError("Overwrite param is not 'yes' but there are files in specified model directory!")
 
-    # Set the logger
+    # Set the logger, delete old log file if overwrite param is set to yes
+    log_path = os.path.join(params.model_dir, 'train.log')
+    if os.path.isfile(log_path) and params.overwrite == 'yes':
+        os.remove(log_path)
     set_logger(os.path.join(params.model_dir, 'train.log'))
+    logging.info("Log file created at " + log_path)
 
     # Create the two iterators over the two datasets
+    logging.info("Generating dataset objects...")
     train_inputs = input_fn(is_training=True, params=params)
     eval_inputs = input_fn(is_training=False, params=params)
     logging.info("- done.")
-
 
     # Define the models (2 different set of nodes that share weights for train and eval)
     logging.info("Creating the model...")

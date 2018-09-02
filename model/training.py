@@ -3,6 +3,7 @@
 import logging
 import os
 import tensorflow as tf
+import numpy as np
 from model.utils import save_dict_to_json
 from model.evaluation import evaluate_sess
 
@@ -62,7 +63,7 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
         restore_from: (string) directory or file containing weights to restore the graph
     """
     # Initialize tf.Saver instances to save weights during training
-    last_saver = tf.train.Saver() # will keep last 5 epochs
+    last_saver = tf.train.Saver()  # will keep last 5 epochs
     best_saver = tf.train.Saver(max_to_keep=1)  # only keep 1 best checkpoint (best on eval)
     begin_at_epoch = 0
 
@@ -96,10 +97,10 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
             metrics = evaluate_sess(sess, eval_model_spec, eval_writer)
 
             # If best_eval, best_save_path
-            eval_acc = metrics['mean_error']
-            if eval_acc >= best_eval_acc:
+            eval_error = 1./np.mean(metrics.values())  # eval performance using 1/mean error metric
+            if eval_error >= best_eval_acc:
                 # Store new best accuracy
-                best_eval_acc = eval_acc
+                best_eval_acc = eval_error
                 # Save weights
                 best_save_path = os.path.join(model_dir, 'best_weights', 'after-epoch')
                 best_save_path = best_saver.save(sess, best_save_path, global_step=epoch + 1)

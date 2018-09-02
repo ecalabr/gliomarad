@@ -1,6 +1,7 @@
 {
   "data_dir": "/media/ecalabr/data2/qc_complete",
   "model_dir": "/media/ecalabr/data2/model",
+  "overwrite": "yes",
   "restore_dir": "None",
   "data_prefix": ["T1_wm", "T2_wm", "FLAIR_wm", "DWI_wm", "ASL_wm"],
   "label_prefix": ["T1gad_wm"],
@@ -21,6 +22,7 @@
   "train_fract": 0.8,
   "learning_rate": 0.001,
   "learning_rate_decay": "exponential",
+  "loss": "MAE",
   "num_epochs":10,
   "dropout_rate": 0.3,
 

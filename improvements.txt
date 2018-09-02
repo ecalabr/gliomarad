@@ -6,7 +6,5 @@ still issues with numbering keeper series, 11273473
 
 understand tf.reuse
 fix restore from functionality in training.py
-fix overwrite protection functionality for model dir
 loss value format for printing from evaluation evaluate_sess, metrics string (currently prints 00inf)
-understand and possibly implement boolean masking for loss
-variable learning rate
+fix error calculation   in model_fn

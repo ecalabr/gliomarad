@@ -4,6 +4,7 @@ import json
 import logging
 import tensorflow as tf
 
+
 class Params:
     """
     Class that loads hyperparameters from a json file.
@@ -16,6 +17,7 @@ class Params:
     # declare attributes as None initially. All attributes defined here must be fed values from params.json.
     data_dir = None
     model_dir = None
+    overwrite = None
     restore_dir = None
     data_prefix = None
     label_prefix = None
@@ -36,6 +38,7 @@ class Params:
     train_fract = None
     learning_rate = None
     learning_rate_decay = None
+    loss = None
     num_epochs = None
     dropout_rate = None
 
@@ -131,3 +134,28 @@ def learning_rate_picker(learning_rate, learning_rate_decay, global_step):
         raise NotImplementedError("Specified learning rate decay method is not implemented: " + learning_rate_decay)
 
     return learning_rate_function
+
+
+def loss_picker(loss_method, labels, predictions, weights=None):
+    """
+    Takes a string specifying the loss method and returns a tensorflow loss function
+    :param loss_method: (str) the desired loss method
+    :param labels: (tf.tensor) the labels tensor
+    :param predictions: (tf.tensor) the features tensor
+    :param weights: (tf.tensor) an optional weight tensor for masking values
+    :return: A tensorflow loss function
+    """
+
+    # sanity checks
+    if not isinstance(loss_method, (str, unicode)): raise ValueError("Loss method parameter must be a string")
+    if weights is None: weights = 1.0
+
+    # chooser for decay method
+    if loss_method == 'MSE':
+        loss_function = tf.losses.mean_squared_error(labels, predictions, weights)
+    elif loss_method == 'MAE':
+        loss_function = tf.losses.absolute_difference(labels, predictions, weights)
+    else:
+        raise NotImplementedError("Specified loss method is not implemented: " + loss_method)
+
+    return loss_function
