@@ -16,6 +16,7 @@ def train_sess(sess, model_spec, writer, params):
         writer: (tf.summary.FileWriter) writer for summaries
         params: (Params) hyperparameters
     """
+
     # Get relevant graph operations or nodes needed for training
     loss = model_spec['loss']
     train_op = model_spec['train_op']

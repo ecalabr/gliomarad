@@ -371,7 +371,7 @@ def unet(tensor, is_training, base_filters, k_size, data_format):
     """
 
     # set variable scope
-    with tf.variable_scope("unet"):
+    with tf.variable_scope('model'):
         # set default values
         ksize = list(k_size) if isinstance(k_size, (tuple, list)) else [k_size] * 2
         filters = base_filters
@@ -395,7 +395,7 @@ def unet(tensor, is_training, base_filters, k_size, data_format):
         skip1 = tf.identity(tensor, "skip_1")
 
         # maxpool layer 1
-        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = maxpool_layer_2d(tensor, pool_size, pool_stride, data_format)
         tensor = tf.identity(tensor, "maxpool_1")
         filters = base_filters * 2
 
@@ -419,7 +419,7 @@ def unet(tensor, is_training, base_filters, k_size, data_format):
         skip2 = tf.identity(tensor, "skip_2")
 
         # maxpool layer 2
-        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = maxpool_layer_2d(tensor, pool_size, pool_stride, data_format)
         tensor = tf.identity(tensor, "maxpool_2")
         filters = base_filters * 4
 
@@ -443,7 +443,7 @@ def unet(tensor, is_training, base_filters, k_size, data_format):
         skip3 = tf.identity(tensor, "skip_3")
 
         # maxpool layer 3
-        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = maxpool_layer_2d(tensor, pool_size, pool_stride, data_format)
         tensor = tf.identity(tensor, "maxpool_3")
         filters = base_filters * 8
 
@@ -467,7 +467,7 @@ def unet(tensor, is_training, base_filters, k_size, data_format):
         skip4 = tf.identity(tensor, "skip_4")
 
         # maxpool layer 4
-        tensor = maxpool_layer_2d(tensor, ksize, pool_size, pool_stride, data_format)
+        tensor = maxpool_layer_2d(tensor, pool_size, pool_stride, data_format)
         tensor = tf.identity(tensor, "maxpool_4")
         filters = base_filters * 8
 
@@ -596,6 +596,9 @@ def net_builder(features, params, is_training):
     :param is_training: (bool) whether or not the model is training
     :return: network - the specified network with the desired parameters
     """
+
+    # sanity checks
+    if not isinstance(is_training, bool): raise ValueError("Parameter is_training must be a boolean")
 
     # determine network
     if params.model_name == "res_unet_reg":

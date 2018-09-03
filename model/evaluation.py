@@ -3,7 +3,6 @@
 import logging
 import os
 import tensorflow as tf
-
 from model.utils import save_dict_to_json
 
 
@@ -23,9 +22,14 @@ def evaluate_sess(sess, model_spec, writer=None):
     sess.run(model_spec['metrics_init_op'])
 
     # compute metrics over the dataset
+    n=1
     while True:
         try:
             sess.run(update_metrics)
+            metrics_val = sess.run({k: v[0] for k, v in eval_metrics.items()})
+            metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
+            logging.info("Batch = " + str(n).zfill(6) + " " + metrics_string)
+            n=n+1
         except tf.errors.OutOfRangeError:
             break
 
@@ -45,15 +49,14 @@ def evaluate_sess(sess, model_spec, writer=None):
     return metrics_val
 
 
-def evaluate(model_spec, model_dir, params, restore_from):
+def evaluate(model_spec, model_dir, restore_from):
     """Evaluate the model
     Args:
         model_spec: (dict) contains the graph operations or nodes needed for evaluation
         model_dir: (string) directory containing config, weights and log
-        params: (Params) contains hyperparameters of the model.
-                Must define: num_epochs, train_size, batch_size, eval_size, save_summary_steps
         restore_from: (string) directory or file containing weights to restore the graph
     """
+
     # Initialize tf.Saver
     saver = tf.train.Saver()
 
@@ -68,8 +71,7 @@ def evaluate(model_spec, model_dir, params, restore_from):
         saver.restore(sess, save_path)
 
         # Evaluate
-        num_steps = (params.eval_size + params.batch_size - 1) // params.batch_size
-        metrics = evaluate_sess(sess, model_spec, num_steps)
+        metrics = evaluate_sess(sess, model_spec)
         metrics_name = '_'.join(restore_from.split('/'))
         save_path = os.path.join(model_dir, "metrics_test_{}.json".format(metrics_name))
         save_dict_to_json(metrics, save_path)

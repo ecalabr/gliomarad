@@ -4,7 +4,8 @@ make nets for image segmentation and synthetic CT
 still issues with numbering keeper series, 11273473
 
 
-understand tf.reuse
+understand tf.reuse, specifically whether or not to use it for layers
 fix restore from functionality in training.py
 loss value format for printing from evaluation evaluate_sess, metrics string (currently prints 00inf)
 fix error calculation   in model_fn
+should we do batching for predictions?

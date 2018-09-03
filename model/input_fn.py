@@ -223,10 +223,10 @@ def display_tf_dataset(dataset_data, data_format):
     return
 
 
-def input_fn(is_training, params):
+def input_fn(mode, params):
     """
     Input function for UCSF GBM dataset
-    :param is_training: (bool) whether or not the model is training, if training, data augmentation is used
+    :param mode: (str) the model for running the model: 'train', 'eval', 'infer'
     :param params: (class) the params class generated from a JSON file
     :return: outputs, a dict containing the features, labels, and initializer operation
     """
@@ -235,16 +235,22 @@ def input_fn(is_training, params):
     study_dirs = glob(params.data_dir + '/*/')
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
     eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
+    infer_dirs = [study_dirs[-1]]
 
     # differences between training and non-training: augment, dirs
     data_dims = [params.data_height, params.data_width]
-    if is_training:
+    if mode == 'train':
         data_dirs = train_dirs
         py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, params.augment_train_data,
                           params.label_interp]
-    else:
+    elif mode == 'eval':
         data_dirs = eval_dirs
         py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, 'no']  # 'no' for aug
+    elif mode == 'infer':
+        data_dirs = infer_dirs
+        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, 'no']  # 'no' for aug
+    else:
+        raise ValueError("Specified mode does not exist: " + mode)
 
     # generate tensorflow dataset object
     dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
@@ -252,11 +258,18 @@ def input_fn(is_training, params):
         lambda x: tf.py_func(load_multicon_and_labels,
                              [x] + py_func_params,
                              (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
-    dataset = dataset.prefetch(params.buffer_size)
     dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-    dataset = dataset.shuffle(params.shuffle_size)
-    # dataset = dataset.batch(params.batch_size)  # this is causing errors in conv transpose when batch size changes
-    dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+    dataset = dataset.prefetch(params.buffer_size)
+    if mode == 'train':
+        dataset = dataset.shuffle(params.shuffle_size)
+        dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+    elif mode == 'eval':
+        dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+    elif mode == 'infer':
+        dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+    else:
+        raise ValueError("Specified mode does not exist: " + mode)
+
 
     # make iterator and query the output of the iterator for input to the model
     iterator = dataset.make_initializable_iterator()
@@ -270,7 +283,6 @@ def input_fn(is_training, params):
     get_next_labels.set_shape([params.batch_size, params.data_height, params.data_width, len(params.label_prefix)])
 
     # Build and return a dictionary containing the nodes / ops
-    # inputs = {'features': get_next['features'], 'labels':get_next['labels'], 'iterator_init_op': init_op}
     inputs = {'features': get_next_features, 'labels': get_next_labels, 'iterator_init_op': init_op}
 
     return inputs

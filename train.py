@@ -3,7 +3,6 @@
 import argparse
 import logging
 import os
-import tensorflow as tf
 from model.utils import Params
 from model.utils import set_logger
 from model.training import train_and_evaluate
@@ -11,14 +10,13 @@ from model.input_fn import input_fn
 from model.model_fn import model_fn
 
 
+# parse input arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
                     help="Path to params.json")
 
 
 if __name__ == '__main__':
-    # Set the random seed for the whole graph for reproducible experiments
-    # tf.set_random_seed(230)
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
@@ -38,14 +36,14 @@ if __name__ == '__main__':
 
     # Create the two iterators over the two datasets
     logging.info("Generating dataset objects...")
-    train_inputs = input_fn(is_training=True, params=params)
-    eval_inputs = input_fn(is_training=False, params=params)
+    train_inputs = input_fn(mode='train', params=params)
+    eval_inputs = input_fn(mode='eval', params=params)
     logging.info("- done.")
 
     # Define the models (2 different set of nodes that share weights for train and eval)
     logging.info("Creating the model...")
-    train_model_spec = model_fn(train_inputs, params, mode='train')
-    eval_model_spec = model_fn(eval_inputs, params, mode='eval')
+    train_model_spec = model_fn(train_inputs, params, mode='train', reuse=False)
+    eval_model_spec = model_fn(eval_inputs, params, mode='eval', reuse=True)
     logging.info("- done.")
 
     # Train the model

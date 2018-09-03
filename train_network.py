@@ -5,7 +5,7 @@ from model.utils import *
 params = Params('/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json')
 
 # load inputs with input function
-inputs = input_fn(is_training=True, params=params)
+inputs = input_fn(mode=True, params=params)
 
 # run tensorflow session
 n = 0
