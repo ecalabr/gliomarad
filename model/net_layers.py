@@ -45,7 +45,7 @@ def _fixed_padding(inputs, kernel_size, strides, data_format='channels_last', ):
 ################################################################################
 
 
-def batch_norm(tensor, is_training, data_format='channels_last', name=None, reuse=False):
+def batch_norm(tensor, is_training, data_format='channels_last', name=None, reuse=None):
     """
     Returns a batch normalization layer with the specified parameters
     :param tensor: (tf.tensor) the input tensor

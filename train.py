@@ -31,7 +31,7 @@ if __name__ == '__main__':
     log_path = os.path.join(params.model_dir, 'train.log')
     if os.path.isfile(log_path) and params.overwrite == 'yes':
         os.remove(log_path)
-    set_logger(os.path.join(params.model_dir, 'train.log'))
+    set_logger(log_path)
     logging.info("Log file created at " + log_path)
 
     # Create the two iterators over the two datasets
