@@ -17,9 +17,10 @@ def model_fn(inputs, params, mode, reuse=False):
     features = inputs['features']
 
     # MODEL: define the layers of the model
+    is_training = mode == 'train'
     with tf.variable_scope('model', reuse=reuse):
         # generate the model and compute the output predictions
-        predictions = net_builder(features, params, (mode == 'train'))
+        predictions = net_builder(features, params, is_training, reuse)
 
     # Define loss using loss picker function and accuracy (we need to apply a mask to account for padding)
     mask = labels > 0

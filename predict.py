@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     # Define the models (2 different set of nodes that share weights for train and eval)
     logging.info("Creating the model...")
-    infer_model_spec = model_fn(infer_inputs, params, mode='infer', reuse=tf.AUTO_REUSE)
+    infer_model_spec = model_fn(infer_inputs, params, mode='infer', reuse=False)  # reuse only if model already exists
     logging.info("- done.")
 
     # Train the model
