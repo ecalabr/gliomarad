@@ -22,7 +22,7 @@ def evaluate_sess(sess, model_spec, writer=None):
     sess.run(model_spec['metrics_init_op'])
 
     # compute metrics over the dataset
-    n=1
+    n = 1
     while True:
         try:
             sess.run(update_metrics)

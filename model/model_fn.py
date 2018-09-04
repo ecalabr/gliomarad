@@ -29,6 +29,7 @@ def model_fn(inputs, params, mode, reuse=False):
     error = tf.reduce_mean(tf.cast(tf.losses.absolute_difference(labels=labels, predictions=predictions), tf.float32))
 
     # Define training step that minimizes the loss with the Adam optimizer
+    train_op = []
     if mode == 'train':
         global_step = tf.train.get_or_create_global_step()
         learning_rate = learning_rate_picker(params.learning_rate, params.learning_rate_decay, global_step)

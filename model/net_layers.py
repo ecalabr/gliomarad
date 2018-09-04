@@ -222,7 +222,7 @@ def maxpool_layer_2d(tensor, pool_size, strides, data_format, name=None):
     """
 
     # sanity checks
-    if isinstance(pool_size, (list, tuple)): kernel_size = pool_size[0]
+    if isinstance(pool_size, (list, tuple)): pool_size = pool_size[0]
     if isinstance(strides, (list, tuple)): strides = strides[0]
     if not isinstance(pool_size, int): raise ValueError("Pool size must be an int or list/tuple of ints")
     if not isinstance(strides, int): raise ValueError("Strides must be an int or list/tuple of ints")

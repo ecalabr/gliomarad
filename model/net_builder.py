@@ -179,7 +179,7 @@ def unet(tensor, is_training, base_filters, k_size, data_format, reuse):
 
     # deconvolution layer 3
     filters = base_filters
-    tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format, 'upsample_4')
+    tensor = upsample_layer(tensor, filters, ksize, [2, 2], data_format, 'upsample_4', reuse)
     tensor = tf.add(tensor, skip1, name='fuse_1')
 
     # Convolution layers 9
