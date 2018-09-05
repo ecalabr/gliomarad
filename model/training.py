@@ -84,7 +84,10 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
         train_writer = tf.summary.FileWriter(os.path.join(model_dir, 'train_summaries'), sess.graph)
         eval_writer = tf.summary.FileWriter(os.path.join(model_dir, 'eval_summaries'), sess.graph)
 
-        best_eval_acc = 0.0
+        # set best eval error to infinity
+        best_eval_error = float('inf')
+
+        # run through each epoch of training with evaluation in between epochs
         for epoch in range(begin_at_epoch, begin_at_epoch + params.num_epochs):
             # Train for one epoch
             logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + params.num_epochs))
@@ -98,10 +101,10 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
             metrics = evaluate_sess(sess, eval_model_spec, eval_writer)
 
             # If best_eval, best_save_path
-            eval_error = 1./np.mean(metrics.values())  # eval performance using 1/mean error metric
-            if eval_error >= best_eval_acc:
+            eval_error = np.mean(metrics.values())  # eval performance using 1/mean error metric
+            if eval_error <= best_eval_error:
                 # Store new best accuracy
-                best_eval_acc = eval_error
+                best_eval_error = eval_error
                 # Save weights
                 best_save_path = os.path.join(model_dir, 'best_weights', 'after-epoch')
                 best_save_path = best_saver.save(sess, best_save_path, global_step=epoch + 1)

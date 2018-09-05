@@ -6,7 +6,6 @@ from model.utils import Params, set_logger
 from model.prediction import predict
 from model.input_fn import input_fn
 from model.model_fn import model_fn
-import tensorflow as tf
 
 
 # parse input arguments
@@ -30,6 +29,7 @@ if __name__ == '__main__':
 
     # Create the two iterators over the two datasets
     logging.info("Generating dataset objects...")
+    params.batch_size = 1  # manually set batch size here so there is no dropped remainder
     infer_inputs = input_fn(mode='infer', params=params)
     logging.info("- done.")
 

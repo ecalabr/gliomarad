@@ -61,14 +61,13 @@ def evaluate(model_spec, model_dir, restore_from):
     saver = tf.train.Saver()
 
     with tf.Session() as sess:
-        # Initialize the lookup table
-        sess.run(model_spec['variable_init_op'])
-
         # Reload weights from the weights subdirectory
+        logging.info("Loading weights from model directory...")
         save_path = os.path.join(model_dir, restore_from)
         if os.path.isdir(save_path):
             save_path = tf.train.latest_checkpoint(save_path)
         saver.restore(sess, save_path)
+        logging.info("- done.")
 
         # Evaluate
         metrics = evaluate_sess(sess, model_spec)

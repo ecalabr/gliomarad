@@ -5,6 +5,7 @@ import tensorflow as tf
 import numpy as np
 import nibabel as nib
 import logging
+import time
 
 
 def predict_sess(sess, model_spec):
@@ -23,15 +24,16 @@ def predict_sess(sess, model_spec):
     n=1
     while True:
         try:
-            features = sess.run(model_spec['features'])
-            print(np.mean(features))
             prediction = sess.run(model_spec['predictions'])
-            print("Batch = " + str(n).zfill(6) + " Mean = " + str(np.mean(prediction)))
             n = n+1
             if type(predictions) != np.ndarray:
+                start = time.time()
                 predictions = prediction
+                logging.info("Processing slice " + str(n) + " took " + str(time.time()-start) + " seconds")
             else:
+                start = time.time()
                 predictions = np.concatenate([predictions, prediction])  # concatenates on axis=0 by default
+                logging.info("Processing slice " + str(n) + " took " + str(time.time() - start) + " seconds")
         except tf.errors.OutOfRangeError:
             break
 

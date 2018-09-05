@@ -166,7 +166,7 @@ def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, ou
 
     # if augmentation is to be used generate random params for augmentation and run augment function
     if augment == 'yes':
-        params = (np.random.random() * 30., np.random.random() > 0.5)
+        params = (np.random.random() * 90., np.random.random() > 0.5)
         data = _augment_image(data, params=params, data_format=data_fmt, order=1)  # force linear interp for images
         labels = _augment_image(labels, params=params, data_format=data_fmt, order=label_interp)
 

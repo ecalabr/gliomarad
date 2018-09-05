@@ -34,7 +34,10 @@ def model_fn(inputs, params, mode, reuse=False):
         global_step = tf.train.get_or_create_global_step()
         learning_rate = learning_rate_picker(params.learning_rate, params.learning_rate_decay, global_step)
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        train_op = optimizer.minimize(loss, global_step=global_step)
+        # the following steps are needed for batch norm to work properly
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)  # get moving variance and moving mean update ops
+        with tf.control_dependencies(update_ops):  # www.tensorflow.org/api_docs/python/tf/layers/batch_normalization
+            train_op = optimizer.minimize(loss, global_step=global_step)
 
     # Metrics for evaluation using tf.metrics (average over whole dataset)
     with tf.variable_scope('metrics'):
