@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
     # Define the models
     logging.info("Creating the model...")
-    eval_model_spec = model_fn(eval_inputs, params, mode='eval', reuse=True)
+    eval_model_spec = model_fn(eval_inputs, params, mode='eval', reuse=False)
     logging.info("- done.")
 
     # Initialize tf.Saver
@@ -54,8 +54,9 @@ if __name__ == '__main__':
         # Reload weights from the weights subdirectory
         logging.info("Loading model weights...")
         save_path = os.path.join(params.model_dir, params.restore_dir)
-        if os.path.isdir(save_path):
-            save_path = tf.train.latest_checkpoint(save_path)
+        meta = os.path.join(save_path, 'after-epoch-10.meta')
+        checkpoint = tf.train.latest_checkpoint(save_path)
+        
         saver.restore(sess, save_path)
         logging.info("- done.")
 
