@@ -197,6 +197,91 @@ def unet(tensor, is_training, base_filters, k_size, data_format, reuse):
     return tensor
 
 
+def custom_unet(features, params, is_training, reuse=False):
+    """
+    Makes a deep bottleneck residual unet with long range skip connections similar to:
+    https://arxiv.org/pdf/1704.07239.pdf
+    https://vitalab.github.io/deep-learning/2017/05/08/resunet.html
+    :param features: (tf.tensor) the input features
+    :param params: (class Params()) the parameters for the model
+    :param is_training: (bool) whether or not the model is training
+    :param reuse: (bool) whether or not to reuse layer weights (mostly for eval and infer modes)
+    :return: A deep bottleneck residual unet with the specified parameters
+    """
+
+    # define fixed params
+    layer_layout = params.layer_layout
+    filt = params.base_filters
+    dfmt = params.data_format
+    # dropout = params.dropout_rate
+    ksize = params.kernel_size
+    act = params.activation
+    strides = [1, 1]
+    dil = [1, 1]
+
+    # additional setup for network construction
+    skips = []
+    horz_layers = layer_layout[-1]
+    unet_layout = layer_layout[:-1]
+
+    # initial input convolution layer
+    tensor = conv2d_fixed_pad(features, filt, ksize, [1, 1], [1, 1], dfmt, 'init_conv', reuse)
+    tensor = batch_norm(tensor, is_training, dfmt, 'init_bn', reuse)
+    tensor = activation(tensor,act, 'init_act')
+
+    # unet encoder limb with residual bottleneck blocks
+    for n, n_layers in enumerate(unet_layout):
+        # horizontal blocks
+        for layer in range(n_layers):
+            layer_name = 'enc_conv_' + str(n) + '_' + str(layer)
+            tensor = conv2d_fixed_pad(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse)
+            tensor = batch_norm(tensor, is_training, dfmt, 'enc_conv_bn_' + str(n) + '_' + str(layer), reuse)
+            tensor = activation(tensor, act, 'enc_conv_act_' + str(n) + '_' + str(layer))
+        # create skip connection
+        layer_name = 'skip_' + str(n)
+        skips.append(tf.identity(tensor, name=layer_name))
+        # downsample block
+        filt = filt * 2  # double filters before downsampling
+        layer_name = 'enc_conv_downsample_' + str(n)
+        tensor = conv2d_fixed_pad(tensor, filt, ksize, [2, 2], dil, dfmt, layer_name, reuse)
+        tensor = batch_norm(tensor, is_training, dfmt, 'enc_conv_downsample_bn_' + str(n), reuse)
+        tensor = activation(tensor, act, 'enc_conv_downsample_act_' + str(n))
+
+    # unet horizontal (bottom) bottleneck blocks
+    for layer in range(horz_layers):
+        layer_name = 'horz_conv_' + str(layer)
+        tensor = conv2d_fixed_pad(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse)
+        tensor = batch_norm(tensor, is_training, dfmt, 'horz_conv_bn_' + str(layer), reuse)
+        tensor = activation(tensor, act, 'horz_conv_act_' + str(layer))
+
+    # reverse layout and skip connections for decoder limb
+    skips.reverse()
+    unet_layout.reverse()
+
+    # unet decoder limb with residual bottleneck blocks
+    for n, n_layers in enumerate(unet_layout):
+        # upsample block
+        filt = filt / 2  # half filters before upsampling
+        layer_name = 'dec_conv_upsample' + str(n)
+        tensor = upsample_layer(tensor, filt, ksize, [2, 2], dfmt, layer_name, reuse)
+        tensor = batch_norm(tensor, is_training, dfmt, 'dec_conv_upsample_bn_' + str(n), reuse)
+        tensor = activation(tensor, act, 'dec_conv_upsample_act_' + str(n))
+        # fuse skip connections
+        layer_name = 'skip_' + str(n)
+        tensor = tf.add(tensor, skips[n], name=layer_name)
+        # horizontal blocks
+        for layer in range(n_layers):
+            layer_name = 'conv_dec_blk_' + str(n) + '_' + str(layer)
+            tensor = conv2d_fixed_pad(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse)
+            tensor = batch_norm(tensor, is_training, dfmt, 'dec_conv_bn_' + str(n) + '_' + str(layer), reuse)
+            tensor = activation(tensor, act, 'dec_conv_act_' + str(n) + '_' + str(layer))
+
+    # output layer
+    tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
+
+    return tensor
+
+
 def bneck_resunet(features, params, is_training, reuse=False):
     """
     Makes a deep bottleneck residual unet with long range skip connections similar to:

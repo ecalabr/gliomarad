@@ -358,7 +358,7 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
     dil = [1, 1]  # do not use dilation
     filters = int(round(in_filt / 4))  # filters for bottleneck layers are 1/4 of input/output filters
 
-    # shortcut with projection if upsampling or downsampling
+    # shortcut with projection if upsampling or downsampling, if not just identity
     if resample == 1:  # downsample projection
         shortcut = conv2d_fixed_pad(tensor, in_filt, [1, 1], [2, 2], dil, data_format, name + '_sc_us_proj', reuse)
     elif resample == 2:  # upsample projection
@@ -378,16 +378,16 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
     # 3x3 (or other specified non-unity kernel) conv block
     tensor = batch_norm(tensor, is_training, data_format, name + '_bn_2', reuse)
     tensor = activation(tensor, act_type, name + '_act_2')
-    layer_name = name + '_conv'+ str(ksize[0]) + 'x' + str(ksize[1]) + '_1'
+    layer_name = name + '_conv' + str(ksize[0]) + 'x' + str(ksize[1]) + '_2'
     tensor = conv2d_fixed_pad(tensor, filters, ksize, [1, 1], dil, data_format, layer_name, reuse)
 
     # second 1x1 conv block with optional upsampling
     tensor = batch_norm(tensor, is_training, data_format, name + '_bn_3', reuse)
     tensor = activation(tensor, act_type, name + '_act_3')
     if resample == 2:  # if upsampling
-        tensor = upsample_layer(tensor, in_filt, [1, 1], [2, 2], data_format, name + '_us_conv1x1_2', reuse)
+        tensor = upsample_layer(tensor, in_filt, [1, 1], [2, 2], data_format, name + '_us_conv1x1_3', reuse)
     else:
-        tensor = conv2d_fixed_pad(tensor, in_filt, [1, 1], [1, 1], dil, data_format, name + '_conv1x1_2', reuse)
+        tensor = conv2d_fixed_pad(tensor, in_filt, [1, 1], [1, 1], dil, data_format, name + '_conv1x1_3', reuse)
 
     # optional dropout layer
     if dropout > 0.:
