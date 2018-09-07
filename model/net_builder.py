@@ -265,9 +265,11 @@ def custom_unet(features, params, is_training, reuse=False):
         tensor = upsample_layer(tensor, filt, ksize, [2, 2], dfmt, layer_name, reuse)
         tensor = batch_norm(tensor, is_training, dfmt, 'dec_conv_upsample_bn_' + str(n), reuse)
         tensor = activation(tensor, act, 'dec_conv_upsample_act_' + str(n))
-        # fuse skip connections
+        # fuse skip connections with concatenation of features
         layer_name = 'skip_' + str(n)
-        tensor = tf.add(tensor, skips[n], name=layer_name)
+        axis = 1 if dfmt == 'channels_first' else -1
+        tensor = tf.concat([tensor, skips[n]], axis, name=layer_name)
+        # tensor = tf.add(tensor, skips[n], name=layer_name)
         # horizontal blocks
         for layer in range(n_layers):
             layer_name = 'conv_dec_blk_' + str(n) + '_' + str(layer)
@@ -348,6 +350,23 @@ def bneck_resunet(features, params, is_training, reuse=False):
 
     # output layer
     tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
+
+    return tensor
+
+
+def deep_embed_net(features, params, is_training, reuse=False):
+    """
+    Creates a deep embedding CNN similar to:
+    https://www.medicalimageanalysisjournal.com/article/S1361-8415(18)30125-7/fulltext
+    :param features: (tf.tensor) the input features
+    :param params: (class Params()) the parameters for the model
+    :param is_training: (bool) whether or not the model is training
+    :param reuse: (bool) whether or not to reuse layer weights (mostly for eval and infer modes)
+    :return: A deep embedding CNN with the specified parameters
+    """
+
+    # initial convolutional layer
+    tensor = features
 
     return tensor
 
