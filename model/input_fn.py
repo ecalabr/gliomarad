@@ -233,6 +233,7 @@ def input_fn(mode, params):
 
     # Study dirs and prefixes setup
     study_dirs = glob(params.data_dir + '/*/')
+    study_dirs.sort()  # ensure study dirs is in alphabetical order and sorted the same for both eval and train funcs
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
     eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
     infer_dirs = [study_dirs[-1]]
@@ -241,7 +242,8 @@ def input_fn(mode, params):
     data_dims = [params.data_height, params.data_width]
     if mode == 'train':
         data_dirs = train_dirs
-        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, params.augment_train_data,
+        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims,
+                          params.augment_train_data,
                           params.label_interp]
     elif mode == 'eval':
         data_dirs = eval_dirs

@@ -227,16 +227,20 @@ def bneck_resunet(features, params, is_training, reuse=False):
     for n, n_layers in enumerate(unet_layout):
         # horizontal blocks
         for layer in range(n_layers):
-            tensor = bneck_res_layer(tensor, filt, 0, dropout, is_training, dfmt, act, 'bneck_blk_' + str(layer), reuse)
+            layer_name = 'bneck_enc_blk_' + str(n) + '_' + str(layer)
+            tensor = bneck_res_layer(tensor, ksize, filt, 0, dropout, is_training, dfmt, act, layer_name, reuse)
         # create skip connection
-        skips.append(tf.identity(tensor, 'skip_' + str(n)))
+        layer_name = 'skip_' + str(n)
+        skips.append(tf.identity(tensor, name=layer_name))
         # downsample block
         filt = filt * 2  # double filters before downsampling
-        tensor = bneck_res_layer(tensor, filt, 1, dropout, is_training, dfmt, act, 'bneck_downsample_' + str(n), reuse)
+        layer_name = 'bneck_downsample_' + str(n)
+        tensor = bneck_res_layer(tensor, ksize, filt, 1, dropout, is_training, dfmt, act, layer_name, reuse)
 
     # unet horizontal (bottom) bottleneck blocks
     for layer in range(horz_layers):
-        tensor = bneck_res_layer(tensor, filt, 0, dropout, is_training, dfmt, act, 'bneck_horz_' + str(layer), reuse)
+        layer_name = 'bneck_horz_' + str(layer)
+        tensor = bneck_res_layer(tensor, ksize, filt, 0, dropout, is_training, dfmt, act, layer_name, reuse)
 
     # reverse layout and skip connections for decoder limb
     skips.reverse()
@@ -246,12 +250,15 @@ def bneck_resunet(features, params, is_training, reuse=False):
     for n, n_layers in enumerate(unet_layout):
         # upsample block
         filt = filt / 2  # half filters before upsampling
-        tensor = bneck_res_layer(tensor, filt, 2, dropout, is_training, dfmt, act, 'bneck_upsample_' + str(n), reuse)
+        layer_name = 'bneck_upsample_' + str(n)
+        tensor = bneck_res_layer(tensor, ksize, filt, 2, dropout, is_training, dfmt, act, layer_name, reuse)
         # fuse skip connections
-        tensor = tf.add(tensor, skips)
+        layer_name = 'skip_' + str(n)
+        tensor = tf.add(tensor, skips[n], name=layer_name)
         # horizontal blocks
         for layer in range(n_layers):
-            tensor = bneck_res_layer(tensor, filt, 0, dropout, is_training, dfmt, act, 'bneck_blk_' + str(layer), reuse)
+            layer_name = 'bneck_dec_blk_' + str(n) + '_' + str(layer)
+            tensor = bneck_res_layer(tensor, ksize, filt, 0, dropout, is_training, dfmt, act, layer_name, reuse)
 
     # output layer
     tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)

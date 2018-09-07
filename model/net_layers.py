@@ -351,6 +351,9 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
             including optional upsampling or downsampling.
     """
 
+    # sanity checks
+    if isinstance(ksize, int): ksize = [ksize] * 2
+
     # define basic parameters
     dil = [1, 1]  # do not use dilation
     filters = int(round(in_filt / 4))  # filters for bottleneck layers are 1/4 of input/output filters
@@ -375,7 +378,8 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
     # 3x3 (or other specified non-unity kernel) conv block
     tensor = batch_norm(tensor, is_training, data_format, name + '_bn_2', reuse)
     tensor = activation(tensor, act_type, name + '_act_2')
-    tensor = conv2d_fixed_pad(tensor, filters, ksize, [1, 1], dil, data_format, name + '_conv1x1_1', reuse)
+    layer_name = name + '_conv'+ str(ksize[0]) + 'x' + str(ksize[1]) + '_1'
+    tensor = conv2d_fixed_pad(tensor, filters, ksize, [1, 1], dil, data_format, layer_name, reuse)
 
     # second 1x1 conv block with optional upsampling
     tensor = batch_norm(tensor, is_training, data_format, name + '_bn_3', reuse)
