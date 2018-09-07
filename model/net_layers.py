@@ -381,13 +381,14 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
     layer_name = name + '_conv' + str(ksize[0]) + 'x' + str(ksize[1]) + '_2'
     tensor = conv2d_fixed_pad(tensor, filters, ksize, [1, 1], dil, data_format, layer_name, reuse)
 
-    # second 1x1 conv block with optional upsampling
+    # optional upsampling, in this case as an additional transpose conv, could also do linear upsamp without params?
+    if resample == 2:  # if upsampling
+        tensor = upsample_layer(tensor, filters, [1, 1], [2, 2], data_format, name + '_transpose_conv1x1', reuse)
+
+    # second 1x1 conv block
     tensor = batch_norm(tensor, is_training, data_format, name + '_bn_3', reuse)
     tensor = activation(tensor, act_type, name + '_act_3')
-    if resample == 2:  # if upsampling
-        tensor = upsample_layer(tensor, in_filt, [1, 1], [2, 2], data_format, name + '_us_conv1x1_3', reuse)
-    else:
-        tensor = conv2d_fixed_pad(tensor, in_filt, [1, 1], [1, 1], dil, data_format, name + '_conv1x1_3', reuse)
+    tensor = conv2d_fixed_pad(tensor, in_filt, [1, 1], [1, 1], dil, data_format, name + '_conv1x1_3', reuse)
 
     # optional dropout layer
     if dropout > 0.:

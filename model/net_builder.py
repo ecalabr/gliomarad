@@ -199,14 +199,13 @@ def unet(tensor, is_training, base_filters, k_size, data_format, reuse):
 
 def custom_unet(features, params, is_training, reuse=False):
     """
-    Makes a deep bottleneck residual unet with long range skip connections similar to:
-    https://arxiv.org/pdf/1704.07239.pdf
-    https://vitalab.github.io/deep-learning/2017/05/08/resunet.html
+    Makes a deep unet with long range skip connections similar to:
+    https://arxiv.org/pdf/1803.00131.pdf
     :param features: (tf.tensor) the input features
     :param params: (class Params()) the parameters for the model
     :param is_training: (bool) whether or not the model is training
     :param reuse: (bool) whether or not to reuse layer weights (mostly for eval and infer modes)
-    :return: A deep bottleneck residual unet with the specified parameters
+    :return: A deep unet with the specified parameters
     """
 
     # define fixed params
