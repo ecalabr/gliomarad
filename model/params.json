@@ -12,14 +12,14 @@
 
   "model_name": "bneck_resunet",
   "base_filters": 64,
-  "layer_layout": [3, 3, 3, 3, 6],
+  "layer_layout": [3, 3, 4, 4, 6],
   "kernel_size": [3, 3],
   "data_format": "channels_last",
   "activation": "leaky_relu",
 
   "buffer_size": 500,
   "shuffle_size": 500,
-  "batch_size": 1,
+  "batch_size": 8,
   "num_threads": 16,
   "train_fract": 0.9,
   "learning_rate": 0.001,
