@@ -244,22 +244,23 @@ def maxpool_layer_2d(tensor, pool_size, strides, data_format, name=None):
 ################################################################################
 
 
-def residual_layer(tensor, n_filters=64, k_size=(3, 3), strides=(1, 1), dilation=(1, 1),
-                   is_training=False, data_format="channels_last"):
+def residual_layer(tensor, n_filters, k_size, strides, dilation, is_training, data_format, act_type, name, reuse=False):
     """
-    Creates a single simple residual block with batch normalization and activation
+    Creates a 2D single simple residual block with batch normalization and activation
     Modeled after: https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py
-    Args:
-        tensor: a tensorflow tensor - the input data tensor
-        n_filters: an int - the number of filters for the layers
-        k_size: an int or list/tuple - the size of the convolution kernel for the residual layers
-        strides: an int or list/tuple - the stride for the convolutions of the first convolution layer
-        dilation: an int or list/tuple - the dilation rate for the convolution
-        is_training: a boolean - whether or not the model is training
-        data_format: a string - "channels_first" for NCHW data or "channels_last" for NHWC
-    Returns:
-        tensor: a tensorflow tensor - the output of the layer
+    :param tensor: (tf.tensor) the inputa data tensor
+    :param n_filters: (int) the number of filters for the convolutions
+    :param k_size: (list/tuple(int)) the kernel size for convolutions
+    :param strides: (list/tuple(int)) the strides for convolutions
+    :param dilation: (list/tuple(int)) the dilation for convolutions
+    :param is_training: (bool) whether or not the model is training
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param act_type: (str) the name of te activation method, e.g. 'leaky_relu'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :return: returns a residual layer as defined in the resnet example above.
     """
+
     # define shortcut
     shortcut = tensor
 
@@ -271,20 +272,121 @@ def residual_layer(tensor, n_filters=64, k_size=(3, 3), strides=(1, 1), dilation
     # handle identity versus projection shortcut for outputs of different dimension
     if strided: # if strides are 2 for example, then project shortcut to output size
         # accomplish projection with a 1x1 convolution
-        shortcut = conv2d_fixed_pad(tensor, n_filters, 1, strides, dilation=dilation, data_format=data_format)
-        shortcut = batch_norm(shortcut, is_training)
+        shortcut = conv2d_fixed_pad(tensor, n_filters, 1, strides, dilation, data_format, name + '_shrtct_conv', reuse)
+        shortcut = batch_norm(shortcut, is_training, data_format, name + '_sc_batchnorm', reuse)
 
     # Convolution block 1
-    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation=dilation, data_format=data_format)
-    tensor = batch_norm(tensor, is_training, data_format=data_format)
-    tensor = activation(tensor)
+    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation, data_format, name + '_resid_conv1', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv1_batchnorm', reuse)
+    tensor = act_type(tensor, act_type, name + '_resid_conv1_act')
 
     # Convolution block 2 (force strides==1)
-    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides=1, dilation=dilation, data_format=data_format)
-    tensor = batch_norm(tensor, is_training, data_format=data_format)
+    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation, data_format, name + '_resid_conv2', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv2_batchnorm', reuse)
 
-    # add shortcut to outputs and one final activation
+    # fuse shortcut with outputs and do one final activation
     tensor = tf.add(tensor, shortcut)
-    tensor = activation(tensor)
+    tensor = act_type(tensor, act_type, name + '_resid_conv2_act')
+
+    return tensor
+
+
+def resid_us_layer(tensor, n_filters, k_size, strides, dilation, is_training, data_format, act_type, name, reuse=False):
+    """
+    Creates a 2D single transpose convolution residual block with batch normalization and activation
+    Modeled after: https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py
+    :param tensor: (tf.tensor) the inputa data tensor
+    :param n_filters: (int) the number of filters for the convolutions
+    :param k_size: (list/tuple(int)) the kernel size for convolutions
+    :param strides: (list/tuple(int)) the strides for convolutions
+    :param dilation: (list/tuple(int)) the dilation for convolutions
+    :param is_training: (bool) whether or not the model is training
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param act_type: (str) the name of te activation method, e.g. 'leaky_relu'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :return: returns a transpose residual layer as defined in the resnet example above.
+    """
+
+    # ensure strided
+    if isinstance(strides, int): strides = [strides] * 2
+    if not isinstance(strides, (list, tuple)): raise ValueError("Strides must be an int or list/tuple of ints")
+    if strides[0] <= 1: raise ValueError("Strides must be greater than or equal to 2 for upsampling layer")
+
+    # projection shortcut for upsample layer accomplish projection with a 1x1 convolution
+    shortcut = upsample_layer(tensor, n_filters, 1, strides, data_format, name + '_shrtct_conv', reuse)
+    shortcut = batch_norm(shortcut, is_training, data_format, name + '_sc_batchnorm', reuse)
+
+    # Convolution block 1
+    tensor = upsample_layer(tensor, n_filters, k_size, strides, data_format, name + '_resid_conv1', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv1_batchnorm', reuse)
+    tensor = act_type(tensor, act_type, name + '_resid_conv1_act')
+
+    # Convolution block 2 (force strides==1)
+    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation, data_format, name + '_resid_conv2', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv2_batchnorm', reuse)
+
+    # fuse shortcut with outputs and do one final activation
+    tensor = tf.add(tensor, shortcut)
+    tensor = act_type(tensor, act_type, name + '_resid_conv2_act')
+
+    return tensor
+
+
+def bneck_res_layer(tensor, n_filters, resample, dropout, is_training, data_format, act_type, name, reuse=False):
+    """
+    Creates a 2D bottleneck residual layer with optional upsampling and downsampling
+    https://vitalab.github.io/deep-learning/2017/05/08/resunet.html
+    :param tensor: (tf.tensor) the inputa data tensor
+    :param n_filters: (int) the number of base filters for the input/output of the residual block
+    :param resample: (int) in rage [0, 2], 0 = no resampling, 1 = downsample by 2, 2 = upsample by 2
+    :param dropout: (bool) whether or not to include a dropout layer
+    :param is_training: (bool) whether or not the model is training
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param act_type: (str) the name of te activation method, e.g. 'leaky_relu'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :return: returns a bottleneck residual block with the specified parameters
+            including optional upsampling or downsampling.
+    """
+
+    # define basic parameters
+    dilation = [1, 1]
+    filters = int(round(n_filters / 4))
+
+    # shortcut with projection if upsampling
+    if resample > 0:
+        shortcut = conv2d_fixed_pad(tensor, n_filters, [1, 1], [1, 1], dilation, data_format, name + '_sc_conv', reuse)
+    else:
+        shortcut = tf.identity(tensor, name + '_sc_identity')
+
+    # bottleneck residual block
+    # first 1x1 conv block with optional downsampling
+    tensor = batch_norm(tensor, is_training, data_format, name + '_bn_1', reuse)
+    tensor = activation(tensor, act_type, name + '_act_1')
+    if resample == 1:  # if downsampling
+        tensor = conv2d_fixed_pad(tensor, filters, [1, 1], [2, 2], dilation, data_format, name + '_ds_conv1x1_1', reuse)
+    else:
+        tensor = conv2d_fixed_pad(tensor, filters, [1, 1], [1, 1], dilation, data_format, name + '_conv1x1_1', reuse)
+
+    # 3x3 conv block
+    tensor = batch_norm(tensor, is_training, data_format, name + '_bn_2', reuse)
+    tensor = activation(tensor, act_type, name + '_act_2')
+    tensor = conv2d_fixed_pad(tensor, filters, [3, 3], [1, 1], dilation, data_format, name + '_conv1x1_1', reuse)
+
+    # second 1x1 conv block with optional upsampling
+    tensor = batch_norm(tensor, is_training, data_format, name + '_bn_3', reuse)
+    tensor = activation(tensor, act_type, name + '_act_3')
+    if resample == 2:  # if upsampling
+        tensor = upsample_layer(tensor, n_filters, [1, 1], [1, 1], data_format, name + '_us_conv1x1_2', reuse)
+    else:
+        tensor = conv2d_fixed_pad(tensor, n_filters, [1, 1], [1, 1], dilation, data_format, name + '_conv1x1_2', reuse)
+
+    # optional dropout layer
+    if dropout:
+        tensor = tf.layers.dropout(tensor, rate=0.2, training=is_training, name=name + '_dropout')
+
+    # shortcut fusion
+    tensor = tf.add(tensor, shortcut)
 
     return tensor
