@@ -28,8 +28,10 @@ class Params:
 
     model_name = None
     base_filters = None
+    layer_layout = None
     kernel_size = None
     data_format = None
+    activation = None
 
     buffer_size = None
     shuffle_size = None

@@ -197,6 +197,68 @@ def unet(tensor, is_training, base_filters, k_size, data_format, reuse):
     return tensor
 
 
+def bneck_resunet(features, params, is_training, reuse=False):
+    """
+
+    :param features:
+    :param params:
+    :param is_training:
+    :param reuse:
+    :return:
+    """
+
+    # define fixed params
+    layer_layout = params.layer_layout
+    filt = params.base_filters
+    dfmt = params.data_format
+    dropout = params.dropout_rate
+    ksize = params.kernel_size
+    act = params.activation
+
+    # additional setup for network construction
+    skips = []
+    horz_layers = layer_layout[-1]
+    unet_layout = layer_layout[:-1]
+
+    # initial input convolution layer
+    tensor = conv2d_fixed_pad(features, filt, ksize, [1, 1], [1, 1], dfmt, 'init_conv', reuse)
+
+    # unet encoder limb with residual bottleneck blocks
+    for n, n_layers in enumerate(unet_layout):
+        # horizontal blocks
+        for layer in range(n_layers):
+            tensor = bneck_res_layer(tensor, filt, 0, dropout, is_training, dfmt, act, 'bneck_blk_' + str(layer), reuse)
+        # create skip connection
+        skips.append(tf.identity(tensor, 'skip_' + str(n)))
+        # downsample block
+        filt = filt * 2  # double filters before downsampling
+        tensor = bneck_res_layer(tensor, filt, 1, dropout, is_training, dfmt, act, 'bneck_downsample_' + str(n), reuse)
+
+    # unet horizontal (bottom) bottleneck blocks
+    for layer in range(horz_layers):
+        tensor = bneck_res_layer(tensor, filt, 0, dropout, is_training, dfmt, act, 'bneck_horz_' + str(layer), reuse)
+
+    # reverse layout and skip connections for decoder limb
+    skips.reverse()
+    unet_layout.reverse()
+
+    # unet decoder limb with residual bottleneck blocks
+    for n, n_layers in enumerate(unet_layout):
+        # upsample block
+        filt = filt / 2  # half filters before upsampling
+        tensor = bneck_res_layer(tensor, filt, 2, dropout, is_training, dfmt, act, 'bneck_upsample_' + str(n), reuse)
+        # fuse skip connections
+        tensor = tf.add(tensor, skips)
+        # horizontal blocks
+        for layer in range(n_layers):
+            tensor = bneck_res_layer(tensor, filt, 0, dropout, is_training, dfmt, act, 'bneck_blk_' + str(layer), reuse)
+
+    # output layer
+    tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
+
+    return tensor
+
+
 def net_builder(features, params, is_training, reuse=False):
     """
     Builds the specified network.
@@ -214,6 +276,8 @@ def net_builder(features, params, is_training, reuse=False):
     if params.model_name == 'unet':
         network = unet(features, is_training, base_filters=params.base_filters, k_size=params.kernel_size,
                        data_format=params.data_format, reuse=reuse)
+    elif params.model_name == 'bneck_resunet':
+        network = bneck_resunet(features, params, is_training, reuse)
     else:
         raise ValueError("Specified network does not exist: " + params.model_name)
 

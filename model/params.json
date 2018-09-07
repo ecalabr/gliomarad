@@ -10,10 +10,12 @@
   "augment_train_data": "yes",
   "label_interp": 1,
 
-  "model_name": "unet",
+  "model_name": "bneck_resunet",
   "base_filters": 64,
+  "layer_layout": [3, 3, 3, 3, 6],
   "kernel_size": [3, 3],
   "data_format": "channels_last",
+  "activation": "leaky_relu",
 
   "buffer_size": 500,
   "shuffle_size": 500,
@@ -24,7 +26,7 @@
   "learning_rate_decay": "exponential",
   "loss": "MAE",
   "num_epochs":10,
-  "dropout_rate": 0.3,
+  "dropout_rate": 0,
 
   "save_summary_steps": 100
 }
