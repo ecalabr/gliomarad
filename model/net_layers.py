@@ -333,12 +333,12 @@ def resid_us_layer(tensor, n_filters, k_size, strides, dilation, is_training, da
     return tensor
 
 
-def bneck_res_layer(tensor, n_filters, resample, dropout, is_training, data_format, act_type, name, reuse=False):
+def bneck_res_layer(tensor, in_filters, resample, dropout, is_training, data_format, act_type, name, reuse=False):
     """
     Creates a 2D bottleneck residual layer with optional upsampling and downsampling
     https://vitalab.github.io/deep-learning/2017/05/08/resunet.html
     :param tensor: (tf.tensor) the inputa data tensor
-    :param n_filters: (int) the number of base filters for the input/output of the residual block
+    :param in_filters: (int) the number of base filters for the input/output of the residual block
     :param resample: (int) in rage [0, 2], 0 = no resampling, 1 = downsample by 2, 2 = upsample by 2
     :param dropout: (bool) whether or not to include a dropout layer
     :param is_training: (bool) whether or not the model is training
@@ -352,11 +352,11 @@ def bneck_res_layer(tensor, n_filters, resample, dropout, is_training, data_form
 
     # define basic parameters
     dilation = [1, 1]
-    filters = int(round(n_filters / 4))
+    filters = int(round(in_filters / 4))
 
-    # shortcut with projection if upsampling
+    # shortcut with projection if upsampling or downsampling
     if resample > 0:
-        shortcut = conv2d_fixed_pad(tensor, n_filters, [1, 1], [1, 1], dilation, data_format, name + '_sc_conv', reuse)
+        shortcut = conv2d_fixed_pad(tensor, in_filters, [1, 1], [1, 1], dilation, data_format, name + '_sc_proj', reuse)
     else:
         shortcut = tf.identity(tensor, name + '_sc_identity')
 
@@ -378,9 +378,9 @@ def bneck_res_layer(tensor, n_filters, resample, dropout, is_training, data_form
     tensor = batch_norm(tensor, is_training, data_format, name + '_bn_3', reuse)
     tensor = activation(tensor, act_type, name + '_act_3')
     if resample == 2:  # if upsampling
-        tensor = upsample_layer(tensor, n_filters, [1, 1], [1, 1], data_format, name + '_us_conv1x1_2', reuse)
+        tensor = upsample_layer(tensor, in_filters, [1, 1], [2, 2], data_format, name + '_us_conv1x1_2', reuse)
     else:
-        tensor = conv2d_fixed_pad(tensor, n_filters, [1, 1], [1, 1], dilation, data_format, name + '_conv1x1_2', reuse)
+        tensor = conv2d_fixed_pad(tensor, in_filters, [1, 1], [1, 1], dilation, data_format, name + '_conv1x1_2', reuse)
 
     # optional dropout layer
     if dropout:
