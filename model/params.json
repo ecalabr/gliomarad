@@ -10,7 +10,7 @@
   "augment_train_data": "yes",
   "label_interp": 1,
 
-  "model_name": "bneck_resunet",
+  "model_name": "custom_unet",
   "base_filters": 64,
   "layer_layout": [3, 3, 4, 4, 6],
   "kernel_size": [3, 3],

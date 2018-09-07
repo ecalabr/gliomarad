@@ -372,6 +372,8 @@ def net_builder(features, params, is_training, reuse=False):
                        data_format=params.data_format, reuse=reuse)
     elif params.model_name == 'bneck_resunet':
         network = bneck_resunet(features, params, is_training, reuse)
+    elif params.model_name == 'custom_unet':
+        network = custom_unet(features, params, is_training,reuse)
     else:
         raise ValueError("Specified network does not exist: " + params.model_name)
 
