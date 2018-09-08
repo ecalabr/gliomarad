@@ -11,6 +11,15 @@ def model_fn(inputs, params, mode, reuse=False):
     :param reuse: (bool) whether or not to reuse variables within the tf model variable scope
     :return: model_spec (dict) contains all the data/nodes and ops for tensorflow training/evaluation
     """
+    # handle infer mode
+    if mode == 'infer':
+        with tf.variable_scope('model', reuse=reuse):
+            # generate the model and compute the output predictions
+            predictions = net_builder(inputs['features'], params, False, False)  # not training, no reuse
+            model_spec = inputs
+            model_spec['variable_init_op'] = tf.group(*[tf.global_variables_initializer(), tf.tables_initializer()])
+            model_spec['predictions'] = predictions
+            return model_spec
 
     # separate out labels and features
     labels = inputs['labels']

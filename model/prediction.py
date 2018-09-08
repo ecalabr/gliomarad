@@ -6,6 +6,7 @@ import numpy as np
 import nibabel as nib
 import logging
 import time
+from glob import glob
 
 
 def predict_sess(sess, model_spec):
@@ -17,7 +18,6 @@ def predict_sess(sess, model_spec):
 
     # initialize iterator
     sess.run(model_spec['iterator_init_op'])
-    sess.run(model_spec['metrics_init_op'])
 
     # compute predictions over the dataset
     predictions = []
@@ -40,12 +40,13 @@ def predict_sess(sess, model_spec):
     return predictions
 
 
-def predict(model_spec, model_dir, params):
+def predict(model_spec, model_dir, params, infer_dir):
     """Evaluate the model
     Args:
         model_spec: (dict) contains the graph operations or nodes needed for evaluation
         model_dir: (string) directory containing config, weights and log
         params: (Params) contains hyperparameters of the model.
+        infer_dir: (str) the path to the directory for inference
                 Must define: num_epochs, train_size, batch_size, eval_size, save_summary_steps
     """
 
@@ -74,10 +75,25 @@ def predict(model_spec, model_dir, params):
         # predict
         predictions = predict_sess(sess, model_spec)
 
-    # convert to nifti format
-    nii_out = os.path.join(pred_dir, 'predictions.nii.gz')
+    # load one of the original images to restore original shape
+    if infer_dir[-1] == '/': infer_dir = infer_dir[0:-1]  # remove possible trailing slash
+    nii = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
+    affine = nii.affine
+    shape = nii.shape
+    name_prefix = os.path.basename(infer_dir)
+
+    # make predictions the correct shape (same as input data)
     permute = [2, 3, 0, 1] if params.data_format == 'channels_first' else [1, 2, 0, 3]
     predictions = np.squeeze(np.transpose(predictions, axes=permute))
-    img = nib.Nifti1Image(predictions, np.eye(4))
+    pads = ((0, 0), (0, 0), (0, shape[2]-predictions.shape[-1]))
+    predictions = np.pad(predictions[0:shape[0], 0:shape[1], :], pads, 'constant')
+
+    # mask predictions based on input data
+    mask = nii.get_data() > 0
+    predictions = predictions * mask
+
+    # convert to nifti format and save
+    nii_out = os.path.join(pred_dir, name_prefix + '_predictions.nii.gz')
+    img = nib.Nifti1Image(predictions, affine)
     logging.info("Saving predictions to: " + nii_out)
     nib.save(img, nii_out)

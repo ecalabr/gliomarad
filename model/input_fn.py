@@ -16,7 +16,8 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None):
     :param study_dir: (str) the full path to the study directory
     :param file_prefixes: (str, list(str)) the file prefixes for the images to be loaded
     :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param slice_trim: (list, tuple) contains 2 ints, the first and last slice to use for trimming. None = auto trim
+    :param slice_trim: (list, tuple) contains 2 ints, the first and last slice to use for trimming. None = auto trim.
+                        [0, -1] does no trimming
     :return: output - a 4D numpy array containing the image data
     """
 
@@ -133,7 +134,7 @@ def _zero_pad_image(input_data, out_dims, axes):
     # pad array with zeros (default)
     input_data = np.pad(input_data, pads, 'constant')
 
-    return input_data
+    return input_data, pads
 
 
 def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, augment, label_interp=1):
@@ -172,10 +173,32 @@ def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, ou
 
     # do data padding to desired dims
     axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
-    data = _zero_pad_image(data, out_dims, axes)
-    labels = _zero_pad_image(labels, out_dims, axes)
+    data, _ = _zero_pad_image(data, out_dims, axes)
+    labels, _ = _zero_pad_image(labels, out_dims, axes)
 
     return data, labels
+
+
+def load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims):
+    """
+    Load multicontrast image data and target data/labels and perform augmentation if desired.
+    :param study_dir: (str) A directory containing the desired image data.
+    :param feature_prefx: (list) a list of filenames - the data files to be loaded
+    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
+    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
+    """
+
+    # sanity checks
+    if not os.path.isdir(study_dir): sys.exit("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): sys.exit("Data prefixes must be strings")
+    if data_fmt not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
+    if not all([np.issubdtype(a, np.integer) for a in out_dims]): sys.exit("data_dims must be a list/tuple of ints")
+
+    # load multi-contrast data
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, -1])  # no slice trim
+
+    return data
 
 
 def display_tf_dataset(dataset_data, data_format):
@@ -286,5 +309,42 @@ def input_fn(mode, params):
 
     # Build and return a dictionary containing the nodes / ops
     inputs = {'features': get_next_features, 'labels': get_next_labels, 'iterator_init_op': init_op}
+
+    return inputs
+
+
+def infer_input_fn(params, infer_dir):
+    """
+    Input function for UCSF GBM dataset
+    :param params: (class) the params class generated from a JSON file
+    :param infer_dir: (str) the directory for inference
+    :return: outputs, a dict containing the features, labels, and initializer operation
+    """
+
+    # prepare pyfunc
+    data_dims = [params.data_height, params.data_width]
+    py_func_params = [params.data_prefix, params.data_format, data_dims]  # 'no' for aug
+
+    # generate tensorflow dataset object
+    dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
+    dataset = dataset.map(
+        lambda x: tf.py_func(load_multicon_preserve_size,
+                             [x] + py_func_params,
+                             tf.float32), num_parallel_calls=params.num_threads)
+    dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
+    dataset = dataset.prefetch(params.buffer_size)
+    padded_shapes = ([params.data_height, params.data_width, len(params.data_prefix)])
+    dataset = dataset.padded_batch(params.batch_size, padded_shapes=padded_shapes, padding_values=0.)
+
+    # make iterator and query the output of the iterator for input to the model
+    iterator = dataset.make_initializable_iterator()
+    get_next_features = iterator.get_next()
+    init_op = iterator.initializer
+
+    # manually set shapes for inputs
+    get_next_features.set_shape([params.batch_size, params.data_height, params.data_width, len(params.data_prefix)])
+
+    # Build and return a dictionary containing the nodes / ops
+    inputs = {'features': get_next_features, 'iterator_init_op': init_op}
 
     return inputs
