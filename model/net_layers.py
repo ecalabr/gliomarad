@@ -62,7 +62,7 @@ def batch_norm(tensor, is_training, data_format='channels_last', name=None, reus
     return tf.layers.batch_normalization(
         inputs=tensor,  # tensor
         axis=axis,  # axis
-        momentum=0.99,
+        momentum=0.9,  # set to 0.9 per https://github.com/tensorflow/tensorflow/issues/1122
         epsilon=0.001,
         center=True,
         scale=True,
