@@ -131,7 +131,7 @@ def learning_rate_picker(learning_rate, learning_rate_decay, global_step):
     if learning_rate_decay == 'constant':
         learning_rate_function = learning_rate
     elif learning_rate_decay == 'exponential':
-        learning_rate_function = tf.train.exponential_decay(learning_rate, global_step, 10000, 0.96, staircase=True)
+        learning_rate_function = tf.train.exponential_decay(learning_rate, global_step, 10000, 0.9, staircase=True)
     else:
         raise NotImplementedError("Specified learning rate decay method is not implemented: " + learning_rate_decay)
 

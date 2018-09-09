@@ -23,6 +23,12 @@ if __name__ == '__main__':
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
     params = Params(args.param_file)
 
+    # determine model dir
+    if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
+        params.model_dir = os.path.dirname(args.param_file)
+    if not os.path.isdir(params.model_dir):
+        raise ValueError("Specified model directory does not exist")
+
     # Check that we are not overwriting some previous experiment
     if params.overwrite != 'yes' and os.listdir(params.model_dir):
         raise ValueError("Overwrite param is not 'yes' but there are files in specified model directory!")
