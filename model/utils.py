@@ -114,24 +114,33 @@ def save_dict_to_json(d, json_path):
         json.dump(d, f, indent=4)
 
 
-def learning_rate_picker(learning_rate, learning_rate_decay, global_step):
+def learning_rate_picker(learn_rate, learning_rate_decay, global_step):
     """
     Takes a learning rate and a string specifying a learning rate decay method and returns a learning rate.
-    :param learning_rate: (float) the learning rate
+    :param learn_rate: (float) the learning rate or list/tuple(float) the learning rate, step, and decay factor
     :param learning_rate_decay (string) the learning rate decay method
     :param global_step (tensorflow global step) the global step for the model
     :return: A learning rate function using the specified starting rate
     """
 
     # sanity checks
-    if not isinstance(learning_rate, float): raise ValueError("Learning rate must be a float")
-    if not isinstance(learning_rate_decay, (str, unicode)): raise ValueError("Learning rate decay parameter must be a string")
+    if not isinstance(learn_rate, (float, list, tuple)):
+        raise ValueError("Learning rate must be a float or list/tuple")
+    if not isinstance(learning_rate_decay, (str, unicode)):
+        raise ValueError("Learning rate decay parameter must be a string")
 
     # chooser for decay method
     if learning_rate_decay == 'constant':
-        learning_rate_function = learning_rate
+        if isinstance(learn_rate, (list, tuple)):
+            learn_rate = learn_rate[0]
+        learning_rate_function = learn_rate
     elif learning_rate_decay == 'exponential':
-        learning_rate_function = tf.train.exponential_decay(learning_rate, global_step, 10000, 0.9, staircase=True)
+        if not isinstance(learn_rate, (list, tuple)):
+            raise ValueError("Exponential decay requres three values: starting learning rate, steps, and decay factor")
+        start_lr = learn_rate[0]
+        steps = learn_rate[1]
+        decay = learn_rate[2]
+        learning_rate_function = tf.train.exponential_decay(start_lr, global_step, steps, decay, staircase=True)
     else:
         raise NotImplementedError("Specified learning rate decay method is not implemented: " + learning_rate_decay)
 

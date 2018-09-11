@@ -319,7 +319,7 @@ def custom_resid_unet(features, params, is_training, reuse=False):
     for n, n_layers in enumerate(unet_layout):
         # horizontal blocks
         for layer in range(n_layers):
-            if 0 < layer < n_layers -1:
+            if layer < n_layers -1:
                 layer_name = 'enc_bneck_resid_' + str(n) + '_' + str(layer)
                 tensor = bneck_res_layer(tensor, ksize, filt, 0, dpout, is_training, dfmt, act, layer_name, reuse)
             else:
@@ -367,7 +367,7 @@ def custom_resid_unet(features, params, is_training, reuse=False):
         # tensor = tf.add(tensor, skips[n], name=layer_name)
         # horizontal blocks
         for layer in range(n_layers):
-            if 0 < layer < n_layers -1:
+            if 0 < layer:
                 layer_name = 'dec_bneck_resid_' + str(n) + '_' + str(layer)
                 tensor = bneck_res_layer(tensor, ksize, filt, 0, dpout, is_training, dfmt, act, layer_name, reuse)
             else:

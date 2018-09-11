@@ -3,7 +3,7 @@
   "model_dir": "same",
   "overwrite": "yes",
   "restore_dir": "/media/ecalabr/data2/model/last_weights",
-  "data_prefix": ["T1_wm", "T2_wm", "FLAIR_wm", "DWI_wm", "ASL_wm", "SWI_wm"],
+  "data_prefix": ["T1_wm", "T2_wm", "FLAIR_wm", "DWI_wm", "ASL_wm", "SWI_wm", "DTI_eddy_MD_wm"],
   "label_prefix": ["T1gad_wm"],
   "data_height": 208,
   "data_width": 240,
@@ -22,11 +22,11 @@
   "batch_size": 10,
   "num_threads": 16,
   "train_fract": 0.9,
-  "learning_rate": 0.001,
+  "learning_rate": [0.001, 5000, 0.5],
   "learning_rate_decay": "exponential",
-  "loss": "MSE",
+  "loss": "MAE",
   "num_epochs":10,
-  "dropout_rate": 0,
+  "dropout_rate": 0.2,
 
   "save_summary_steps": 100
 }
