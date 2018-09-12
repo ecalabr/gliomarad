@@ -46,7 +46,7 @@ def custom_unet_maxpool(features, params, is_training, reuse=False):
         # downsample layer
         filt = filt * 2  # double filters before downsampling
         layer_name = 'encoder_downsample_' + str(n)
-        tensor = maxpool2d_layer(tensor, [2, 2], strides, dfmt, layer_name)
+        tensor = maxpool2d_layer(tensor, [2, 2], [2, 2], dfmt, layer_name)
 
     # unet horizontal (bottom) limb
     for layer in range(horz_layers):
@@ -62,6 +62,7 @@ def custom_unet_maxpool(features, params, is_training, reuse=False):
         # upsample block
         filt = filt / 2  # half filters before upsampling
         layer_name = 'decoder_upsample_' + str(n)
+        # tensor = deconv2d_block(tensor, filt, ksize, [2, 2], dfmt, layer_name, reuse, dropout, is_training, act)
         tensor = upsample2d_layer(tensor, 2, dfmt, layer_name)
 
         # fuse skip connections with concatenation of features

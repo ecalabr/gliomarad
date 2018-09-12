@@ -2,7 +2,7 @@
   "data_dir": "/media/ecalabr/data2/qc_complete",
   "model_dir": "same",
   "overwrite": "yes",
-  "restore_dir": "/media/ecalabr/data2/model/last_weights",
+  "restore_dir": "last_weights",
   "data_prefix": ["T1_wm", "T2_wm", "FLAIR_wm", "DWI_wm", "ASL_wm", "SWI_wm", "DTI_eddy_MD_wm"],
   "label_prefix": ["T1gad_wm"],
   "data_height": 208,
@@ -10,7 +10,7 @@
   "augment_train_data": "yes",
   "label_interp": 2,
 
-  "model_name": "custom_resid_unet",
+  "model_name": "custom_unet_maxpool",
   "base_filters": 64,
   "layer_layout": [3, 3, 4, 4, 6],
   "kernel_size": [3, 3],
@@ -26,7 +26,7 @@
   "learning_rate_decay": "exponential",
   "loss": "MAE",
   "num_epochs":10,
-  "dropout_rate": 0.2,
+  "dropout_rate": 0,
 
   "save_summary_steps": 100
 }

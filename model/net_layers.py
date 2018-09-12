@@ -254,10 +254,11 @@ def upsample2d_layer(tensor, factor, data_format, name=None):
         tensor = tf.transpose(tensor, perm=[0, 2, 3, 1], name=name + '_transpose1')
 
     # get output shape
-    size = tf.shape(tensor)[1:2] * factor
+    size = tensor.get_shape().as_list()[1:3]
+    size = [dim * factor for dim in size]
 
     # do resizing
-    tf.image.resize_images(tensor, size=size, method=ResizeMethod.BILINEAR, align_corners=True)
+    tensor = tf.image.resize_images(tensor, size=size, method=tf.image.ResizeMethod.BILINEAR, align_corners=True)
 
     # handle channels first data
     if data_format == 'channels_first':
