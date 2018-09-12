@@ -4,9 +4,7 @@ make nets for image segmentation and synthetic CT
 still issues with numbering keeper series, 11273473
 
 
-fix restore from functionality in training.py
-should we do batching for predictions?
-find a way to shuffle input directories so testing is not just from newest datasets
+[x] possibly already done fix restore from functionality in training.py
 test residual layer and upsample residual layer
 get bneck resid working, particularly with upsampling?
 add optional dropout to custom unet

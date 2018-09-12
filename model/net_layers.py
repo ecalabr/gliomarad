@@ -112,12 +112,12 @@ def activation(tensor, acti_type='leaky_relu', name=None):  # add optional type 
     return act_func
 
 
-def conv2d_fixed_pad(inputs, filters, kernel_size, strides, dilation, data_format, name=None, reuse=None):
+def conv2d_fixed_pad(tensor, filters, kernel_size, strides, dilation, data_format, name=None, reuse=None):
     """
     2D strided convolutional layer with explicit padding.
     The padding is consistent and is based only on `kernel_size`, not on the
     dimensions of `inputs` (as opposed to using `tf.layers.conv2d` alone).
-    :param inputs: (tf.tensor) the input data tensor
+    :param tensor: (tf.tensor) the input data tensor
     :param filters: (int) the number of filters used for the layer
     :param kernel_size: (tuple/list(int)) the convolution kernel size
     :param strides: (tuple/list(int)) the strides for the convolution
@@ -141,10 +141,10 @@ def conv2d_fixed_pad(inputs, filters, kernel_size, strides, dilation, data_forma
     # determine if strided
     strided = strides > 1
     if strided:
-        inputs = _fixed_padding(inputs, kernel_size, strides, data_format)
+        tensor = _fixed_padding(tensor, kernel_size, strides, data_format)
 
     return tf.layers.conv2d(
-        inputs=inputs,  # inputs
+        inputs=tensor,  # inputs
         filters=filters,  # filters
         kernel_size=kernel_size,  # kernel size
         strides=strides,  # strides
@@ -166,7 +166,7 @@ def conv2d_fixed_pad(inputs, filters, kernel_size, strides, dilation, data_forma
     )
 
 
-def upsample_layer(inputs, filters, kernel_size, strides, data_format, name=None, reuse=None):
+def deconv2d_layer(inputs, filters, kernel_size, strides, data_format, name=None, reuse=None):
     """
     Strided 2-D transpose convolution layer, which can be used for upsampling using strides >= 2
     :param inputs: (tf.tensor) the input data tensor
@@ -210,15 +210,15 @@ def upsample_layer(inputs, filters, kernel_size, strides, data_format, name=None
     )
 
 
-def maxpool_layer_2d(tensor, pool_size, strides, data_format, name=None):
+def maxpool2d_layer(tensor, pool_size, strides, data_format, name=None):
     """
     Returns a maxpool 2d layer
-    :param tensor:
-    :param pool_size:
-    :param strides:
-    :param data_format:
-    :param name:
-    :return:
+    :param tensor: (tf.tensor) the input tensor
+    :param pool_size: (tuple/list(int)) the pool size for maxpool
+    :param strides: (tuple/list(int)) the strides for the convolution
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :return: Returns a maxpool2d layer with the specified parameters
     """
 
     # sanity checks
@@ -239,12 +239,89 @@ def maxpool_layer_2d(tensor, pool_size, strides, data_format, name=None):
             name=name)
 
 
+def upsample2d_layer(tensor, factor, data_format, name=None):
+    """
+    Upsampling with bilinear interpolation.
+    :param tensor: (tf.tensor) the input tensor
+    :param factor: (int) the resampling factor
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :return: Returns an tensor with the desired upsampling factor
+    """
+
+    # handle channels first data
+    if data_format == 'channels_first':
+        tensor = tf.transpose(tensor, perm=[0, 2, 3, 1], name=name + '_transpose1')
+
+    # get output shape
+    size = tf.shape(tensor)[1:2] * factor
+
+    # do resizing
+    tf.image.resize_images(tensor, size=size, method=ResizeMethod.BILINEAR, align_corners=True)
+
+    # handle channels first data
+    if data_format == 'channels_first':
+        tensor = tf.transpose(tensor, perm=[0, 1, 2, 3], name=name + '_transpose2')
+
+    return tensor
+
+
 ################################################################################
 # Layer building blocks
 ################################################################################
 
 
-def residual_layer(tensor, n_filters, k_size, strides, dilation, is_training, data_format, act_type, name, reuse=False):
+def conv2d_block(tensor, filters, kernel_size, strides, dil, data_format, name, reuse, dropout, is_training, acti_type):
+    """
+    Basic conv 2d block with batchnorm, activation, and optional dropout
+    :param tensor: (tf.tensor) the input data tensor
+    :param filters: (int) the number of filters used for the layer
+    :param kernel_size: (tuple/list(int)) the convolution kernel size
+    :param strides: (tuple/list(int)) the strides for the convolution
+    :param dil: (tuple/list(int)) the dilation used for the convolution
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :param dropout: (float) the dropout rate. If zero, dropout is not used.
+    :param is_training: (bool) whether or not the model is training
+    :param acti_type: (str) the type of activation to be uzed
+    :return: Returns a basic conv2d block with the specified parameters
+    """
+    # basic block of conv, batch norm, activation, and optional dropout
+    tensor = conv2d_fixed_pad(tensor, filters, kernel_size, strides, dil, data_format, name + '_conv', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_bn', reuse)
+    tensor = activation(tensor, acti_type, name + '_act')
+    if dropout > 0.:
+        tensor = tf.layers.dropout(tensor, rate=dropout, training=is_training, name=name + '_dropout')
+
+    return tensor
+
+
+def deconv2d_block(tensor, filters, kernel_size, strides, data_format, name, reuse, dropout, is_training, acti_type):
+    """
+    Basic transpose conv 2d block with batchnorm, activation, and optional dropout
+    :param tensor: (tf.tensor) the input data tensor
+    :param filters: (int) the number of filters used for the layer
+    :param kernel_size: (tuple/list(int)) the convolution kernel size
+    :param strides: (tuple/list(int)) the strides for the convolution
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :param dropout: (float) the dropout rate. If zero, dropout is not used.
+    :param is_training: (bool) whether or not the model is training
+    :param acti_type: (str) the type of activation to be uzed
+    :return: Returns a basic transpose conv2d block with the specified parameters
+    """
+    # basic block of conv, batch norm, activation, and optional dropout
+    tensor = deconv2d_layer(tensor, filters, kernel_size, strides, data_format, name + '_deconv', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_bn', reuse)
+    tensor = activation(tensor, acti_type, name + '_act')
+    if dropout > 0.:
+        tensor = tf.layers.dropout(tensor, rate=dropout, training=is_training, name=name + '_dropout')
+    return tensor
+
+
+def resid2d_layer(tensor, n_filters, k_size, strides, dilation, is_training, data_format, act_type, name, reuse=False):
     """
     Creates a 2D single simple residual block with batch normalization and activation
     Modeled after: https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py
@@ -273,19 +350,19 @@ def residual_layer(tensor, n_filters, k_size, strides, dilation, is_training, da
     if strided: # if strides are 2 for example, then project shortcut to output size
         # accomplish projection with a 1x1 convolution
         shortcut = conv2d_fixed_pad(tensor, n_filters, 1, strides, dilation, data_format, name + '_shrtct_conv', reuse)
-        shortcut = batch_norm(shortcut, is_training, data_format, name + '_sc_batchnorm', reuse)
+        shortcut = batch_norm(shortcut, is_training, data_format, name + '_shrtct_bn', reuse)
 
     # Convolution block 1
     tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation, data_format, name + '_resid_conv1', reuse)
-    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv1_batchnorm', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv1_bn', reuse)
     tensor = act_type(tensor, act_type, name + '_resid_conv1_act')
 
     # Convolution block 2 (force strides==1)
     tensor = conv2d_fixed_pad(tensor, n_filters, k_size, [1, 1], dilation, data_format, name + '_resid_conv2', reuse)
-    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv2_batchnorm', reuse)
+    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv2_bn', reuse)
 
     # fuse shortcut with outputs and do one final activation
-    tensor = tf.add(tensor, shortcut)
+    tensor = tf.add(tensor, shortcut, name + '_resid_shrtct_add')
     tensor = act_type(tensor, act_type, name + '_resid_conv2_act')
 
     return tensor
@@ -314,11 +391,11 @@ def resid_us_layer(tensor, n_filters, k_size, strides, dilation, is_training, da
     if strides[0] <= 1: raise ValueError("Strides must be greater than or equal to 2 for upsampling layer")
 
     # projection shortcut for upsample layer accomplish projection with a 1x1 convolution
-    shortcut = upsample_layer(tensor, n_filters, 1, strides, data_format, name + '_shrtct_conv', reuse)
+    shortcut = deconv2d_layer(tensor, n_filters, 1, strides, data_format, name + '_shrtct_conv', reuse)
     shortcut = batch_norm(shortcut, is_training, data_format, name + '_sc_batchnorm', reuse)
 
     # Convolution block 1
-    tensor = upsample_layer(tensor, n_filters, k_size, strides, data_format, name + '_resid_conv1', reuse)
+    tensor = deconv2d_layer(tensor, n_filters, k_size, strides, data_format, name + '_resid_conv1', reuse)
     tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv1_batchnorm', reuse)
     tensor = act_type(tensor, act_type, name + '_resid_conv1_act')
 
@@ -362,7 +439,7 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
     if resample == 1:  # downsample projection
         shortcut = conv2d_fixed_pad(tensor, in_filt, [1, 1], [2, 2], dil, data_format, name + '_sc_us_proj', reuse)
     elif resample == 2:  # upsample projection
-        shortcut = upsample_layer(tensor, in_filt, [1, 1], [2, 2], data_format, name + '_sc_us_proj', reuse)
+        shortcut = deconv2d_layer(tensor, in_filt, [1, 1], [2, 2], data_format, name + '_sc_us_proj', reuse)
     else:
         shortcut = tf.identity(tensor, name + '_sc_identity')
 
@@ -383,7 +460,7 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
 
     # optional upsampling, in this case as an additional transpose conv, could also do linear upsamp without params?
     if resample == 2:  # if upsampling
-        tensor = upsample_layer(tensor, filters, [1, 1], [2, 2], data_format, name + '_transpose_conv1x1', reuse)
+        tensor = deconv2d_layer(tensor, filters, [1, 1], [2, 2], data_format, name + '_transpose_conv1x1', reuse)
 
     # second 1x1 conv block
     tensor = batch_norm(tensor, is_training, data_format, name + '_bn_3', reuse)

@@ -7,6 +7,7 @@ import nibabel as nib
 from matplotlib import pyplot as plt
 import scipy.ndimage.interpolation as interp
 import tensorflow as tf
+from random import shuffle
 
 
 def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None):
@@ -255,11 +256,16 @@ def input_fn(mode, params):
     """
 
     # Study dirs and prefixes setup
-    study_dirs = glob(params.data_dir + '/*/')
-    study_dirs.sort()  # ensure study dirs is in alphabetical order and sorted the same for both eval and train funcs
+    study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.npy')
+    if os.path.isfile(study_dirs_filepath):  # load study dirs file if it already exists for consistent training
+        study_dirs = list(np.load(study_dirs_filepath))
+    else:
+        study_dirs = glob(params.data_dir + '/*/')
+        study_dirs.sort()  # ensure study dirs is in alphabetical order and sorted in alphabetical order
+        shuffle(study_dirs)  # randomly shuffle input directories for training
+        np.save(study_dirs_filepath, study_dirs)  # save study dir list for later use to ensure consistency
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
     eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
-    infer_dirs = [study_dirs[-1]]
 
     # differences between training and non-training: augment, dirs
     data_dims = [params.data_height, params.data_width]
@@ -272,8 +278,7 @@ def input_fn(mode, params):
         data_dirs = eval_dirs
         py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, 'no']  # 'no' for aug
     elif mode == 'infer':
-        data_dirs = infer_dirs
-        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, 'no']  # 'no' for aug
+        raise ValueError("Please use separate infer data input function.")
     else:
         raise ValueError("Specified mode does not exist: " + mode)
 
@@ -294,7 +299,6 @@ def input_fn(mode, params):
         dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
     else:
         raise ValueError("Specified mode does not exist: " + mode)
-
 
     # make iterator and query the output of the iterator for input to the model
     iterator = dataset.make_initializable_iterator()
