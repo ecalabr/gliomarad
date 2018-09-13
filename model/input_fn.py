@@ -62,15 +62,76 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
     return output, nz_inds
 
 
+def _load_single_study_mask(study_dir, file_prefixes, mask, data_format, slice_trim=None, norm=False):
+    """
+    Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
+    returns a 4D numpy array containing the image data. Performs optional slice trimming in z and normalization.
+    :param study_dir: (str) the full path to the study directory
+    :param file_prefixes: (str, list(str)) the file prefixes for the images to be loaded
+    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param mask (np.ndarray) the mask data for masking inputs
+    :param slice_trim: (list, tuple) contains 2 ints, the first and last slice to use for trimming. None = auto trim.
+                        [0, -1] does no trimming
+    :param norm: (bool) whether or not to perform per dataset normalization
+    :return: output - a 4D numpy array containing the image data
+    """
+
+    # sanity checks
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_dir does not exist")
+    if data_format not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if slice_trim is not None and not isinstance(slice_trim, (list, tuple)): raise ValueError(
+        "slice_trim must be list/tuple")
+    images = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
+    if not images: raise ValueError("No matching image files found for file prefixes: " + str(images))
+
+    # load images and concatenate into a 4d numpy array
+    output = []
+    nz_inds = [0, -1]
+    for ind, image in enumerate(images):
+        if ind == 0:  # find dimensions after trimming zero slices and preallocate 4d array
+            first_image = nib.load(images[0]).get_fdata()
+            if slice_trim:
+                nz_inds = slice_trim
+            else:
+                nz_inds = _nonzero_slice_inds(first_image)
+            first_image = first_image[:, :, nz_inds[0]:nz_inds[1]]
+            # do normalization
+            if norm:
+                first_image = _normalize(first_image)
+            output_shape = list(first_image.shape)[0:3] + [len(images)]
+            output = np.zeros(output_shape, np.float32)
+            output[:, :, :, 0] = first_image
+        else:
+            img = nib.load(images[ind]).get_fdata()[:, :, nz_inds[0]:nz_inds[1]]
+            # do normalization
+            if norm:
+                img = _normalize(img)
+            output[:, :, :, ind] = img
+
+    # permute data to desired data format
+    if data_format == 'channels_first':
+        output = np.transpose(output, axes=(2, 3, 0, 1))
+        # do masking
+        for i in range(output.shape[1]):
+            output[:, i, :, :] = np.where(np.squeeze(mask)>0, output[:, i, :, :], 0)
+    else:
+        output = np.transpose(output, axes=(2, 0, 1, 3))
+        # do masking
+        for i in range(output.shape[3]):
+            output[:, :, :, i] = np.where(np.squeeze(mask)>0, output[:, :, :, i], 0)
+
+    return output, nz_inds
+
+
 def _normalize(input_numpy):
     """
     Performs image normalization to zero mean, unit variance.
     :param input_numpy: The input numpy array
-    :return: The input array normalized to zero mean, unit variance
+    :return: The input array normalized to zero mean, unit variance or [0, 1]
     """
 
     # perform normalization to zero mean unit variance
-    input_numpy = np.where(input_numpy!=0, input_numpy - input_numpy.mean(), 0) / input_numpy.var()
+    # input_numpy = np.where(input_numpy!=0, input_numpy - input_numpy.mean(), 0) / input_numpy.var()
 
     # perform normalization to [0, 1]
     input_numpy *= 1.0 / input_numpy.max()
@@ -169,6 +230,11 @@ def _mask_and_crop(data, mask, data_format):
     :param data_format: (str) the data format, either 'channels_first' or 'channels_last'
     :return: The masked and cropped data array
     """
+
+    # this currently doesnt crop 4d images, just 3d images
+    # this needs to be corrected before use
+    if data:
+        raise NotImplementedError("Function not yet implemented.")
 
     # mask data
     data = data * (mask>1.).astype(np.float)
@@ -275,9 +341,9 @@ def _load_multicon_and_labels_mask(study_dir, feature_prefx, label_prefx, mask_p
         # load mask data
         mask, mask_nzi = _load_single_study(study_dir, mask_prefx, data_format=data_fmt)
         # load multi-contrast data and normalize input imgs
-        data, _ = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=mask_nzi, norm=True)
+        data, _ = _load_single_study_mask(study_dir, feature_prefx, mask, data_format=data_fmt, slice_trim=mask_nzi, norm=True)
         # load labels data
-        labels, _ = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=mask_nzi)
+        labels, _ = _load_single_study_mask(study_dir, label_prefx, mask, data_format=data_fmt, slice_trim=mask_nzi)
     else:
         print("Mask file does not exist! Loading data without mask")
         # load labels data
