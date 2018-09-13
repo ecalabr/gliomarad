@@ -42,6 +42,7 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
             else:
                 nz_inds = _nonzero_slice_inds(first_image)
             first_image = first_image[:, :, nz_inds[0]:nz_inds[1]]
+            # do normalization
             if norm:
                 first_image = _normalize(first_image)
             output_shape = list(first_image.shape)[0:3] + [len(images)]
@@ -49,6 +50,7 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
             output[:, :, :, 0] = first_image
         else:
             img = nib.load(images[ind]).get_fdata()[:, :, nz_inds[0]:nz_inds[1]]
+            # do normalization
             if norm:
                 img = _normalize(img)
             output[:, :, :, ind] = img
@@ -65,7 +67,8 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
 def _load_single_study_mask(study_dir, file_prefixes, mask, data_format, slice_trim=None, norm=False):
     """
     Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
-    returns a 4D numpy array containing the image data. Performs optional slice trimming in z and normalization.
+    returns a 4D numpy array containing the image data. Performs optional slice trimming in z based on mask and
+     optional input image normalization.
     :param study_dir: (str) the full path to the study directory
     :param file_prefixes: (str, list(str)) the file prefixes for the images to be loaded
     :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
@@ -123,6 +126,64 @@ def _load_single_study_mask(study_dir, file_prefixes, mask, data_format, slice_t
     return output, nz_inds
 
 
+def _load_single_study_crop_mask(study_dir, file_prefixes, mask_prefix, dim_out, data_format, norm=False):
+    """
+    Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
+    returns a 4D numpy array containing the image data cropped to a mask. Performs optional normalization.
+    :param study_dir: (str) the full path to the study directory
+    :param file_prefixes: (str, list(str)) the file prefixes for the images to be loaded
+    :param mask_prefix: (np.ndarray) the mask data for masking inputs
+    :param dim_out: (int) the desired output dimensions for the data (currently isotropic)
+    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param norm: (bool) whether or not to perform per dataset normalization
+    :return: output - a 4D numpy array containing the image data
+    """
+
+    # sanity checks
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_dir does not exist")
+    if data_format not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    images = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
+    if not images: raise ValueError("No matching image files found for file prefixes: " + str(images))
+
+    # load mask data
+    mask_file = glob(study_dir + '/*' + mask_prefix[0] + '*.nii.gz')[0]
+    mask = nib.load(images[0]).get_fdata()
+    inds = _nonzero_slice_inds3d(mask_file)
+
+    # scale and pad mask to desired size
+    maxdim = np.max(mask.shape)
+    zoom = np.float(dim_out) / np.float(maxdim)
+    mask = ndi.zoom(mask, (zoom, 1, zoom, zoom), order=0)  # nn interp mask
+
+    # preallocate 4d array, load images and crop/normalize then insert into 4d array
+    output = np.zeros((inds[1] - inds[0], inds[3] - inds[2], inds[5] - inds[4]))
+    for ind, image in enumerate(images):
+        img = nib.load(images[0]).get_fdata()[inds[0]:inds[1], inds[2]:inds[3], inds[4]:inds[5]]
+        # do normalization
+        if norm:
+            img = _normalize(img)
+        # do zoom
+        img = ndi.zoom(img, (zoom, 1, zoom, zoom), order=1)  # linear interp data
+        output[:, :, :, ind] = img
+
+    # zero pad data to final dims
+    output = _zero_pad_image(output, out_dims=[dim_out, dim_out, dim_out], axes=[0, 1, 2])
+
+    # permute data to desired data format
+    if data_format == 'channels_first':
+        output = np.transpose(output, axes=(2, 3, 0, 1))
+        # do masking
+        for i in range(output.shape[1]):
+            output[:, i, :, :] = np.where(np.squeeze(mask) > 0, output[:, i, :, :], 0)
+    else:
+        output = np.transpose(output, axes=(2, 0, 1, 3))
+        # do masking
+        for i in range(output.shape[3]):
+            output[:, :, :, i] = np.where(np.squeeze(mask) > 0, output[:, :, :, i], 0)
+
+    return output
+
+
 def _normalize(input_numpy):
     """
     Performs image normalization to zero mean, unit variance.
@@ -153,6 +214,37 @@ def _nonzero_slice_inds(input_numpy):
     vector = np.max(np.max(input_numpy, axis=0), axis=0)
     nz = np.nonzero(vector)[0]
     inds = [nz[0], nz[-1]]
+
+    return inds
+
+
+def _nonzero_slice_inds3d(input_numpy):
+    """
+    Takes numpy array and returns slice indices of first and last nonzero pixels in 3d
+    :param input_numpy: (np.ndarray) a numpy array containing image data
+    :return: inds - a list of 2 indices corresponding to the first and last nonzero slices in the numpy array
+    """
+
+    # sanity checks
+    if type(input_numpy) is not np.ndarray: raise ValueError("Input must be numpy array")
+
+    # finds inds of first and last nonzero pixel in x
+    vector = np.max(np.max(input_numpy, axis=2), axis=1)
+    nz = np.nonzero(vector)[0]
+    xinds = [nz[0], nz[-1]]
+
+    # finds inds of first and last nonzero pixel in y
+    vector = np.max(np.max(input_numpy, axis=0), axis=1)
+    nz = np.nonzero(vector)[0]
+    yinds = [nz[0], nz[-1]]
+
+    # finds inds of first and last nonzero pixel in z
+    vector = np.max(np.max(input_numpy, axis=0), axis=0)
+    nz = np.nonzero(vector)[0]
+    zinds = [nz[0], nz[-1]]
+
+    # perpare return
+    inds = [xinds[0], xinds[1], yinds[0], yinds[1], zinds[0], zinds[1]]
 
     return inds
 
@@ -193,7 +285,7 @@ def _zero_pad_image(input_data, out_dims, axes):
     """
     Zero pads an input image to the specified dimensions.
     :param input_data: (np.ndarray) the image data to be padded
-    :param out_dims: (list(int)) the desired output dimensions.
+    :param out_dims: (list(int)) the desired output dimensions for each axis.
     :param axes: (list(int)) the axes for padding. Must have same length as out_dims
     :return: (np.ndarray) the zero padded image
     """
@@ -338,12 +430,10 @@ def _load_multicon_and_labels_mask(study_dir, feature_prefx, label_prefx, mask_p
     # check if mask
     mask_file = glob(study_dir + '/*' + mask_prefx[0] + '*.nii.gz')[0]
     if os.path.isfile(mask_file):
-        # load mask data
-        mask, mask_nzi = _load_single_study(study_dir, mask_prefx, data_format=data_fmt)
-        # load multi-contrast data and normalize input imgs
-        data, _ = _load_single_study_mask(study_dir, feature_prefx, mask, data_format=data_fmt, slice_trim=mask_nzi, norm=True)
+        # load multi-contrast data cropping to mask and normalizing
+        data, mask_nzi = _load_single_study_crop_mask(study_dir, feature_prefx, mask_prefx, out_dims, data_fmt, True)
         # load labels data
-        labels, _ = _load_single_study_mask(study_dir, label_prefx, mask, data_format=data_fmt, slice_trim=mask_nzi)
+        labels, _ = _load_single_study_mask(study_dir, label_prefx, mask_prefx, out_dims, data_fmt, False)
     else:
         print("Mask file does not exist! Loading data without mask")
         # load labels data
@@ -389,9 +479,9 @@ def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims):
     return data
 
 
-def _load_multicon_with_mask(study_dir, feature_prefx, mask_prefx, data_fmt, out_dim, augment, label_interp=1):
+def _load_multicon_crop_mask(study_dir, feature_prefx, mask_prefx, data_fmt, out_dim, augment, label_interp=1):
     """
-    Load multicontrast image data and target data/labels and perform augmentation if desired.
+    Load multicontrast image data, crop to mask, then interpolate to out_dims
     :param study_dir: (str) A directory containing the desired image data.
     :param feature_prefx: (list) a list of filenames - the data files to be loaded
     :param mask_prefx: (list) a list containing one string, the prefix of the mask file
@@ -415,6 +505,10 @@ def _load_multicon_with_mask(study_dir, feature_prefx, mask_prefx, data_fmt, out
         "data_dims must be a list/tuple of ints")
     if augment not in ['yes', 'no']: raise ValueError("Parameter augment must be 'yes' or 'no'")
     if label_interp not in range(6): raise ValueError("Spline interpolation order must be in range 0-3")
+    if isinstance(out_dim, (list, tuple)): out_dim = out_dim[0]
+
+    # load data with masking and zooming/padding to desired dims
+    data, nzi = _load_multicon_crop_mask(study_dir, feature_prefx, mask_prefx, data_fmt, out_dim, augment)
 
     # load mask data first, then only load relevant slices of image data (where mask is nonzero)
     mask, nzi = _load_single_study(study_dir, mask_prefx, data_format=data_fmt)
@@ -517,6 +611,7 @@ def input_fn(mode, params):
         py_func_params = [params.data_prefix, params.label_prefix, params.mask_prefix, params.data_format, data_dims,
                           params.augment_train_data,
                           params.label_interp]
+
     elif mode == 'eval':
         data_dirs = eval_dirs
         py_func_params = [params.data_prefix, params.label_prefix, params.mask_prefix, params.data_format, data_dims,
