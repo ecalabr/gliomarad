@@ -12,7 +12,7 @@ from model.model_fn import model_fn
 parser = argparse.ArgumentParser()
 parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
                     help="Path to params.json")
-parser.add_argument('--infer_dir', default='/media/ecalabr/data2/qc_complete/12319781',
+parser.add_argument('--infer_dir', default='/media/ecalabr/data2/qc_complete/12309838',
                     help="Path to directory to generate inference from")
 
 if __name__ == '__main__':

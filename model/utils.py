@@ -21,6 +21,7 @@ class Params:
     restore_dir = None
     data_prefix = None
     label_prefix = None
+    mask_prefix = None
     data_height = None
     data_width = None
     augment_train_data = None

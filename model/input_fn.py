@@ -1,33 +1,35 @@
 import os
-import sys
 import math
 from glob import glob
 import numpy as np
 import nibabel as nib
 from matplotlib import pyplot as plt
+import scipy.ndimage as ndi
 import scipy.ndimage.interpolation as interp
 import tensorflow as tf
 from random import shuffle
 
 
-def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None):
+def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, norm=False):
     """
     Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
-    returns a 4D numpy array containing the image data.
+    returns a 4D numpy array containing the image data. Performs optional slice trimming in z and normalization.
     :param study_dir: (str) the full path to the study directory
     :param file_prefixes: (str, list(str)) the file prefixes for the images to be loaded
     :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param slice_trim: (list, tuple) contains 2 ints, the first and last slice to use for trimming. None = auto trim.
                         [0, -1] does no trimming
+    :param norm: (bool) whether or not to perform per dataset normalization
     :return: output - a 4D numpy array containing the image data
     """
 
     # sanity checks
-    if not os.path.isdir(study_dir): sys.exit("Specified study_dir does not exist")
-    if data_format not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
-    if slice_trim is not None and not isinstance(slice_trim, (list, tuple)): sys.exit("slice_trim must be list/tuple")
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_dir does not exist")
+    if data_format not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if slice_trim is not None and not isinstance(slice_trim, (list, tuple)): raise ValueError(
+        "slice_trim must be list/tuple")
     images = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
-    if not images: sys.exit("No matching image files found for file prefixes: " + str(images))
+    if not images: raise ValueError("No matching image files found for file prefixes: " + str(images))
 
     # load images and concatenate into a 4d numpy array
     output = []
@@ -40,11 +42,16 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None):
             else:
                 nz_inds = _nonzero_slice_inds(first_image)
             first_image = first_image[:, :, nz_inds[0]:nz_inds[1]]
+            if norm:
+                first_image = _normalize(first_image)
             output_shape = list(first_image.shape)[0:3] + [len(images)]
             output = np.zeros(output_shape, np.float32)
             output[:, :, :, 0] = first_image
         else:
-            output[:, :, :, ind] = nib.load(images[ind]).get_fdata()[:, :, nz_inds[0]:nz_inds[1]]
+            img = nib.load(images[ind]).get_fdata()[:, :, nz_inds[0]:nz_inds[1]]
+            if norm:
+                img = _normalize(img)
+            output[:, :, :, ind] = img
 
     # permute data to desired data format
     if data_format == 'channels_first':
@@ -55,6 +62,22 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None):
     return output, nz_inds
 
 
+def _normalize(input_numpy):
+    """
+    Performs image normalization to zero mean, unit variance.
+    :param input_numpy: The input numpy array
+    :return: The input array normalized to zero mean, unit variance
+    """
+
+    # perform normalization to zero mean unit variance
+    input_numpy = np.where(input_numpy!=0, input_numpy - input_numpy.mean(), 0) / input_numpy.var()
+
+    # perform normalization to [0, 1]
+    input_numpy *= 1.0 / input_numpy.max()
+
+    return input_numpy
+
+
 def _nonzero_slice_inds(input_numpy):
     """
     Takes numpy array and returns slice indices of first and last nonzero slices
@@ -63,7 +86,7 @@ def _nonzero_slice_inds(input_numpy):
     """
 
     # sanity checks
-    if type(input_numpy) is not np.ndarray: sys.exit("Input must be numpy array")
+    if type(input_numpy) is not np.ndarray: raise ValueError("Input must be numpy array")
 
     # finds inds of first and last nonzero slices
     vector = np.max(np.max(input_numpy, axis=0), axis=0)
@@ -84,12 +107,12 @@ def _augment_image(input_data, data_format, params=(np.random.random()*90., np.r
     """
 
     # sanity checks
-    if type(input_data) is not np.ndarray: sys.exit("Input must be numpy array or list/tuple of numpy arrays")
-    if data_format not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
-    if not isinstance(params, (list, tuple)): sys.exit("Params must be a list or tuple if specified")
-    if not isinstance(params[0], (float, int)): sys.exit("First entry in params must be a float or int")
-    if not isinstance(params[1], bool): sys.exit("Second entry in params must be a boolean")
-    if order not in range(6): sys.exit("Spline interpolation order must be in range 0-3")
+    if type(input_data) is not np.ndarray: raise ValueError("Input must be numpy array or list/tuple of numpy arrays")
+    if data_format not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if not isinstance(params, (list, tuple)): raise ValueError("Params must be a list or tuple if specified")
+    if not isinstance(params[0], (float, int)): raise ValueError("First entry in params must be a float or int")
+    if not isinstance(params[1], bool): raise ValueError("Second entry in params must be a boolean")
+    if order not in range(6): raise ValueError("Spline interpolation order must be in range 0-3")
 
     # apply rotation
     if data_format == 'channels_last':
@@ -115,13 +138,13 @@ def _zero_pad_image(input_data, out_dims, axes):
     """
 
     # sanity checks
-    if type(input_data) is not np.ndarray: sys.exit("Input must be a numpy array")
-    if not all([np.issubdtype(val, np.integer) for val in out_dims]): sys.exit(
+    if type(input_data) is not np.ndarray: raise ValueError("Input must be a numpy array")
+    if not all([np.issubdtype(val, np.integer) for val in out_dims]): raise ValueError(
         "Output dims must be a list or tuple of ints")
-    if not all([isinstance(axes, (tuple, list))] + [isinstance(val, int) for val in axes]): sys.exit(
+    if not all([isinstance(axes, (tuple, list))] + [isinstance(val, int) for val in axes]): raise ValueError(
         "Axes must be a list or tuple of ints")
-    if not len(out_dims) == len(axes): sys.exit("Output dimensions must have same length as axes")
-    if len(axes) != len(set(axes)): sys.exit("Axes cannot contain duplicate values")
+    if not len(out_dims) == len(axes): raise ValueError("Output dimensions must have same length as axes")
+    if len(axes) != len(set(axes)): raise ValueError("Axes cannot contain duplicate values")
 
     # determine pad widths
     pads = []
@@ -138,7 +161,45 @@ def _zero_pad_image(input_data, out_dims, axes):
     return input_data, pads
 
 
-def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, augment, label_interp=1):
+def _mask_and_crop(data, mask, data_format):
+    """
+    Takes data and a mask and returns the masked data cropped to tightly to the mask borders
+    :param data: (np.ndarray) the image data
+    :param mask: (np.ndarray) the mask data
+    :param data_format: (str) the data format, either 'channels_first' or 'channels_last'
+    :return: The masked and cropped data array
+    """
+
+    # mask data
+    data = data * (mask>1.).astype(np.float)
+
+    # get 3d mask
+    mask = np.squeeze(mask[:, :, :])
+
+    # handle data format
+    if data_format == 'channels_first':
+        mask = np.squeeze(mask[:, 0, :, :])
+    else:
+        mask = np.squeeze(mask[:, :, :, 0])
+
+    # get nonzero inds of mask image in 3D
+    xvector = np.max(np.max(mask, axis=0), axis=1)
+    nzx = np.nonzero(xvector)[0]
+    nzix = [nzx[0], nzx[-1]]
+    yvector = np.max(np.max(mask, axis=0), axis=0)
+    nzy = np.nonzero(yvector)[0]
+    nziy = [nzy[0], nzy[-1]]
+
+    # crop data
+    if data_format == 'channels_first':
+        data = data[:, :, nzix[0]:nzix[1], nziy[0]:nziy[1]]
+    else:
+        data = data[:, nzix[0]:nzix[1], nziy[0]:nziy[1], :]
+
+    return data
+
+
+def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, augment, label_interp=1):
     """
     Load multicontrast image data and target data/labels and perform augmentation if desired.
     :param study_dir: (str) A directory containing the desired image data.
@@ -152,16 +213,17 @@ def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, ou
     """
 
     # sanity checks
-    if not os.path.isdir(study_dir): sys.exit("Specified study_directory does not exist")
-    if not all([isinstance(a, str) for a in feature_prefx]): sys.exit("Data prefixes must be strings")
-    if not all([isinstance(a, str) for a in label_prefx]): sys.exit("Labels prefixes must be strings")
-    if data_fmt not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
-    if not all([np.issubdtype(a, np.integer) for a in out_dims]): sys.exit("data_dims must be a list/tuple of ints")
-    if augment not in ['yes', 'no']: sys.exit("Parameter augment must be 'yes' or 'no'")
-    if label_interp not in range(6): sys.exit("Spline interpolation order must be in range 0-3")
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
+    if not all([isinstance(a, str) for a in label_prefx]): raise ValueError("Labels prefixes must be strings")
+    if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
+        "data_dims must be a list/tuple of ints")
+    if augment not in ['yes', 'no']: raise ValueError("Parameter augment must be 'yes' or 'no'")
+    if label_interp not in range(6): raise ValueError("Spline interpolation order must be in range 0-3")
 
     # load multi-contrast data
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt)
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True)  # normalize input imgs
 
     # load labels data
     labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi)
@@ -180,9 +242,67 @@ def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, ou
     return data, labels
 
 
-def load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims):
+def _load_multicon_and_labels_mask(study_dir, feature_prefx, label_prefx, mask_prefx, data_fmt, out_dims, augment,
+                                   label_interp=1):
     """
-    Load multicontrast image data and target data/labels and perform augmentation if desired.
+    Load multicontrast image data and target data/labels with optional masking and perform augmentation if desired.
+    Currently this only crops the data to the nonzero part of the mask in the z dimension
+    :param study_dir: (str) A directory containing the desired image data.
+    :param feature_prefx: (list) a list of data filename prefixes - the data files to be loaded
+    :param label_prefx: (list) a list containing one string, the prefix of the labels to be loaded
+    :param mask_prefx: (list) a list containing one string: the prefix of the mask nifti file
+    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
+    :param augment: (str) whether or not to perform data augmentation, must be 'yes' or 'no'
+    :param label_interp: (int) in range 0-5, the order of spline interp for labels during augmentation
+    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
+    """
+
+    # sanity checks
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
+    if not all([isinstance(a, str) for a in label_prefx]): raise ValueError("Labels prefixes must be strings")
+    if not all([isinstance(a, str) for a in mask_prefx]): raise ValueError("Mask prefixes must be strings")
+    if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
+        "data_dims must be a list/tuple of ints")
+    if augment not in ['yes', 'no']: raise ValueError("Parameter augment must be 'yes' or 'no'")
+    if label_interp not in range(6): raise ValueError("Spline interpolation order must be in range 0-3")
+
+    # check if mask
+    mask_file = glob(study_dir + '/*' + mask_prefx[0] + '*.nii.gz')[0]
+    if os.path.isfile(mask_file):
+        # load mask data
+        mask, mask_nzi = _load_single_study(study_dir, mask_prefx, data_format=data_fmt)
+        # load multi-contrast data and normalize input imgs
+        data, _ = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=mask_nzi, norm=True)
+        # load labels data
+        labels, _ = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=mask_nzi)
+    else:
+        print("Mask file does not exist! Loading data without mask")
+        # load labels data
+        labels, labels_nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt)
+        # load multi-contrast data
+        data, _ = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=labels_nzi, norm=True)
+        data = _normalize(data)
+
+    # if augmentation is to be used generate random params for augmentation and run augment function
+    if augment == 'yes':
+        params = (np.random.random() * 90., np.random.random() > 0.5)
+        data = _augment_image(data, params=params, data_format=data_fmt, order=1)  # force linear interp for images
+        labels = _augment_image(labels, params=params, data_format=data_fmt, order=label_interp)
+
+    # do data padding to desired dims
+    axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
+    data, _ = _zero_pad_image(data, out_dims, axes)
+    labels, _ = _zero_pad_image(labels, out_dims, axes)
+
+    return data, labels
+
+
+def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims):
+    """
+    Load multicontrast image data without cropping or otherwise adjusting size. For use with inference/prediction.
     :param study_dir: (str) A directory containing the desired image data.
     :param feature_prefx: (list) a list of filenames - the data files to be loaded
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
@@ -191,13 +311,70 @@ def load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims):
     """
 
     # sanity checks
-    if not os.path.isdir(study_dir): sys.exit("Specified study_directory does not exist")
-    if not all([isinstance(a, str) for a in feature_prefx]): sys.exit("Data prefixes must be strings")
-    if data_fmt not in ['channels_last', 'channels_first']: sys.exit("data_format invalid")
-    if not all([np.issubdtype(a, np.integer) for a in out_dims]): sys.exit("data_dims must be a list/tuple of ints")
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
+    if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
+        "data_dims must be a list/tuple of ints")
+
+    # load multi-contrast data and normalize, no slice trimming for infer data
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, -1], norm=True)
+
+    return data
+
+
+def _load_multicon_with_mask(study_dir, feature_prefx, mask_prefx, data_fmt, out_dim, augment, label_interp=1):
+    """
+    Load multicontrast image data and target data/labels and perform augmentation if desired.
+    :param study_dir: (str) A directory containing the desired image data.
+    :param feature_prefx: (list) a list of filenames - the data files to be loaded
+    :param mask_prefx: (list) a list containing one string, the prefix of the mask file
+    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param out_dim: (int) the desired isotropic output data dimension, data will be interpolated to dims
+    :param augment: (str) whether or not to perform data augmentation, must be 'yes' or 'no'
+    :param label_interp: (int) in range 0-5, the order of spline interp for labels during augmentation
+    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
+    """
+
+    # not finished
+    if study_dir:
+        raise NotImplementedError("Function _load_multicon_with_mask not yet fully implemented")
+
+    # sanity checks
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
+    if not all([isinstance(a, str) for a in mask_prefx]): raise ValueError("Mask prefix must be a string")
+    if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if not all([np.issubdtype(a, np.integer) for a in out_dim]): raise ValueError(
+        "data_dims must be a list/tuple of ints")
+    if augment not in ['yes', 'no']: raise ValueError("Parameter augment must be 'yes' or 'no'")
+    if label_interp not in range(6): raise ValueError("Spline interpolation order must be in range 0-3")
+
+    # load mask data first, then only load relevant slices of image data (where mask is nonzero)
+    mask, nzi = _load_single_study(study_dir, mask_prefx, data_format=data_fmt)
 
     # load multi-contrast data
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, -1])  # no slice trim
+    data, _ = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=nzi, norm=True)
+
+    # mask data and trim to size of mask
+    data = _mask_and_crop(data, mask, data_fmt)
+
+    # interpolate to desired largest dimension (assumes data is already cube)
+    maxdim = np.max(data.shape)
+    zoom = np.float(out_dim) / np.float(maxdim)
+    if data_fmt == 'channels_first':
+        data = ndi.zoom(data, (zoom, 1, zoom, zoom), order=2)  # interpolate based on zoom
+    else:
+        data = ndi.zoom(data, (zoom, zoom, zoom, 1), order=2)  # interpolate based on zoom
+
+    # now must pad data to desired dims
+
+    # if augmentation is to be used generate random params for augmentation and run augment function
+
+    # must to random affine rotation?
+    if augment == 'yes':
+        params = (np.random.random() * 90., np.random.random() > 0.5)
+        data = _augment_image(data, params=params, data_format=data_fmt, order=1)  # force linear interp for images
 
     return data
 
@@ -216,7 +393,7 @@ def display_tf_dataset(dataset_data, data_format):
     # define close event and create timer
     def close_event():
         plt.close()
-    timer = fig.canvas.new_timer(interval=3000)
+    timer = fig.canvas.new_timer(interval=4000)
     timer.add_callback(close_event)
 
     # image data
@@ -271,12 +448,13 @@ def input_fn(mode, params):
     data_dims = [params.data_height, params.data_width]
     if mode == 'train':
         data_dirs = train_dirs
-        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims,
+        py_func_params = [params.data_prefix, params.label_prefix, params.mask_prefix, params.data_format, data_dims,
                           params.augment_train_data,
                           params.label_interp]
     elif mode == 'eval':
         data_dirs = eval_dirs
-        py_func_params = [params.data_prefix, params.label_prefix, params.data_format, data_dims, 'no']  # 'no' for aug
+        py_func_params = [params.data_prefix, params.label_prefix, params.mask_prefix, params.data_format, data_dims,
+                          'no']  # 'no' for aug
     elif mode == 'infer':
         raise ValueError("Please use separate infer data input function.")
     else:
@@ -285,7 +463,7 @@ def input_fn(mode, params):
     # generate tensorflow dataset object
     dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
     dataset = dataset.map(
-        lambda x: tf.py_func(load_multicon_and_labels,
+        lambda x: tf.py_func(_load_multicon_and_labels_mask,
                              [x] + py_func_params,
                              (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
     dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
@@ -332,7 +510,7 @@ def infer_input_fn(params, infer_dir):
     # generate tensorflow dataset object
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
     dataset = dataset.map(
-        lambda x: tf.py_func(load_multicon_preserve_size,
+        lambda x: tf.py_func(_load_multicon_preserve_size,
                              [x] + py_func_params,
                              tf.float32), num_parallel_calls=params.num_threads)
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
