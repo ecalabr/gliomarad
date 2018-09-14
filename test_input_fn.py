@@ -40,5 +40,5 @@ if __name__ == '__main__':
                 # increment counter and show images
                 n = n+1
                 print("Processing slice " + str(n) + " epoch " + str(i+1))
-                if n % 50 == 0:
+                if n % 5 == 0:
                     display_tf_dataset(data_slice, params.data_format)

@@ -144,44 +144,44 @@ def _load_single_study_crop_mask(study_dir, file_prefixes, mask_prefix, dim_out,
     if data_format not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
     images = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
     if not images: raise ValueError("No matching image files found for file prefixes: " + str(images))
+    if isinstance(dim_out, np.ndarray): dim_out = dim_out[0]
 
     # load mask data
     mask_file = glob(study_dir + '/*' + mask_prefix[0] + '*.nii.gz')[0]
-    mask = nib.load(images[0]).get_fdata()
-    inds = _nonzero_slice_inds3d(mask_file)
+    mask = nib.load(mask_file).get_fdata()
+    inds = _nonzero_slice_inds3d(mask)
 
     # scale and pad mask to desired size
+    mask = mask[inds[0]:inds[1], inds[2]:inds[3], inds[4]:inds[5]]
     maxdim = np.max(mask.shape)
     zoom = np.float(dim_out) / np.float(maxdim)
-    mask = ndi.zoom(mask, (zoom, 1, zoom, zoom), order=0)  # nn interp mask
+    mask = ndi.zoom(mask, (zoom, zoom, zoom), order=0)  # nn interp mask
 
     # preallocate 4d array, load images and crop/normalize then insert into 4d array
-    output = np.zeros((inds[1] - inds[0], inds[3] - inds[2], inds[5] - inds[4]))
+    output = np.zeros((mask.shape[0], mask.shape[1], mask.shape[2], len(file_prefixes)))
     for ind, image in enumerate(images):
-        img = nib.load(images[0]).get_fdata()[inds[0]:inds[1], inds[2]:inds[3], inds[4]:inds[5]]
+        img = nib.load(image).get_fdata()[inds[0]:inds[1], inds[2]:inds[3], inds[4]:inds[5]]
         # do normalization
         if norm:
             img = _normalize(img)
         # do zoom
-        img = ndi.zoom(img, (zoom, 1, zoom, zoom), order=1)  # linear interp data
+        img = ndi.zoom(img, (zoom, zoom, zoom), order=1)  # linear interp data
         output[:, :, :, ind] = img
 
+    # do masking
+    # for i in range(output.shape[3]):
+    #     output[:, :, :, i] = np.where(mask > 0, output[:, :, :, i], 0)
+
     # zero pad data to final dims
-    output = _zero_pad_image(output, out_dims=[dim_out, dim_out, dim_out], axes=[0, 1, 2])
+    output = _zero_pad_image(output, out_dims=[dim_out, dim_out], axes=[0, 1])  # only zeropad in x and y
 
     # permute data to desired data format
     if data_format == 'channels_first':
         output = np.transpose(output, axes=(2, 3, 0, 1))
-        # do masking
-        for i in range(output.shape[1]):
-            output[:, i, :, :] = np.where(np.squeeze(mask) > 0, output[:, i, :, :], 0)
     else:
         output = np.transpose(output, axes=(2, 0, 1, 3))
-        # do masking
-        for i in range(output.shape[3]):
-            output[:, :, :, i] = np.where(np.squeeze(mask) > 0, output[:, :, :, i], 0)
 
-    return output
+    return output, inds
 
 
 def _normalize(input_numpy):
@@ -311,7 +311,7 @@ def _zero_pad_image(input_data, out_dims, axes):
     # pad array with zeros (default)
     input_data = np.pad(input_data, pads, 'constant')
 
-    return input_data, pads
+    return input_data
 
 
 def _mask_and_crop(data, mask, data_format):
@@ -394,8 +394,8 @@ def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, o
 
     # do data padding to desired dims
     axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
-    data, _ = _zero_pad_image(data, out_dims, axes)
-    labels, _ = _zero_pad_image(labels, out_dims, axes)
+    data = _zero_pad_image(data, out_dims, axes)
+    labels = _zero_pad_image(labels, out_dims, axes)
 
     return data, labels
 
@@ -433,7 +433,7 @@ def _load_multicon_and_labels_mask(study_dir, feature_prefx, label_prefx, mask_p
         # load multi-contrast data cropping to mask and normalizing
         data, mask_nzi = _load_single_study_crop_mask(study_dir, feature_prefx, mask_prefx, out_dims, data_fmt, True)
         # load labels data
-        labels, _ = _load_single_study_mask(study_dir, label_prefx, mask_prefx, out_dims, data_fmt, False)
+        labels, _ = _load_single_study_crop_mask(study_dir, label_prefx, mask_prefx, out_dims, data_fmt, False)
     else:
         print("Mask file does not exist! Loading data without mask")
         # load labels data
@@ -449,11 +449,11 @@ def _load_multicon_and_labels_mask(study_dir, feature_prefx, label_prefx, mask_p
         labels = _augment_image(labels, params=params, data_format=data_fmt, order=label_interp)
 
     # do data padding to desired dims
-    axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
-    data, _ = _zero_pad_image(data, out_dims, axes)
-    labels, _ = _zero_pad_image(labels, out_dims, axes)
+    #axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
+    #data, _ = _zero_pad_image(data, out_dims, axes)
+    #labels, _ = _zero_pad_image(labels, out_dims, axes)
 
-    return data, labels
+    return data.astype(np.float32), labels.astype(np.float32)
 
 
 def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims):
