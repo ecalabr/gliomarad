@@ -10,6 +10,93 @@ import tensorflow as tf
 from random import shuffle
 
 
+def patch_loader(study_dir, file_prefixes, label_prefix, mask_prefix, data_format, patch_size, augment=True):
+
+    # define full paths
+    data_files = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
+    labels_file = glob(study_dir + '/*' + label_prefix[0] + '*.nii.gz')[0]
+    mask_file = glob(study_dir + '/*' + mask_prefix[0] + '*.nii.gz')[0]
+    if not all([os.path.isfile(img) for img in data_files + [labels_file] + [mask_file]]):
+        raise ValueError("One or more of the input data/labels/mask files does not exist")
+
+    # load the mask and get the full data dims
+    mask = nib.load(mask_file).get_fdata()
+    data_dims = mask.shape
+
+    # load data
+    data = np.zeros((data_dims[0], data_dims[1], data_dims[2], len(data_files)))
+    for i, im_file in enumerate(data_files):
+        data[:, :, :, i] = _normalize(nib.load(im_file).get_fdata())
+
+    # load labels
+    labels = nib.load(labels_file).get_fdata()
+
+    # do optional augmentation with 3D rotation?
+    if augment:
+        theta = np.random.random() * (np.pi/2.)
+        mask = _affine_transform(mask, theta, phi=0., psi=0., offset=None, order=0)  # nn interp for mask
+        data = _affine_transform(data, theta, phi=0., psi=0., offset=None, order=1)
+        labels = _affine_transform(labels, theta, phi=0., psi=0., offset=None, order=1)
+
+    # get the tight bounding box of the mask
+    mask_bbox = _nonzero_slice_inds3d(mask)
+    dim_sizes = [mask_bbox[1] - mask_bbox[0], mask_bbox[3] - mask_bbox[2], mask_bbox[5] - mask_bbox[4]]
+
+    # find the closest multiple of patch_size that encompasses the mask rounding up and get new inds centered on mask
+    add = [patch_size - (dimsize % patch_size) if dimsize % patch_size else 0 for dimsize in dim_sizes]
+    new_bbox = [mask_bbox[0] - np.floor(float(add[0])), mask_bbox[1] + np.ceil(float(add[0])),
+                mask_bbox[2] - np.floor(float(add[1])), mask_bbox[3] + np.ceil(float(add[1])),
+                mask_bbox[4] - np.floor(float(add[2])), mask_bbox[5] + np.ceil(float(add[2]))]
+
+    # determine any zero padding that needs to happen
+
+    # make a function that crops and returns padded value if needed
+    # if negative, keep it, if positive, subtract value from dims
+    pads = [val if val < 0 else dim - val for val, dim in new_bbox, np.repeat(data_dims, 2)]
+    # if negative, return absolute value as the pad vale, else return 0
+    pads = [abs(val) if val < 0 else 0 for val in pads]
+
+    # crop the data down to the new inds that are a multiple of patch size
+
+    # divide the data into patch_size squares and stack them
+
+    # convert to desired data format and return
+
+
+
+def _affine_transform(input_img, theta=None, phi=None, psi=None, offset=None, order=1):
+
+    # define angles
+    if not theta:
+        theta = np.random.random() * (np.pi/2.)
+    if not phi:
+        phi = np.random.random() * (np.pi/2.)
+    if not psi:
+        psi = np.random.random() * (np.pi/2.)
+
+    # define offset
+    if not offset:
+        offset = [i / 2. for i in input_img.shape]
+
+    affine = [
+        [np.cos(theta) * np.cos(psi),
+         -np.cos(phi) * np.sin(psi) + np.sin(phi) * np.sin(theta) * np.cos(psi),
+         np.sin(phi) * np.sin(psi) + np.cos(phi) * np.sin(theta) * np.cos(psi)],
+
+        [np.cos(theta) * np.sin(psi),
+         np.cos(phi) * np.cos(psi) + np.sin(phi) * np.sin(theta) * np.sin(psi),
+         -np.sin(phi) * np.cos(psi) + np.cos(phi) * np.sin(theta) * np.sin(psi)],
+
+        [-np.sin(theta),
+         np.sin(phi) * np.cos(theta),
+         np.cos(phi) * np.cos(theta)]
+    ]
+
+    output_img = ndi.affine_transform(input_img, affine, offset, input_img.shape, order)
+
+    return output_img
+
+
 def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, norm=False):
     """
     Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
