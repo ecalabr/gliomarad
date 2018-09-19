@@ -1,4 +1,4 @@
-from model.input_fn import *
+from model.patch_input_fn import *
 from model.utils import *
 import argparse
 
@@ -23,7 +23,7 @@ if __name__ == '__main__':
         raise ValueError("Specified model directory does not exist")
 
     # load inputs with input function
-    inputs = input_fn(mode='train', params=params)
+    inputs = patch_input_fn(mode='train', params=params)
 
     # run tensorflow session
     n = 0

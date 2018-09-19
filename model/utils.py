@@ -3,6 +3,8 @@
 import json
 import logging
 import tensorflow as tf
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class Params:
@@ -171,3 +173,48 @@ def loss_picker(loss_method, labels, predictions, weights=None):
         raise NotImplementedError("Specified loss method is not implemented: " + loss_method)
 
     return loss_function
+
+
+def display_tf_dataset(dataset_data, data_format):
+    """
+    Displays tensorflow dataset output images and labels/regression images.
+    :param dataset_data: (tf.tensor) output from tf dataset function containing images and labels/regression image
+    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :return: displays images for 3 seconds then continues
+    """
+
+    # make figure
+    fig = plt.figure(figsize=(10, 4))
+
+    # define close event and create timer
+    def close_event():
+        plt.close()
+    timer = fig.canvas.new_timer(interval=4000)
+    timer.add_callback(close_event)
+
+    # image data
+    image_data = dataset_data["features"]  # dataset_data[0]
+    if len(image_data.shape) > 3:
+        image_data = np.squeeze(image_data[0, :, :, :])  # handle batch data
+    nplots = image_data.shape[0] + 1 if data_format == 'channels_first' else image_data.shape[2] + 1
+    channels = image_data.shape[0] if data_format == 'channels_first' else image_data.shape[2]
+    for z in range(channels):
+        ax = fig.add_subplot(1, nplots, z + 1)
+        img = np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1) if data_format == 'channels_first' else np.squeeze(
+            image_data[:, :, z])
+        ax.imshow(img, cmap='gray')
+        ax.set_title('Data Image ' + str(z + 1))
+
+    # label data
+    label_data = dataset_data["labels"]  # dataset_data[1]
+    if len(label_data.shape) > 3: label_data = np.squeeze(label_data[0, :, :, :])  # handle batch data
+    ax = fig.add_subplot(1, nplots, nplots)
+    img = np.swapaxes(np.squeeze(label_data), 0, 1) if data_format == 'channels_first' else np.squeeze(label_data)
+    ax.imshow(img, cmap='gray')
+    ax.set_title('Labels')
+
+    # start timer and show plot
+    timer.start()
+    plt.show()
+
+    return

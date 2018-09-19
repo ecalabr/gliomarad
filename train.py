@@ -6,6 +6,7 @@ import os
 from model.utils import Params
 from model.utils import set_logger
 from model.training import train_and_evaluate
+from model.patch_input_fn import patch_input_fn
 from model.input_fn import input_fn
 from model.model_fn import model_fn
 
@@ -42,8 +43,8 @@ if __name__ == '__main__':
 
     # Create the two iterators over the two datasets
     logging.info("Generating dataset objects...")
-    train_inputs = input_fn(mode='train', params=params)
-    eval_inputs = input_fn(mode='eval', params=params)
+    train_inputs = patch_input_fn(mode='train', params=params)
+    eval_inputs = patch_input_fn(mode='eval', params=params)
     logging.info("- done.")
 
     # Define the models (2 different set of nodes that share weights for train and eval)
