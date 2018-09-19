@@ -12,9 +12,8 @@ from random import shuffle
 
 def patch_loader(study_dir, file_prefixes, label_prefix, mask_prefix, data_format, patch_size, augment=True):
 
-    print("Make offsett for affine in center of mass of tumor")
-    print("Make padding symmetric instead of one sided")
     print("Divide into patch size bites")
+    print("Reformat to data format")
 
     # define full paths
     data_files = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
@@ -37,16 +36,18 @@ def patch_loader(study_dir, file_prefixes, label_prefix, mask_prefix, data_forma
 
     # do optional augmentation with 3D rotation?
     if augment:
-        theta = np.random.random() * (np.pi/2.)
-        mask = _affine_transform(mask, theta=0., phi=theta, psi=0., order=0)  # nn interp for mask
-        data = _affine_transform(data, theta=0., phi=theta, psi=0., order=2)
-        labels = _affine_transform(labels, theta=0., phi=theta, psi=0., order=2)
+        # make affine
+        affine = _create_affine(theta=0., phi=0., psi=np.random.random() * (np.pi/2.))
+        com = ndi.measurements.center_of_mass(mask)
+        cent = np.array(mask.shape) / 2.
+        offset = com - np.dot(affine, cent)
+        mask = _affine_transform(mask, affine=affine, offset=offset, order=0)  # nn interp for mask
+        data = _affine_transform(data, affine=affine, offset=offset, order=1)  # linear interp for data
+        labels = _affine_transform(labels, affine=affine, offset=offset, order=1)  # linear interp for labels
 
     # get the tight bounding box of the mask
     mask_bbox = _nonzero_slice_inds3d(mask)
     dim_sizes = [mask_bbox[1] - mask_bbox[0], mask_bbox[3] - mask_bbox[2], mask_bbox[5] - mask_bbox[4]]
-
-    # print("dim sizes " + str(dim_sizes))
 
     # find the closest multiple of patch_size that encompasses the mask rounding up and get new inds centered on mask
     add = [patch_size - (dimsize % patch_size) if dimsize % patch_size > 0 else 0 for dimsize in dim_sizes]
@@ -56,21 +57,50 @@ def patch_loader(study_dir, file_prefixes, label_prefix, mask_prefix, data_forma
     new_bbox = [int(item) for item in new_bbox]
     new_dim_sizes = [new_bbox[1] - new_bbox[0], new_bbox[3] - new_bbox[2], new_bbox[5] - new_bbox[4]]
 
-    # print("add " + str(add))
-    # print("new_dim_sizes " + str(new_dim_sizes))
-
     # extract the region with zero padding to new bbox if needed
     data_region = np.zeros(new_dim_sizes + [len(data_files)])
     for i in range(len(data_files)):
         data_region[:, :, :, i] = _extract_region(data[:, :, :, i], tuple(new_bbox))
+    data = data_region
     labels = _extract_region(labels, new_bbox)
-    mask = _extract_region(mask, new_bbox)
+    # mask = _extract_region(mask, new_bbox)
 
-    # divide the data into patch_size squares and stack them
+    # permute to [batch, x, y, depth]
+    data = np.transpose(data, axes=(2, 0, 1, 3))
+    labels = np.expand_dims(labels, axis=3)
+    labels = np.transpose(labels, axes=(2, 0, 1, 3))
+    print(data.shape)
 
-    # convert to desired data format and return
+    # make patches
+    ksizes = [1, patch_size, patch_size, 1]
+    strides = [1, patch_size, patch_size, 1]
+    rates = [1, 1, 1, 1]
 
-    return data_region, labels, mask
+    # eval patches
+    with tf.Session() as sess:
+        data = sess.run(tf.extract_image_patches(data, ksizes=ksizes, strides=strides, rates=rates, padding='SAME'))
+        labels = sess.run(tf.extract_image_patches(labels, ksizes, strides, rates, 'SAME'))
+    print(data.shape)
+    data = np.reshape(data, [-1, 16, 16, len(data_files)])
+    labels = np.reshape(labels, [-1, 16, 16, 1])
+
+    # return back to normal permutation
+    data = np.transpose(data, axes=(1, 2, 3, 0))
+    labels = np.squeeze(np.transpose(labels, axes=(1, 2, 3, 0)))
+
+
+
+    """
+    labels = np.transpose(labels, axes=(2, 0, 1))
+    if data_format == 'channels_first':
+        data = np.transpose(data, axes=(2, 3, 0, 1))
+        labels = np.expand_dims(labels, axis=1)
+    else:
+        data = np.transpose(data, axes=(2, 0, 1, 3))
+        labels = np.expand_dims(labels, axis=3)
+    """
+
+    return data, labels
 
 
 def _extract_region(input_img, region_bbox):
@@ -108,43 +138,53 @@ def _extract_region(input_img, region_bbox):
     return output
 
 
-def _affine_transform(input_img, theta=0., phi=0., psi=0., order=1):
+def _create_affine(theta=None, phi=None, psi=None):
 
     # define angles
     if theta is None:
-        theta = np.random.random() * (np.pi/2.)
+        theta = np.random.random() * (np.pi / 2.)
     if phi is None:
-        phi = np.random.random() * (np.pi/2.)
+        phi = np.random.random() * (np.pi / 2.)
     if psi is None:
-        psi = np.random.random() * (np.pi/2.)
+        psi = np.random.random() * (np.pi / 2.)
 
     # define affine array
     affine = np.asarray([
         [np.cos(theta) * np.cos(psi),
          -np.cos(phi) * np.sin(psi) + np.sin(phi) * np.sin(theta) * np.cos(psi),
-         np.sin(phi) * np.sin(psi) + np.cos(phi) * np.sin(theta) * np.cos(psi),
-         0.],
+         np.sin(phi) * np.sin(psi) + np.cos(phi) * np.sin(theta) * np.cos(psi)],
 
         [np.cos(theta) * np.sin(psi),
          np.cos(phi) * np.cos(psi) + np.sin(phi) * np.sin(theta) * np.sin(psi),
-         -np.sin(phi) * np.cos(psi) + np.cos(phi) * np.sin(theta) * np.sin(psi),
-         0.],
+         -np.sin(phi) * np.cos(psi) + np.cos(phi) * np.sin(theta) * np.sin(psi)],
 
         [-np.sin(theta),
          np.sin(phi) * np.cos(theta),
-         np.cos(phi) * np.cos(theta),
-         0.],
-
-        [0., 0., 0., 1.]
+         np.cos(phi) * np.cos(theta)]
     ])
+
+    return affine
+
+
+def _affine_transform(input_img, affine, offset=None, order=1):
+
+    # define affine
+    if affine is None:
+        affine = _create_affine()
+
+    # define offset
+    if offset is None:
+        center = np.array(input_img.shape)
+        offset = center - np.dot(affine, center)
 
     # handle 4d
     if len(input_img.shape) > 3:
         output_img = np.zeros(input_img.shape)
         for i in range(input_img.shape[-1]):
-            output_img[:, :, :, i] = ndi.interpolation.affine_transform(input_img[:, :, :, i], affine)
+            output_img[:, :, :, i] = ndi.interpolation.affine_transform(input_img[:, :, :, i], affine,
+                                                                        offset=offset, order=order)
     else:
-        output_img = ndi.interpolation.affine_transform(input_img, affine, offset=None, order=order)
+        output_img = ndi.interpolation.affine_transform(input_img, affine, offset=offset, order=order)
 
     return output_img
 
