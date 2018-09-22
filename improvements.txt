@@ -9,3 +9,5 @@ test residual layer and upsample residual layer
 get bneck resid working, particularly with upsampling?
 add optional dropout to custom unet
 add patch padsize and predict padsize, perhaps separate for eval too?
+
+need to figure out prefetch and shuffling

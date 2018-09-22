@@ -313,8 +313,6 @@ def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, o
 
     # do data padding to desired dims
     axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
-    print(data.shape)
-    print(out_dims)
     data = _zero_pad_image(data, out_dims, axes)
     labels = _zero_pad_image(labels, out_dims, axes)
 
@@ -384,9 +382,9 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
 
     # center the tumor in the image usine affine, with optional rotation for data augmentation
     if aug:  # if augmenting, select random rotation values for x, y, and z axes
-        theta = 0.
-        phi = 0.
-        psi = np.random.random() * (np.pi / 2.)
+        theta = 0.  # np.random.random() * (np.pi / 2.)  # rotation in yz plane
+        phi = 0.  # np.random.random() * (np.pi / 2.)  # rotation in xz plane
+        psi = np.random.random() * (np.pi / 2.)  # rotation in xy plane
     else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
         theta = 0.
         phi = 0.
@@ -496,16 +494,23 @@ def patch_input_fn(mode, params):
                           params.label_interp]
         # map tensorflow dataset variable to data
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
+        dataset = dataset.prefetch(buffer_size=10)
         dataset = dataset.map(
             lambda x: tf.py_func(_load_roi_multicon_and_labels,
                                  [x] + py_func_params,
                                  (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)
-        dataset = dataset.map(lambda x, y: _tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format))
+        dataset = dataset.prefetch(buffer_size=10)
+        dataset = dataset.map(
+            lambda x, y: _tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format),
+            num_parallel_calls=params.num_threads)
+        dataset = dataset.prefetch(buffer_size=10)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-        dataset = dataset.prefetch(params.buffer_size)
-        dataset = dataset.shuffle(params.shuffle_size)
+        dataset = dataset.prefetch(buffer_size=params.shuffle_size)
+        dataset = dataset.shuffle(buffer_size=params.shuffle_size)
+        #dataset = dataset.batch(batch_size=params.batch_size)
         dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+        dataset = dataset.prefetch(buffer_size=params.buffer_size)
 
     # eval mode
     elif mode == 'eval':

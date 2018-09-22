@@ -48,5 +48,5 @@ if __name__ == '__main__':
     infer_model_spec = model_fn(infer_inputs, params, mode='infer', reuse=False)  # reuse only if model already exists
     logging.info("- done.")
 
-    # Train the model
+    # predict using the model
     predict(infer_model_spec, params.model_dir, params, infer_dir)
