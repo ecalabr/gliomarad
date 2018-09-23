@@ -1,4 +1,5 @@
 from net_layers import *
+import tensorflow as tf
 
 
 def custom_unet_maxpool(features, params, is_training, reuse=False):
@@ -344,8 +345,37 @@ def deep_embed_net(features, params, is_training, reuse=False):
     :return: A deep embedding CNN with the specified parameters
     """
 
-    # initial convolutional layer
+    # define fixed params
+    layer_layout = params.layer_layout
+    filt = params.base_filters
+    dfmt = params.data_format
+    dropout = params.dropout_rate
+    ksize = params.kernel_size
+    act = params.activation
+    strides = [1, 1]
+    dil = [1, 1]
+
+    # first 5 simple convolutional layers
     tensor = features
+    for i in range(5):
+        name = 'initial_conv_' + str(i)
+        tensor = conv2d_block(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dropout, is_training, act)
+
+    # embedding blocks
+    recons = None
+    for i in range(layer_layout[0]):
+        name = 'embedding_block_' + str(i)
+        tensor, recon = embedding_block(tensor,ksize, filt, dropout, is_training, dfmt, act, name, reuse)
+        if i == 0:  # handles first loop where recons has not been defined yet
+            recons = recon  # tf.expand_dims(recon, axis=-1)
+        else:  # handles subsequent loops
+            recons = tf.concat([recons, recon], axis=-1, name=name + '_concat')
+
+     # final output layer
+    tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
+
+    # concatenate all recons and return as one tensor, which will be # of embedding blocks + 1 different predicitons
+    tensor = tf.concat([tensor, recons], axis=-1)
 
     return tensor
 
@@ -372,6 +402,8 @@ def net_builder(features, params, is_training, reuse=False):
         network = custom_unet_maxpool(features, params, is_training,reuse)
     elif params.model_name == 'custom_resid_unet':
         network = custom_resid_unet(features, params, is_training,reuse)
+    elif params.model_name == 'deep_embed_net':
+        network = deep_embed_net(features, params, is_training)
     else:
         raise ValueError("Specified network does not exist: " + params.model_name)
 

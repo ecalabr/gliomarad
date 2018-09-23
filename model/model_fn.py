@@ -33,8 +33,18 @@ def model_fn(inputs, params, mode, reuse=False):
 
     # Define loss using loss picker function and accuracy (we need to apply a mask to account for padding)
     mask = labels > 0
-    losses = loss_picker(params.loss, labels, predictions, weights=mask)
+    losses = loss_picker(params.loss, labels, predictions, data_format=params.data_format, weights=mask)
     loss = tf.reduce_mean(losses)
+
+    # handle predictions with more than 1 prediction
+    if params.data_format == 'channels_first':
+        if predictions.shape[1] > 1:
+            predictions = tf.expand_dims(predictions[:, 0, :, :], axis=1)
+    if params.data_format == 'channels_last':
+        if predictions.shape[-1] > 1:
+            predictions = tf.expand_dims(predictions[:, :, :, 0], axis=-1)
+
+    # add other training metrics
     error = tf.reduce_mean(tf.cast(tf.losses.absolute_difference(labels=labels, predictions=predictions), tf.float32))
 
     # Define training step that minimizes the loss with the Adam optimizer

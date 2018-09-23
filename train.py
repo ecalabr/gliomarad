@@ -55,5 +55,5 @@ if __name__ == '__main__':
 
     # Train the model
     logging.info("Starting training for {} epoch(s)".format(params.num_epochs))
-    restor_dir = os.path.join(params.model_dir, params.restore_dir)  # get full path to restore directory
-    train_and_evaluate(train_model_spec, eval_model_spec, params.model_dir, params, params.restore_dir)
+    restore_dir = os.path.join(params.model_dir, params.restore_dir)  # get full path to restore directory
+    train_and_evaluate(train_model_spec, eval_model_spec, params.model_dir, params, restore_dir)

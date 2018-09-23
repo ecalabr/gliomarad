@@ -96,16 +96,24 @@ def activation(tensor, acti_type='leaky_relu', name=None):  # add optional type 
     :return: Returns the input tensor after activation.
     """
 
-    if acti_type == "leaky_relu":
+    # no activation
+    if acti_type == 'none':
+        act_func = tensor
+
+    # leaky relu
+    elif acti_type == 'leaky_relu':
         act_func = tf.nn.leaky_relu(
             features=tensor,
             alpha=0.2,
             name=name)
 
-    elif acti_type == "relu":
+    # normal relu
+    elif acti_type == 'relu':
         act_func = tf.nn.relu(
             features=tensor,
             name=name)
+
+     # not implemented
     else:
         raise ValueError("Provided type " + str(acti_type) + " is not a known activation type")
 
@@ -476,3 +484,30 @@ def bneck_res_layer(tensor, ksize, in_filt, resample, dropout, is_training, data
     tensor = tf.add(tensor, shortcut)
 
     return tensor
+
+
+def embedding_block(tensor, ksize, filt, drpout, is_training, dfmt, act, name, reuse=False):
+
+    # set some basic constant params
+    strd = [1, 1]
+    dil = [1, 1]
+
+    # input tensor forks to 3x3x1 conv and 3x3xfilters conv
+    # transform fork
+    layer_name = name + '_transform'
+    trans_tensor = conv2d_block(tensor, filt, ksize, strd, dil, dfmt, layer_name, reuse, drpout, is_training, act)
+
+    # embedding fork
+    layer_name = name + '_embed'
+    embed_tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, layer_name, reuse)
+
+    # concatenate transform and embedding forks
+    layer_name = name + '_concat'
+    axis = 1 if dfmt == 'channels_first' else -1
+    tensor = tf.concat([trans_tensor, embed_tensor], axis, name=layer_name)
+
+    # final convolution
+    layer_name = name + '_final_conv'
+    tensor = conv2d_block(tensor, filt, ksize, strd, dil, dfmt, layer_name, reuse, drpout, is_training, act)
+
+    return tensor, embed_tensor

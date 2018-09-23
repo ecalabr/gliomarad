@@ -137,6 +137,8 @@ def learning_rate_picker(learn_rate, learning_rate_decay, global_step):
         if isinstance(learn_rate, (list, tuple)):
             learn_rate = learn_rate[0]
         learning_rate_function = learn_rate
+
+    # exponential decay
     elif learning_rate_decay == 'exponential':
         if not isinstance(learn_rate, (list, tuple)):
             raise ValueError("Exponential decay requres three values: starting learning rate, steps, and decay factor")
@@ -144,18 +146,21 @@ def learning_rate_picker(learn_rate, learning_rate_decay, global_step):
         steps = learn_rate[1]
         decay = learn_rate[2]
         learning_rate_function = tf.train.exponential_decay(start_lr, global_step, steps, decay, staircase=True)
+
+    # not implemented yet
     else:
         raise NotImplementedError("Specified learning rate decay method is not implemented: " + learning_rate_decay)
 
     return learning_rate_function
 
 
-def loss_picker(loss_method, labels, predictions, weights=None):
+def loss_picker(loss_method, labels, predictions, data_format, weights=None):
     """
     Takes a string specifying the loss method and returns a tensorflow loss function
     :param loss_method: (str) the desired loss method
     :param labels: (tf.tensor) the labels tensor
     :param predictions: (tf.tensor) the features tensor
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
     :param weights: (tf.tensor) an optional weight tensor for masking values
     :return: A tensorflow loss function
     """
@@ -165,10 +170,39 @@ def loss_picker(loss_method, labels, predictions, weights=None):
     if weights is None: weights = 1.0
 
     # chooser for decay method
+    # MSE loss
     if loss_method == 'MSE':
         loss_function = tf.losses.mean_squared_error(labels, predictions, weights)
+
+    # MAE loss
     elif loss_method == 'MAE':
         loss_function = tf.losses.absolute_difference(labels, predictions, weights)
+
+    # auxiliary loss
+    # https://www-sciencedirect-com.ucsf.idm.oclc.org/science/article/pii/S1361841518301257
+    elif loss_method == 'auxiliary':
+
+        # predefine loss_function
+        loss_function = None
+
+        # determine dimension of channels
+        dim = 1 if data_format == 'channels_first' else -1
+
+        # loop through the different predictions and sum to create auxillary loss
+        for i in range(predictions.shape[dim]):
+            # isolate pred
+            if data_format == 'channels_first':
+                pred = tf.expand_dims(predictions[:, i, :, :], axis=1)
+            else:
+                pred = tf.expand_dims(predictions[:, :, :, i], axis=-1)
+            # generate MAE loss
+            loss = tf.losses.absolute_difference(labels, pred, weights)
+            if i == 0:  # for first loop, use full value of loss as this is the final predictions
+                loss_function = loss
+            else:  # for all subsequent loops, add the loss times 0.5, as these are auxiliary losses
+                loss_function = tf.add(loss_function, loss * 0.5)
+
+    # not implemented loss
     else:
         raise NotImplementedError("Specified loss method is not implemented: " + loss_method)
 
