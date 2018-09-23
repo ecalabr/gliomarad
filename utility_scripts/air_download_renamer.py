@@ -1,3 +1,5 @@
+"""Moves data downloaded from UCSF air into new unique directories named after the accession number"""
+
 import pydicom as dicom
 import os
 import subprocess

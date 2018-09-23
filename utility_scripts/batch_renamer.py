@@ -1,3 +1,5 @@
+"""Scrtipt for zipping individual studies downloaded from ucsf air into zip files named by accession"""
+
 import os
 
 # main directory after unzipping
