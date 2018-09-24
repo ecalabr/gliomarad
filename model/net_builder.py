@@ -369,13 +369,13 @@ def deep_embed_net(features, params, is_training, reuse=False):
         if i == 0:  # handles first loop where recons has not been defined yet
             recons = recon  # tf.expand_dims(recon, axis=-1)
         else:  # handles subsequent loops
-            recons = tf.concat([recons, recon], axis=-1, name=name + '_concat')
+            recons = tf.concat([recons, recon], axis=-1, name=name + '_embed_concat')
 
      # final output layer
     tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
 
     # concatenate all recons and return as one tensor, which will be # of embedding blocks + 1 different predicitons
-    tensor = tf.concat([tensor, recons], axis=-1)
+    tensor = tf.concat([tensor, recons], axis=-1, name=name + '_final_embed_concat')
 
     return tensor
 

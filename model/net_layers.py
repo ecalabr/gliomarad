@@ -502,7 +502,7 @@ def embedding_block(tensor, ksize, filt, drpout, is_training, dfmt, act, name, r
     embed_tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, layer_name, reuse)
 
     # concatenate transform and embedding forks
-    layer_name = name + '_concat'
+    layer_name = name + '_transform_concat'
     axis = 1 if dfmt == 'channels_first' else -1
     tensor = tf.concat([trans_tensor, embed_tensor], axis, name=layer_name)
 

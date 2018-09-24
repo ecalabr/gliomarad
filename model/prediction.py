@@ -82,6 +82,14 @@ def predict(model_spec, model_dir, params, infer_dir):
     shape = nii.shape
     name_prefix = os.path.basename(infer_dir)
 
+    # handle multiple predictions
+    if params.data_format == 'channels_first':
+        if predictions.shape[1] > 1:
+            predictions = np.expand_dims(predictions[:, 0, :, :], axis=1)
+    if params.data_format == 'channels_last':
+        if predictions.shape[-1] > 1:
+            predictions = np.expand_dims(predictions[:, :, :, 0], axis=-1)
+
     # make predictions the correct shape (same as input data)
     permute = [2, 3, 0, 1] if params.data_format == 'channels_first' else [1, 2, 0, 3]
     predictions = np.squeeze(np.transpose(predictions, axes=permute))
