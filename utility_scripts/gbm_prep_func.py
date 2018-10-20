@@ -56,13 +56,13 @@ def make_log(work_dir):
 # first check for series_dict to find the appropriate image series from the dicom folder
 # matching strings format is [[strs to match AND], OR [strs to match AND]
 def make_serdict(reg_atlas, dcm_dir):
-    t1_str = [["t1"], ["ax", "3d", "bravo", "brainnav"]]
-    t1_not = ["post", "gad", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp"]
+    t1_str = [["ax t1"], ["ax", "3d", "bravo", "brainnav"], ["fspgr", "pre", "t1"]]
+    t1_not = ["post", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp"]
     t2_str = [["t2"]]
     t2_not = ["flair", "optic", "motor", "track", "tract", "radiation", "reform"]
     flair_str = [["flair"]]
     flair_not = ["t1", "reform", "rfmt"]
-    dwi_str = [["ax", "dwi"]]
+    dwi_str = [["ax", "dwi"], ["trace"]]
     dwi_not = []
     adc_str = [["adc"], ["apparent", "diffusion"], ["avdc"]]
     adc_not = ["exp", "cor", "sag", "eadc"]

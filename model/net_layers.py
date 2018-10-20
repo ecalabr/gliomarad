@@ -330,20 +330,21 @@ def deconv2d_block(tensor, filters, kernel_size, strides, data_format, name, reu
     return tensor
 
 
-def resid2d_layer(tensor, n_filters, k_size, strides, dilation, is_training, data_format, act_type, name, reuse=False):
+def resid2d_layer(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dropout, is_training, act):
     """
     Creates a 2D single simple residual block with batch normalization and activation
     Modeled after: https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py
     :param tensor: (tf.tensor) the inputa data tensor
-    :param n_filters: (int) the number of filters for the convolutions
-    :param k_size: (list/tuple(int)) the kernel size for convolutions
+    :param filt: (int) the number of filters for the convolutions
+    :param ksize: (list/tuple(int)) the kernel size for convolutions
     :param strides: (list/tuple(int)) the strides for convolutions
-    :param dilation: (list/tuple(int)) the dilation for convolutions
-    :param is_training: (bool) whether or not the model is training
-    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
-    :param act_type: (str) the name of te activation method, e.g. 'leaky_relu'
+    :param dil: (list/tuple(int)) the dilation for convolutions
+    :param dfmt: (str) the tf data format 'channels_first' or 'channels_last'
     :param name: (str) the name of the operation
     :param reuse: (bool) whether or not to reuse weights for this layer
+    :param dropout: (float) the dropout rate, if zero, no dropout layer is applied
+    :param is_training: (bool) whether or not the model is training
+    :param act: (str) the name of te activation method, e.g. 'leaky_relu'
     :return: returns a residual layer as defined in the resnet example above.
     """
 
@@ -358,21 +359,25 @@ def resid2d_layer(tensor, n_filters, k_size, strides, dilation, is_training, dat
     # handle identity versus projection shortcut for outputs of different dimension
     if strided: # if strides are 2 for example, then project shortcut to output size
         # accomplish projection with a 1x1 convolution
-        shortcut = conv2d_fixed_pad(tensor, n_filters, 1, strides, dilation, data_format, name + '_shrtct_conv', reuse)
-        shortcut = batch_norm(shortcut, is_training, data_format, name + '_shrtct_bn', reuse)
+        shortcut = conv2d_fixed_pad(tensor, filt, 1, strides, dil, dfmt, name + '_shrtct_conv', reuse)
+        shortcut = batch_norm(shortcut, is_training, dfmt, name + '_shrtct_bn', reuse)
 
     # Convolution block 1
-    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, strides, dilation, data_format, name + '_resid_conv1', reuse)
-    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv1_bn', reuse)
-    tensor = act_type(tensor, act_type, name + '_resid_conv1_act')
+    tensor = conv2d_fixed_pad(tensor, filt, ksize, strides, dil, dfmt, name + '_resid_conv1', reuse)
+    tensor = batch_norm(tensor, is_training, dfmt, name + '_resid_conv1_bn', reuse)
+    tensor = activation(tensor, act, name + '_resid_conv1_act')
 
     # Convolution block 2 (force strides==1)
-    tensor = conv2d_fixed_pad(tensor, n_filters, k_size, [1, 1], dilation, data_format, name + '_resid_conv2', reuse)
-    tensor = batch_norm(tensor, is_training, data_format, name + '_resid_conv2_bn', reuse)
+    tensor = conv2d_fixed_pad(tensor, filt, ksize, [1, 1], dil, dfmt, name + '_resid_conv2', reuse)
+    tensor = batch_norm(tensor, is_training, dfmt, name + '_resid_conv2_bn', reuse)
 
     # fuse shortcut with outputs and do one final activation
     tensor = tf.add(tensor, shortcut, name + '_resid_shrtct_add')
-    tensor = act_type(tensor, act_type, name + '_resid_conv2_act')
+    tensor = activation(tensor, act, name + '_resid_conv2_act')
+
+    # optional dropout layer
+    if dropout > 0.:
+        tensor = tf.layers.dropout(tensor, rate=dropout, training=is_training, name=name + '_dropout')
 
     return tensor
 

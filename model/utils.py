@@ -180,7 +180,7 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
 
     # auxiliary loss
     # https://www-sciencedirect-com.ucsf.idm.oclc.org/science/article/pii/S1361841518301257
-    elif loss_method == 'auxiliary':
+    elif loss_method == 'auxiliary_MAE':
 
         # predefine loss_function
         loss_function = None
