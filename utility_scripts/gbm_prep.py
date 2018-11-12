@@ -54,7 +54,7 @@ for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
         sys.exit("Could not find required file: " + file_path)
 
 # Define dicom directory and get a list of zip files from a dicom zip folder
-dcm_data_dir = "/media/ecalabr/data/gbm_no_qc/"
+dcm_data_dir = "/media/ecalabr/data/qc_incomplete/"
 dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
 dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
 

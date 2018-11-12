@@ -2,7 +2,7 @@ import os
 from glob import glob
 
 # main directory containing subdirs with processed data
-data_dir = "/media/ecalabr/data/gbm"
+data_dir = "/media/ecalabr/data/qc_pending"
 
 # list all subdirs with the processed data
 direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]

@@ -407,7 +407,7 @@ def deep_embed_resnet(features, params, is_training, reuse=False):
     tensor = conv2d_block(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dropout, is_training, act)
 
     # first 5 residual layers
-    for i in range(5):
+    for i in range(7):
         name = 'res_block_' + str(i)
         tensor = resid2d_layer(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dropout, is_training, act)
 
