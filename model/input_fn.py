@@ -195,7 +195,7 @@ def _normalize(input_numpy):
     # input_numpy = np.where(input_numpy!=0, input_numpy - input_numpy.mean(), 0) / input_numpy.var()
 
     # perform normalization to [0, 1]
-    input_numpy *= 1.0 / input_numpy.max()
+    # input_numpy *= 1.0 / input_numpy.max()
 
     return input_numpy
 

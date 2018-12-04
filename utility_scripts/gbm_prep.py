@@ -28,7 +28,8 @@ def read_dicom_dir(dcm_dir, rep=False):
     series_dict = reg_series(series_dict)
     series_dict = split_dwi(series_dict)
     series_dict = brain_mask(series_dict)
-    #series_dict = norm_niis(series_dict)
+    series_dict = bias_correct(series_dict, repeat=True)
+    series_dict = norm_niis(series_dict, repeat=True)
     #series_dict = make_nii4d(series_dict)
     #series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
     series_dict = print_series_dict(series_dict)
@@ -54,13 +55,13 @@ for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
         sys.exit("Could not find required file: " + file_path)
 
 # Define dicom directory and get a list of zip files from a dicom zip folder
-dcm_data_dir = "/media/ecalabr/data/qc_incomplete/"
+dcm_data_dir = "/media/ecalabr/data/qc_complete/"
 dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
 dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
 
-# iterate through all dicom folders or a subset, or specific ones using options below
+# iterate through all dicom folders or just a subset/specific diectories only using options below
 #dcms = dcms[:61] #[46:]  #0:36 done
-#dcms = ["/media/ecalabr/data/gbm/12182783/1.2.124.113532.80.22017.45499.20180402.142550.12237730"]
+dcms = ["/media/ecalabr/data/qc_complete/10672000/1.2.124.113532.80.22017.45499.20151103.80830.293969749"]
 
 if not isinstance(dcms, list):
     dcms = [dcms]

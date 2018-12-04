@@ -6,6 +6,7 @@ from glob import glob
 import subprocess
 import logging
 import yaml
+import multiprocessing
 from nipype.interfaces.dcm2nii import Dcm2niix
 from nipype.interfaces.ants import Registration
 from nipype.interfaces.ants import ApplyTransforms
@@ -14,10 +15,9 @@ from nipype.interfaces.fsl.maths import ApplyMask
 from nipype.interfaces.fsl import Eddy
 from nipype.interfaces.fsl import DTIFit
 from nipype.interfaces.fsl import ExtractROI
-from nipype.interfaces.fsl.utils import ImageStats
-from nipype.interfaces.fsl.utils import ImageMaths
 from nipype.interfaces.fsl.utils import CopyGeom
 from nipype.interfaces.fsl import Merge
+from nipype.interfaces.ants import N4BiasFieldCorrection
 import external_software.brats17_master.test_ecalabr as test_ecalabr
 
 
@@ -75,15 +75,15 @@ def make_serdict(reg_atlas, dcm_dir):
     dti_str = [["dti"], ["hardi"]]
     dti_not = ["roi", "topup"]
     # note for "reg" key option can be False (no reg), "trans" or "affine" for thos reg types, and "SERIES" to apply transform from another previous series
-    sdict = {"FLAIR": {"or": flair_str, "not": flair_not, "reg": "trans", "reg_target": reg_atlas},
-             "T1": {"or": t1_str, "not": t1_not, "reg": "affine", "reg_target": "FLAIR"},
-             "T1gad": {"or": t1gad_str, "not": t1gad_not, "reg": "affine", "reg_target": "FLAIR"},
-             "T2": {"or": t2_str, "not": t2_not, "reg": "affine", "reg_target": "FLAIR"},
-             "DWI": {"or": dwi_str, "not": dwi_not, "reg": "diffeo", "reg_target": "FLAIR"},
+    sdict = {"FLAIR": {"or": flair_str, "not": flair_not, "reg": "trans", "reg_target": reg_atlas, "bias": True},
+             "T1": {"or": t1_str, "not": t1_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
+             "T1gad": {"or": t1gad_str, "not": t1gad_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
+             "T2": {"or": t2_str, "not": t2_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
+             "SWI": {"or": swi_str, "not": swi_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
+             "DWI": {"or": dwi_str, "not": dwi_not, "reg": "diffeo", "reg_target": "FLAIR", "bias": True},
              "ADC": {"or": adc_str, "not": adc_not, "reg": "DWI"},
-             "SWI": {"or": swi_str, "not": swi_not, "reg": "affine", "reg_target": "FLAIR"},
-             "ASL": {"or": asl_str, "not": asl_not, "reg": "diffeo", "reg_target": "FLAIR"},
              "DTI": {"or": dti_str, "not": dti_not, "reg": False},
+             "ASL": {"or": asl_str, "not": asl_not, "reg": "diffeo", "reg_target": "FLAIR"},
              "info":{"filename": "None", "dcmdir": dcm_dir, "id": os.path.basename(os.path.dirname(dcm_dir))}
              }
     return sdict
@@ -318,7 +318,7 @@ def affine_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.fixed_image=template_nii
     antsreg.inputs.moving_image=moving_nii
     antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=8
+    antsreg.inputs.num_threads=multiprocessing.cpu_count()
     antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]] * 2
     antsreg.inputs.sigma_units=['vox'] * 2
     antsreg.inputs.transforms=['Rigid', 'Affine']  # ['Rigid', 'Affine', 'SyN']
@@ -365,7 +365,7 @@ def diffeo_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.fixed_image=template_nii
     antsreg.inputs.moving_image=moving_nii
     antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=8
+    antsreg.inputs.num_threads=multiprocessing.cpu_count()
     antsreg.terminal_output='none'
     antsreg.inputs.initial_moving_transform_com=1
     antsreg.inputs.winsorize_lower_quantile=0.005
@@ -412,7 +412,7 @@ def trans_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.fixed_image=template_nii
     antsreg.inputs.moving_image=moving_nii
     antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=8
+    antsreg.inputs.num_threads=multiprocessing.cpu_count()
     antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]]
     antsreg.inputs.sigma_units=['vox']
     antsreg.inputs.transforms=['Translation']  # ['Rigid', 'Affine', 'SyN']
@@ -569,89 +569,6 @@ def reg_series(ser_dict, repeat=False):
             pass
     return ser_dict
 
-# normalize nifits
-# takes a series dict and returns a series dict, normalizes all masked niis
-def norm_niis(ser_dict, repeat=False):
-    # logging
-    logger = logging.getLogger("my_logger")
-    logger.info("NORMALIZING NIIs:")
-    # get list of filenames and normalize them
-    for srs in ser_dict:
-        if "filename_masked" in ser_dict[srs] and os.path.isfile(ser_dict[srs]["filename_masked"]):
-            if "no_norm" in ser_dict[srs] and ser_dict[srs]["no_norm"] == True:
-                logger.info("- skipping normalization for " + srs)
-            else:
-                fn = ser_dict[srs]["filename_masked"]
-                normname = os.path.join(os.path.dirname(fn), os.path.basename(fn).split(".")[0] + "n.nii.gz")
-                ser_dict[srs].update({"filename_norm": normname})
-                # if normalized file doesn't exist, make it
-                if not os.path.isfile(normname) or repeat:
-                    logger.info("- normalizing " + srs + " at " + fn)
-                    #norm_cmd = "ImageMath 3 " + ser_dict[srs]["filename_norm"] + " Normalize " + fn
-                    #_ = os.system(norm_cmd)
-                    # first get max and min
-                    im_stats = ImageStats()
-                    im_stats.inputs.in_file=fn
-                    im_stats.inputs.op_string="-R"
-                    im_stats.terminal_output="allatonce"
-                    logger.debug(im_stats.cmdline)
-                    result = im_stats.run()
-                    minv, maxv = result.outputs.out_stat
-                    # then normalize by subtracting min and divding by difference between max and min
-                    norm = ImageMaths()
-                    norm.inputs.in_file=fn
-                    norm.inputs.out_file=normname
-                    norm.inputs.out_data_type="float"
-                    norm.terminal_output="none"
-                    norm.inputs.op_string="-sub %s -div %s" % (minv, (maxv-minv))
-                    logger.debug(norm.cmdline)
-                    norm.run()
-                else:
-                    logger.info("- normalized " + srs + " already exists at " + normname)
-    # remove stat result json file if exists, check home and current dir
-    if os.path.isfile("~/stat_result.json"):
-        os.remove("~/stat_result.json")
-    if os.path.isfile("stat_result.json"):
-        os.remove("stat_result.json")
-    return ser_dict
-
-# make 4d nii
-# takes series dict, returns series dict, makes a 4d nii using all normed series
-def make_nii4d(ser_dict, repeat=False):
-    # logging
-    logger = logging.getLogger("my_logger")
-    logger.info("MAKING 4D NII:")
-    # id setup
-    idno = ser_dict["info"]["id"]
-    # define vars
-    files = []
-    # get all normalized images and collect them in a list
-    for srs in ser_dict:
-        if "filename_norm" in ser_dict[srs]: # normalized files only, others ignored
-            files.append(ser_dict[srs]["filename_norm"])
-            logger.info("- adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
-    if files and len(files)>1: # only attempt work if normalized files exist and there is more than 1
-        # get dirname from first normalized image, make nii4d name from this
-        bdir = os.path.dirname(files[0])
-        nii4d = os.path.join(bdir, idno + "_nii4d.nii.gz")
-        # if nii4d doesn't exist, make it
-        if not os.path.isfile(nii4d) or repeat:
-            logger.info("- creating 4D nii at " + nii4d)
-            #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
-            #os.system(nii4dcmd)
-            merger = Merge()
-            merger.inputs.in_files = files
-            merger.inputs.dimension = "t"
-            merger.inputs.merged_file = nii4d
-            merger.terminal_output = "none"
-            logger.debug(merger.cmdline)
-            merger.run()
-        else:
-            logger.info("- 4D Nii already exists at " + nii4d)
-    else:
-        logger.info("- not enough files to make 4D Nii")
-    return ser_dict
-
 # split b0 and dwi and discard b0 (if necessary)
 def split_dwi(ser_dict):
     dwib0 = ser_dict["DWI"]["filename"]
@@ -790,7 +707,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
     return ser_dict
 
 # make mask based on t1gad and flair and apply to all other images
-def brain_mask(ser_dict):
+def brain_mask(ser_dict, repeat=False):
     # logging
     logger = logging.getLogger("my_logger")
     # id setup
@@ -840,7 +757,7 @@ def brain_mask(ser_dict):
             if "filename_reg" in ser_dict[sers]:  # check that filename_reg entry exists
                 os.path.join(os.path.dirname(dcm_dir), idno + "_" + sers + "_wm.nii.gz")
                 ser_masked = ser_dict[sers]["filename_reg"].rsplit(".nii", 1)[0] + "m.nii.gz"
-                if not os.path.isfile(ser_masked) and os.path.isfile(ser_dict[sers]["filename_reg"]):
+                if repeat or (not os.path.isfile(ser_masked) and os.path.isfile(ser_dict[sers]["filename_reg"])):
                     # check that warping was actually done or not
                     if not ser_dict[sers]["filename_reg"] == ser_dict[sers]["filename"]:
                         logger.info("- masking " + ser_dict[sers]["filename_reg"])
@@ -864,6 +781,143 @@ def brain_mask(ser_dict):
                 logger.info("- no filename_reg entry exists for series " + sers)
     else:
         logger.info("- combined mask file not found, expected location is: " + combined_mask)
+    return ser_dict
+
+# bias correction
+# takes series dict, returns series dict, performs intensity windsorization and n4 bias correction on select volumes
+def bias_correct(ser_dict, repeat=False):
+    # logging
+    logger = logging.getLogger("my_logger")
+    logger.info("BIAS CORRECTING IMAGES:")
+    # id setup
+    idno = ser_dict["info"]["id"]
+    # dcm_dir prep
+    dcm_dir = ser_dict["info"]["dcmdir"]
+    # identify files to bias correct
+    for srs in ser_dict:
+        if "bias" in ser_dict[srs] and ser_dict[srs]["bias"]: # only do bias if specified in series dict
+            # get name of masked file and the mask itself
+            f = ser_dict[srs]["filename_masked"]
+            mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
+            assert os.path.isfile(mask)
+            assert os.path.isfile(f)
+            # generate output filenames for corrected image and bias field
+            biasfile = f.rsplit(".nii", 1)[0] + "_biasmap.nii.gz"
+            truncated_img = f.rsplit(".nii", 1)[0] + "t.nii.gz"
+            biasimg = truncated_img.rsplit(".nii", 1)[0] + "b.nii.gz"
+            # first truncate image intensities, this also removes any negative values
+            if not os.path.isfile(truncated_img) or repeat:
+                logger.info("- truncating image intensities for " + f)
+                thresh = [0.005, 0.995]  # define thresholds
+                mask_img = nib.load(mask)  # load data
+                mask_img = mask_img.get_data()
+                nii = nib.load(f)
+                img = nii.get_data()
+                affine = nii.get_affine()
+                vals = np.sort(img[mask_img>0.], None)  # sort data in order
+                thresh_lo = vals[int(np.round(thresh[0] * len(vals)))]  # define hi and low thresholds
+                thresh_hi = vals[int(np.round(thresh[1] * len(vals)))]
+                img_trunc = np.where(img<thresh_lo, thresh_lo, img)  # truncate low
+                img_trunc = np.where(img_trunc>thresh_hi, thresh_hi, img_trunc)  # truncate hi
+                img_trunc = np.where(mask_img>0., img_trunc, 0.)  # remask data
+                nii = nib.Nifti1Image(img_trunc, affine)  # make nii and save
+                nib.save(nii, truncated_img)
+            else:
+                logger.info("- truncated image already exists at " + truncated_img)
+            # run bias correction on truncated image
+            if not os.path.isfile(biasimg) or repeat:
+                logger.info("- bias correcting " + truncated_img)
+                # apply N4 bias correction
+                n4_cmd = N4BiasFieldCorrection()
+                n4_cmd.inputs.copy_header=True
+                n4_cmd.inputs.input_image=truncated_img
+                n4_cmd.inputs.save_bias=True
+                n4_cmd.inputs.bias_image=biasfile
+                n4_cmd.inputs.bspline_fitting_distance=300
+                n4_cmd.inputs.bspline_order=3
+                n4_cmd.inputs.convergence_threshold=1e-6
+                n4_cmd.inputs.dimension=3
+                # n4_cmd.inputs.environ=
+                n4_cmd.inputs.mask_image=mask
+                n4_cmd.inputs.n_iterations=[50,50,50,50]
+                n4_cmd.inputs.num_threads=multiprocessing.cpu_count()
+                n4_cmd.inputs.output_image=biasimg
+                n4_cmd.inputs.shrink_factor=3
+                #n4_cmd.inputs.weight_image=
+                logger.debug(n4_cmd.cmdline)
+                _ = n4_cmd.run()
+                ser_dict[srs].update({"filename_bias": biasimg})
+            else:
+                logger.info("- bias corrected image already exists at " + biasimg)
+                ser_dict[srs].update({"filename_bias": biasimg})
+    return ser_dict
+
+# normalize nifits
+# takes a series dict and returns a series dict, normalizes all masked niis
+# currently uses zero mean and unit variance
+def norm_niis(ser_dict, repeat=False):
+    # logging
+    logger = logging.getLogger("my_logger")
+    logger.info("NORMALIZING NIIs:")
+    # get list of filenames and normalize them
+    for srs in ser_dict:
+        if "bias" in ser_dict[srs] and ser_dict[srs]["bias"]:  # do normalization if bias was done
+            fn = ser_dict[srs]["filename_bias"]
+            normname = os.path.join(os.path.dirname(fn), os.path.basename(fn).split(".")[0] + "n.nii.gz")
+            # if normalized file doesn't exist, make it
+            if not os.path.isfile(normname) or repeat:
+                logger.info("- normalizing " + srs + " at " + fn)
+                # load image into memory
+                nii = nib.load(fn)
+                affine = nii.get_affine()
+                img = nii.get_data()
+                nzi = np.nonzero(img)
+                mean = np.mean(img[nzi])
+                std = np.std(img[nzi])
+                img = np.where(img != 0., (img - mean) / std, 0.)  # zero mean unit variance for nonzero indices
+                nii = nib.Nifti1Image(img, affine)
+                nib.save(nii, normname)
+                ser_dict[srs].update({"filename_norm": normname})
+            else:
+                logger.info("- normalized " + srs + " already exists at " + normname)
+                ser_dict[srs].update({"filename_norm": normname})
+    return ser_dict
+
+# make 4d nii
+# takes series dict, returns series dict, makes a 4d nii using all normed series
+def make_nii4d(ser_dict, repeat=False):
+    # logging
+    logger = logging.getLogger("my_logger")
+    logger.info("MAKING 4D NII:")
+    # id setup
+    idno = ser_dict["info"]["id"]
+    # define vars
+    files = []
+    # get all normalized images and collect them in a list
+    for srs in ser_dict:
+        if "filename_norm" in ser_dict[srs]: # normalized files only, others ignored
+            files.append(ser_dict[srs]["filename_norm"])
+            logger.info("- adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
+    if files and len(files)>1: # only attempt work if normalized files exist and there is more than 1
+        # get dirname from first normalized image, make nii4d name from this
+        bdir = os.path.dirname(files[0])
+        nii4d = os.path.join(bdir, idno + "_nii4d.nii.gz")
+        # if nii4d doesn't exist, make it
+        if not os.path.isfile(nii4d) or repeat:
+            logger.info("- creating 4D nii at " + nii4d)
+            #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
+            #os.system(nii4dcmd)
+            merger = Merge()
+            merger.inputs.in_files = files
+            merger.inputs.dimension = "t"
+            merger.inputs.merged_file = nii4d
+            merger.terminal_output = "none"
+            logger.debug(merger.cmdline)
+            merger.run()
+        else:
+            logger.info("- 4D Nii already exists at " + nii4d)
+    else:
+        logger.info("- not enough files to make 4D Nii")
     return ser_dict
 
 # create tumor segmentation
