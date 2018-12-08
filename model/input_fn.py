@@ -192,7 +192,10 @@ def _normalize(input_numpy):
     """
 
     # perform normalization to zero mean unit variance
-    # input_numpy = np.where(input_numpy!=0, input_numpy - input_numpy.mean(), 0) / input_numpy.var()
+    nzi = np.nonzero(input_numpy)
+    mean = np.mean(input_numpy[nzi], None)
+    std = np.std(input_numpy[nzi], None)
+    input_numpy = np.where(input_numpy != 0., (input_numpy - mean) / std, 0.)
 
     # perform normalization to [0, 1]
     # input_numpy *= 1.0 / input_numpy.max()

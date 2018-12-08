@@ -346,6 +346,7 @@ def affine_reg(moving_nii, template_nii, work_dir, repeat=False):
         antsreg.run()
     else:
         logger.info("- Warp file already exists at " + trnsfm)
+        logger.debug(antsreg.cmdline)
     return trnsfm
 
 # Fast ants diffeomorphic registration
@@ -393,6 +394,7 @@ def diffeo_reg(moving_nii, template_nii, work_dir, repeat=False):
         antsreg.run()
     else:
         logger.info("- Warp file already exists at " + trnsfm)
+        logger.debug(antsreg.cmdline)
     return trnsfm
 
 # ANTS translation
@@ -440,6 +442,7 @@ def trans_reg(moving_nii, template_nii, work_dir, repeat=False):
         antsreg.run()
     else:
         logger.info("- Warp file already exists at " + trnsfm)
+        logger.debug(antsreg.cmdline)
     return trnsfm
 
 # Ants apply transforms to list
@@ -462,22 +465,23 @@ def ants_apply(moving_nii, reference_nii, interp, transform_list, work_dir, inve
         # define output path
         output_nii[ind] = os.path.join(work_dir, os.path.basename(mvng).split(ext)[0] + '_w.nii.gz')
         # do registration if not already done
+        antsapply = ApplyTransforms()
+        antsapply.inputs.dimension=3
+        antsapply.terminal_output='none'  # suppress terminal output
+        antsapply.inputs.input_image=mvng
+        antsapply.inputs.reference_image=reference_nii
+        antsapply.inputs.output_image=output_nii[ind]
+        antsapply.inputs.interpolation=interp
+        antsapply.inputs.default_value=0
+        antsapply.inputs.transforms=transform_list
+        antsapply.inputs.invert_transform_flags=[invert_bool] * len(transform_list)
         if not os.path.isfile(output_nii[ind]) or repeat:
             logger.info("- Creating warped image " + output_nii[ind])
-            antsapply = ApplyTransforms()
-            antsapply.inputs.dimension=3
-            antsapply.terminal_output='none'  # suppress terminal output
-            antsapply.inputs.input_image=mvng
-            antsapply.inputs.reference_image=reference_nii
-            antsapply.inputs.output_image=output_nii[ind]
-            antsapply.inputs.interpolation=interp
-            antsapply.inputs.default_value=0
-            antsapply.inputs.transforms=transform_list
-            antsapply.inputs.invert_transform_flags=[invert_bool] * len(transform_list)
             logger.debug(antsapply.cmdline)
             antsapply.run()
         else:
             logger.info("- Transformed image already exists at " + output_nii[ind])
+            logger.debug(antsapply.cmdline)
     # if only 1 label, don't return array
     if len(output_nii) == 1:
         output_nii = output_nii[0]
@@ -618,48 +622,50 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
         dti_in = ser_dict["DTI"]["filename"]
         logger.info("PROCESSING DTI")
         logger.info("- DTI file found at " + dti_in)
-        # separate b0 image
+        # separate b0 image if not already done
         b0 = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_b0.nii.gz")
+        fslroi = ExtractROI(in_file=dti_in, roi_file=b0, t_min=0, t_size=1)
+        fslroi.terminal_output = "none"
         if not os.path.isfile(b0):
             logger.info("- separating b0 image from DTI")
-            fslroi = ExtractROI(in_file=dti_in, roi_file=b0, t_min=0, t_size=1)
-            fslroi.terminal_output = "none"
             logger.debug(fslroi.cmdline)
             fslroi.run()
         else:
             logger.info("- b0 image already exists at " + b0)
+            logger.debug(fslroi.cmdline)
         # add b0 to list for affine registration
         ser_dict.update({"DTI_b0": {"filename": b0, "reg": "diffeo", "reg_target": "FLAIR", "no_norm": True}})
         # make BET mask
         dti_mask = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_mask.nii.gz")
+        btr = BET()
+        btr.inputs.in_file = b0  # base mask on b0 image
+        btr.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI")  # output prefix _mask is autoadded
+        btr.inputs.mask = True
+        btr.inputs.no_output = True
+        btr.inputs.frac = 0.2  # lower threshold for more inclusive mask
         if not os.path.isfile(dti_mask) or repeat:
             logger.info("- Making BET brain mask for DTI")
-            btr = BET()
-            btr.inputs.in_file = b0  # base mask on b0 image
-            btr.inputs.out_file = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI")  # output prefix _mask is autoadded
-            btr.inputs.mask = True
-            btr.inputs.no_output = True
-            btr.inputs.frac = 0.2  # lower threshold for more inclusive mask
             logger.debug(btr.cmdline)
             _ = btr.run()
         else:
             logger.info("- DTI BET masking already exists at " + dti_mask)
+            logger.debug(btr.cmdline)
         # do eddy correction with outlier replacement
         dti_out = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_eddy")
         dti_outfile = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_eddy.nii.gz")
+        eddy = Eddy()
+        eddy.inputs.in_file = dti_in
+        eddy.inputs.out_base = dti_out
+        eddy.inputs.in_mask = dti_mask
+        eddy.inputs.in_index = dti_index
+        eddy.inputs.in_acqp = dti_acqp
+        eddy.inputs.in_bvec = dti_bvec
+        eddy.inputs.in_bval = dti_bval
+        eddy.inputs.use_cuda = True
+        eddy.inputs.repol = True
+        eddy.terminal_output = "none"
         if not os.path.isfile(dti_outfile) or repeat:
             logger.info("- Eddy correcting DWIs")
-            eddy = Eddy()
-            eddy.inputs.in_file = dti_in
-            eddy.inputs.out_base = dti_out
-            eddy.inputs.in_mask = dti_mask
-            eddy.inputs.in_index = dti_index
-            eddy.inputs.in_acqp = dti_acqp
-            eddy.inputs.in_bvec = dti_bvec
-            eddy.inputs.in_bval = dti_bval
-            eddy.inputs.use_cuda = True
-            eddy.inputs.repol = True
-            eddy.terminal_output = "none"
             try:
                 logger.debug(eddy.cmdline)
                 _ = eddy.run()
@@ -667,20 +673,21 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
                 logger.info("- Could not eddy correct DTI")
         else:
             logger.info("- Eddy corrected DWIs already exist at " + dti_outfile)
+            logger.debug(eddy.cmdline)
         # do DTI processing
         fa_out = dti_out + "_FA.nii.gz"
+        dti = DTIFit()
+        dti.inputs.dwi = dti_outfile
+        dti.inputs.bvecs = dti_out + ".eddy_rotated_bvecs"
+        dti.inputs.bvals = dti_bval
+        dti.inputs.base_name = dti_out
+        dti.inputs.mask = dti_mask
+        # dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
+        dti.terminal_output = "none"
+        dti.inputs.save_tensor = True
+        # dti.ignore_exception = True  # for some reason running though nipype causes error at end
         if os.path.isfile(dti_outfile) and not os.path.isfile(fa_out) or os.path.isfile(dti_outfile) and repeat:
             logger.info("- Fitting DTI")
-            dti = DTIFit()
-            dti.inputs.dwi = dti_outfile
-            dti.inputs.bvecs = dti_out + ".eddy_rotated_bvecs"
-            dti.inputs.bvals = dti_bval
-            dti.inputs.base_name = dti_out
-            dti.inputs.mask = dti_mask
-            # dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
-            dti.terminal_output = "none"
-            dti.inputs.save_tensor = True
-            # dti.ignore_exception = True  # for some reason running though nipype causes error at end
             try:
                 logger.debug(dti.cmdline)
                 _ = dti.run()
@@ -697,6 +704,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
         else:
             if os.path.isfile(fa_out):
                 logger.info("- DTI outputs already exist with prefix " + dti_out)
+                logger.debug(dti.cmdline)
         # if DTI processing completed, add DTI to series_dict for registration (note, DTI is masked at this point)
         if os.path.isfile(fa_out):
             ser_dict.update({"DTI_FA": {"filename": dti_out + "_FA.nii.gz", "reg": "DTI_b0"}})
@@ -724,54 +732,59 @@ def brain_mask(ser_dict, repeat=False):
         # if original and registered files exist for this contrast
         if os.path.isfile(ser_dict[contrast]["filename"]) and os.path.isfile(ser_dict[contrast]["filename_reg"]):
             maskfile = os.path.join(os.path.dirname(dcm_dir), idno + "_" + contrast + "_w_mask.nii.gz")
+            bet = BET()
+            bet.inputs.in_file = ser_dict[contrast]["filename_reg"]
+            bet.inputs.out_file = ser_dict[contrast]["filename_reg"]  # no output prevents overwrite
+            bet.inputs.mask = True
+            bet.inputs.no_output = True
+            bet.inputs.frac = 0.5
+            bet.terminal_output = "none"
             if not os.path.isfile(maskfile):
                 logger.info("- making brain mask based on " + contrast)
-                bet = BET()
-                bet.inputs.in_file = ser_dict[contrast]["filename_reg"]
-                bet.inputs.out_file = ser_dict[contrast]["filename_reg"]  # no output prevents overwrite
-                bet.inputs.mask = True
-                bet.inputs.no_output = True
-                bet.inputs.frac = 0.5
-                bet.terminal_output = "none"
                 logger.debug(bet.cmdline)
                 _ = bet.run()
                 if os.path.isfile(maskfile):
                     masks.append(maskfile)
             else:
                 logger.info("- " + contrast + " brain mask already exists at " + maskfile)
+                logger.debug(bet.cmdline)
                 masks.append(maskfile)
         else:
             logger.info("- could not find registered " + contrast + ", skipping brain masking for this contrast")
 
     # combine brain masks using majority voting
     combined_mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
+    majority_cmd = "ImageMath 3 " + combined_mask + " MajorityVoting " + " ".join(masks)
     if not os.path.isfile(combined_mask) and masks:  # if combined mask file does not exist, and indivudual masks exist
         logger.info("- making combined brain mask at " + combined_mask)
-        majority_cmd = "ImageMath 3 " + combined_mask + " MajorityVoting " + " ".join(masks)
         logger.debug(majority_cmd)
         _ = subprocess.call(majority_cmd, shell=True)
+    else:
+        logger.info("- combined brain mask already exists at " + combined_mask)
+        logger.debug(majority_cmd)
 
     # now apply to all other images if mask exists
     if os.path.isfile(combined_mask):
+        mask_cmd = ApplyMask()  # ensure this is defined early to prevent error, this line can be removed if needed
         for sers in ser_dict:
             if "filename_reg" in ser_dict[sers]:  # check that filename_reg entry exists
                 os.path.join(os.path.dirname(dcm_dir), idno + "_" + sers + "_wm.nii.gz")
                 ser_masked = ser_dict[sers]["filename_reg"].rsplit(".nii", 1)[0] + "m.nii.gz"
                 if repeat or (not os.path.isfile(ser_masked) and os.path.isfile(ser_dict[sers]["filename_reg"])):
-                    # check that warping was actually done or not
+                    # apply mask using fsl maths
+                    mask_cmd = ApplyMask()
+                    mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
+                    mask_cmd.inputs.mask_file = combined_mask
+                    mask_cmd.inputs.out_file = ser_masked
+                    mask_cmd.terminal_output = "none"
                     if not ser_dict[sers]["filename_reg"] == ser_dict[sers]["filename"]:
                         logger.info("- masking " + ser_dict[sers]["filename_reg"])
-                        # apply mask using fsl maths
-                        mask_cmd = ApplyMask()
-                        mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
-                        mask_cmd.inputs.mask_file = combined_mask
-                        mask_cmd.inputs.out_file = ser_masked
-                        mask_cmd.terminal_output = "none"
                         logger.debug(mask_cmd.cmdline)
                         _ = mask_cmd.run()
                         ser_dict[sers].update({"filename_masked": ser_masked})
                 elif os.path.isfile(ser_masked):
                     logger.info("- masked file already exists for " + sers + " at " + ser_masked)
+                    logger.debug(mask_cmd.cmdline)
                     ser_dict[sers].update({"filename_masked": ser_masked})
                 elif sers == "info":
                     pass
@@ -797,7 +810,7 @@ def bias_correct(ser_dict, repeat=False):
     for srs in ser_dict:
         if "bias" in ser_dict[srs] and ser_dict[srs]["bias"]: # only do bias if specified in series dict
             # get name of masked file and the mask itself
-            f = ser_dict[srs]["filename_masked"]
+            f = os.path.join(os.path.dirname(dcm_dir), idno + "_" + srs + "_wm.nii.gz")
             mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
             assert os.path.isfile(mask)
             assert os.path.isfile(f)
@@ -808,7 +821,7 @@ def bias_correct(ser_dict, repeat=False):
             # first truncate image intensities, this also removes any negative values
             if not os.path.isfile(truncated_img) or repeat:
                 logger.info("- truncating image intensities for " + f)
-                thresh = [0.005, 0.995]  # define thresholds
+                thresh = [0.001, 0.999]  # define thresholds
                 mask_img = nib.load(mask)  # load data
                 mask_img = mask_img.get_data()
                 nii = nib.load(f)
@@ -821,34 +834,35 @@ def bias_correct(ser_dict, repeat=False):
                 img_trunc = np.where(img_trunc>thresh_hi, thresh_hi, img_trunc)  # truncate hi
                 img_trunc = np.where(mask_img>0., img_trunc, 0.)  # remask data
                 nii = nib.Nifti1Image(img_trunc, affine)  # make nii and save
-                nib.save(nii, truncated_img)
+                nib.save(nii, str(truncated_img))
             else:
                 logger.info("- truncated image already exists at " + truncated_img)
             # run bias correction on truncated image
+            # apply N4 bias correction
+            n4_cmd = N4BiasFieldCorrection()
+            n4_cmd.inputs.copy_header=True
+            n4_cmd.inputs.input_image=truncated_img
+            n4_cmd.inputs.save_bias=True
+            n4_cmd.inputs.bias_image=biasfile
+            n4_cmd.inputs.bspline_fitting_distance=300
+            n4_cmd.inputs.bspline_order=3
+            n4_cmd.inputs.convergence_threshold=1e-6
+            n4_cmd.inputs.dimension=3
+            # n4_cmd.inputs.environ=
+            n4_cmd.inputs.mask_image=mask
+            n4_cmd.inputs.n_iterations=[50,50,50,50]
+            n4_cmd.inputs.num_threads=multiprocessing.cpu_count()
+            n4_cmd.inputs.output_image=biasimg
+            n4_cmd.inputs.shrink_factor=3
+            #n4_cmd.inputs.weight_image=
             if not os.path.isfile(biasimg) or repeat:
                 logger.info("- bias correcting " + truncated_img)
-                # apply N4 bias correction
-                n4_cmd = N4BiasFieldCorrection()
-                n4_cmd.inputs.copy_header=True
-                n4_cmd.inputs.input_image=truncated_img
-                n4_cmd.inputs.save_bias=True
-                n4_cmd.inputs.bias_image=biasfile
-                n4_cmd.inputs.bspline_fitting_distance=300
-                n4_cmd.inputs.bspline_order=3
-                n4_cmd.inputs.convergence_threshold=1e-6
-                n4_cmd.inputs.dimension=3
-                # n4_cmd.inputs.environ=
-                n4_cmd.inputs.mask_image=mask
-                n4_cmd.inputs.n_iterations=[50,50,50,50]
-                n4_cmd.inputs.num_threads=multiprocessing.cpu_count()
-                n4_cmd.inputs.output_image=biasimg
-                n4_cmd.inputs.shrink_factor=3
-                #n4_cmd.inputs.weight_image=
                 logger.debug(n4_cmd.cmdline)
                 _ = n4_cmd.run()
                 ser_dict[srs].update({"filename_bias": biasimg})
             else:
                 logger.info("- bias corrected image already exists at " + biasimg)
+                logger.debug(n4_cmd.cmdline)
                 ser_dict[srs].update({"filename_bias": biasimg})
     return ser_dict
 
@@ -903,19 +917,20 @@ def make_nii4d(ser_dict, repeat=False):
         bdir = os.path.dirname(files[0])
         nii4d = os.path.join(bdir, idno + "_nii4d.nii.gz")
         # if nii4d doesn't exist, make it
+        #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
+        #os.system(nii4dcmd)
+        merger = Merge()
+        merger.inputs.in_files = files
+        merger.inputs.dimension = "t"
+        merger.inputs.merged_file = nii4d
+        merger.terminal_output = "none"
         if not os.path.isfile(nii4d) or repeat:
             logger.info("- creating 4D nii at " + nii4d)
-            #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
-            #os.system(nii4dcmd)
-            merger = Merge()
-            merger.inputs.in_files = files
-            merger.inputs.dimension = "t"
-            merger.inputs.merged_file = nii4d
-            merger.terminal_output = "none"
             logger.debug(merger.cmdline)
             merger.run()
         else:
             logger.info("- 4D Nii already exists at " + nii4d)
+            logger.debug(merger.cmdline)
     else:
         logger.info("- not enough files to make 4D Nii")
     return ser_dict
