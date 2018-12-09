@@ -191,7 +191,7 @@ def _affine_transform(input_img, affine, offset=None, order=1):
     return output_img
 
 
-def _normalize(input_img, mode='unit'):
+def _normalize(input_img, mode='zero_mean'):
     """
     Performs image normalization to zero mean, unit variance or to interval [0, 1].
     :param input_img: (np.ndarray) The input numpy array.
@@ -207,7 +207,10 @@ def _normalize(input_img, mode='unit'):
     # handle zero mean mode
     if mode == 'zero_mean':
         # perform normalization to zero mean unit variance
-        input_img = np.where(input_img!=0, input_img - input_img.mean(), 0) / input_img.var()
+        nzi = np.nonzero(input_img)
+        mean = np.mean(input_img[nzi], None)
+        std = np.std(input_img[nzi], None)
+        input_img = np.where(input_img != 0., (input_img - mean) / std, 0.)
 
     # handle unit mode
     if mode == 'unit':

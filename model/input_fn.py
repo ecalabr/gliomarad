@@ -184,23 +184,33 @@ def _load_single_study_crop_mask(study_dir, file_prefixes, mask_prefix, dim_out,
     return output, inds
 
 
-def _normalize(input_numpy):
+def _normalize(input_img, mode='zero_mean'):
     """
-    Performs image normalization to zero mean, unit variance.
-    :param input_numpy: The input numpy array
-    :return: The input array normalized to zero mean, unit variance or [0, 1]
+    Performs image normalization to zero mean, unit variance or to interval [0, 1].
+    :param input_img: (np.ndarray) The input numpy array.
+    :param mode: (str) The normalization mode: 'unit' for scaling to [0,1] or 'zero_mean' for zero mean, unit variance.
+    :return: The input array normalized to zero mean, unit variance or [0, 1].
     """
 
-    # perform normalization to zero mean unit variance
-    nzi = np.nonzero(input_numpy)
-    mean = np.mean(input_numpy[nzi], None)
-    std = np.std(input_numpy[nzi], None)
-    input_numpy = np.where(input_numpy != 0., (input_numpy - mean) / std, 0.)
+    # sanity checks
+    if not isinstance(input_img, np.ndarray):
+        raise TypeError("Input image should be np.ndarray but is: " + str(type(input_img)))
+    if mode not in ['unit', 'zero_mean']: raise ValueError("Mode must be 'unit' or 'zero_mean' but is: " + str(mode))
 
-    # perform normalization to [0, 1]
-    # input_numpy *= 1.0 / input_numpy.max()
+    # handle zero mean mode
+    if mode == 'zero_mean':
+        # perform normalization to zero mean unit variance
+        nzi = np.nonzero(input_img)
+        mean = np.mean(input_img[nzi], None)
+        std = np.std(input_img[nzi], None)
+        input_img = np.where(input_img != 0., (input_img - mean) / std, 0.)
 
-    return input_numpy
+    # handle unit mode
+    if mode == 'unit':
+        # perform normalization to [0, 1]
+        input_img *= 1.0 / input_img.max()
+
+    return input_img
 
 
 def _nonzero_slice_inds(input_numpy):
@@ -443,7 +453,6 @@ def _load_multicon_and_labels_mask(study_dir, feature_prefx, label_prefx, mask_p
         labels, labels_nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt)
         # load multi-contrast data
         data, _ = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=labels_nzi, norm=True)
-        data = _normalize(data)
 
     # if augmentation is to be used generate random params for augmentation and run augment function
     if augment == 'yes':
