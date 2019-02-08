@@ -65,8 +65,8 @@ def predict(model_spec, model_dir, params, infer_dir):
         # Initialize the lookup table
         sess.run(model_spec['variable_init_op'])
 
-        # Reload last weights from the weights subdirectory
-        save_path = os.path.join(model_dir, 'last_weights')
+        # Reload best weights from the weights subdirectory
+        save_path = os.path.join(model_dir, 'best_weights')
         logging.info("Restoring parameters from {}".format(save_path))
         if os.path.isdir(save_path):
             save_path = tf.train.latest_checkpoint(save_path)
@@ -101,7 +101,7 @@ def predict(model_spec, model_dir, params, infer_dir):
     predictions = predictions * mask
 
     # convert to nifti format and save
-    nii_out = os.path.join(pred_dir, name_prefix + '_predictions.nii.gz')
+    nii_out = os.path.join(pred_dir, name_prefix + '_predictions_best.nii.gz')
     img = nib.Nifti1Image(predictions, affine)
     logging.info("Saving predictions to: " + nii_out)
     nib.save(img, nii_out)

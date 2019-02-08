@@ -375,7 +375,7 @@ def deep_embed_net(features, params, is_training, reuse=False):
     tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
 
     # concatenate all recons and return as one tensor, which will be # of embedding blocks + 1 different predicitons
-    tensor = tf.concat([tensor, recons], axis=-1, name=name + '_final_embed_concat')
+    tensor = tf.concat([tensor, recons], axis=-1, name='final_embed_concat')
 
     return tensor
 

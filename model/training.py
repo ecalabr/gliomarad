@@ -40,6 +40,7 @@ def train_sess(sess, model_spec, writer, params):
                                                                   summary_op, global_step])
                 # Write summaries for tensorboard
                 writer.add_summary(summ, global_step_val)
+                logging.info("Global step = " + str(global_step_val))
             else:
                 _, _, loss_val = sess.run([train_op, update_metrics, loss])
                 logging.info("Batch = " + str(n).zfill(6) + " Loss = " + "%010.2f" % loss_val)

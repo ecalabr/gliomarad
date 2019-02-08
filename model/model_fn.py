@@ -45,7 +45,7 @@ def model_fn(inputs, params, mode, reuse=False):
             predictions = tf.expand_dims(predictions[:, :, :, 0], axis=-1)
 
     # add other training metrics
-    error = tf.reduce_mean(tf.cast(tf.losses.absolute_difference(labels=labels, predictions=predictions), tf.float32))
+    # error = tf.reduce_mean(tf.cast(tf.losses.absolute_difference(labels=labels, predictions=predictions), tf.float32))
 
     # Define training step that minimizes the loss with the Adam optimizer
     train_op = []
@@ -76,14 +76,14 @@ def model_fn(inputs, params, mode, reuse=False):
 
     # Summaries for training
     tf.summary.scalar('loss', loss)
-    tf.summary.scalar('error', error)
+    # tf.summary.scalar('error', error)
 
     # Define model_spec. It contains all nodes or operations in the graph that will be used for training and evaluation
     model_spec = inputs
     model_spec['variable_init_op'] = tf.group(*[tf.global_variables_initializer(), tf.tables_initializer()])
     model_spec['predictions'] = predictions
     model_spec['loss'] = loss
-    model_spec['error'] = error
+    # model_spec['error'] = error
     model_spec['metrics_init_op'] = metrics_init_op
     model_spec['metrics'] = metrics
     model_spec['update_metrics'] = update_metrics_op
