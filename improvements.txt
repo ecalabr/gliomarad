@@ -7,3 +7,6 @@ test residual layer and upsample residual layer
 get bneck resid working, particularly with upsampling?
 
 need to figure out how prefetch and shuffling works for complex input pipeline
+
+numbering of matched series and keeper series do not match in gbm_prep
+consider adding "gad" back to "not" list for T1 images

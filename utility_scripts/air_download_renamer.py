@@ -5,8 +5,8 @@ import os
 import subprocess
 import csv
 
-data_dir = "/home/ecalabr/Downloads/download_18"
-patient_csv = "/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--9-23-18.csv"
+data_dir = "/mnt/DE1A2F2D1A2F01DF/new_gbm_download"
+patient_csv = "/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--2-11-19.csv"
 
 # get patient list
 mrn_list = []

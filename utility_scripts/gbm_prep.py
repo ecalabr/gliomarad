@@ -45,17 +45,17 @@ def read_dicom_dir(dcm_dir, rep=False):
 
 
 # Define global variables and required files and check that they exist
-reg_atlas = "/media/ecalabr/data/support_files/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz"
-dti_index = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55_index.txt"
-dti_acqp = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55_acqp.txt"
-dti_bvec = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55.bvec"
-dti_bval = "/media/ecalabr/data/support_files/DTI_files/GE_hardi_55.bval"
+reg_atlas = "/mnt/DE1A2F2D1A2F01DF/gbm_data/support_files/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz"
+dti_index = "/mnt/DE1A2F2D1A2F01DF/gbm_data/support_files/DTI_files/GE_hardi_55_index.txt"
+dti_acqp = "/mnt/DE1A2F2D1A2F01DF/gbm_data/support_files/DTI_files/GE_hardi_55_acqp.txt"
+dti_bvec = "/mnt/DE1A2F2D1A2F01DF/gbm_data/support_files/DTI_files/GE_hardi_55.bvec"
+dti_bval = "/mnt/DE1A2F2D1A2F01DF/gbm_data/support_files/DTI_files/GE_hardi_55.bval"
 for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
     if not os.path.isfile(file_path):
         sys.exit("Could not find required file: " + file_path)
 
 # Define dicom directory and get a list of zip files from a dicom zip folder
-dcm_data_dir = "/media/ecalabr/data/qc_complete/"
+dcm_data_dir = "/mnt/DE1A2F2D1A2F01DF/new_gbm_download/"
 dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
 dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
 

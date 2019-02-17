@@ -55,9 +55,10 @@ def make_log(work_dir):
 
 # first check for series_dict to find the appropriate image series from the dicom folder
 # matching strings format is [[strs to match AND], OR [strs to match AND]
+# for NOT strings that are in all caps, the algorithm will ensure the series does not start with that string
 def make_serdict(reg_atlas, dcm_dir):
     t1_str = [["ax t1"], ["ax", "3d", "bravo", "brainnav"], ["fspgr", "pre", "t1"]]
-    t1_not = ["post", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp"]
+    t1_not = ["post", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp", "GAD", " GAD"]
     t2_str = [["t2"]]
     t2_not = ["flair", "optic", "motor", "track", "tract", "radiation", "reform"]
     flair_str = [["flair"]]
@@ -127,10 +128,10 @@ def get_series(dicom_dir):
         dicoms.append(glob(direc + "/*.dcm"))
         hdrs.append(dicom.read_file(dicoms[ind][0]))
         try:
-            series.append(hdrs[ind].SeriesDescription)
+            series.append(hdrs[ind].SeriesDescription + " [dir=" + direc[-5:] + "]")
         except Exception:
             logger.info("- Skipping series " + str(ind + 1) + " without series description")
-            series.append("none")
+            series.append("none"  + " [dir=" + direc[-5:] + "]")
 
     # save series list
     series_file = os.path.join(os.path.dirname(dicom_dir), idno + "_series_list.txt")
@@ -159,7 +160,7 @@ def get_series(dicom_dir):
             try:
                 fileout.write("%s" % str(hdrs[ind].ImagesInAcquisition))
             except Exception:
-                pass
+                fileout.write("%s" % "None" )
             fileout.write("%s" % "\tacqtime=")
             try:
                 fileout.write("%s" % str(hdrs[ind].AcquisitionTime))
@@ -175,6 +176,10 @@ def substr_list(strings, substrs, substrnot):
     logger = logging.getLogger("my_logger")
     # define variables
     inds = []
+    # determine if any not strings are all caps, if  so treat them as "does not start with this string"
+    substrnotstart = [x.lower() for x in substrnot if x.isupper()]
+    # remove all caps (not starts with) substrs from the substrnot list
+    substrnot = [x for x in substrnot if not x.isupper()]
     # for each input series description
     number = 1
     for ind, string in enumerate(strings, 0):
@@ -182,8 +187,10 @@ def substr_list(strings, substrs, substrnot):
         # for each substr list in substrs
         for substrlist in substrs:
             # if all substrs match and no NOT substrs match then append to matches
+            # also, if there are any all caps NOT substrs, make sure the string does not start with that substr
             if all(ss.lower() in string.lower() for ss in substrlist) \
-                    and not any(ssn.lower() in string.lower() for ssn in substrnot):
+                    and not any(ssn.lower() in string.lower() for ssn in substrnot) \
+                    and not any(string.lower().startswith(ssns) for ssns in substrnotstart):
                 inds.append(ind)
                 match = True
         if match:
@@ -765,25 +772,32 @@ def brain_mask(ser_dict, repeat=False):
 
     # now apply to all other images if mask exists
     if os.path.isfile(combined_mask):
-        mask_cmd = ApplyMask()  # ensure this is defined early to prevent error, this line can be removed if needed
         for sers in ser_dict:
             if "filename_reg" in ser_dict[sers]:  # check that filename_reg entry exists
                 os.path.join(os.path.dirname(dcm_dir), idno + "_" + sers + "_wm.nii.gz")
                 ser_masked = ser_dict[sers]["filename_reg"].rsplit(".nii", 1)[0] + "m.nii.gz"
+
                 if repeat or (not os.path.isfile(ser_masked) and os.path.isfile(ser_dict[sers]["filename_reg"])):
                     # apply mask using fsl maths
-                    mask_cmd = ApplyMask()
-                    mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
-                    mask_cmd.inputs.mask_file = combined_mask
-                    mask_cmd.inputs.out_file = ser_masked
-                    mask_cmd.terminal_output = "none"
                     if not ser_dict[sers]["filename_reg"] == ser_dict[sers]["filename"]:
                         logger.info("- masking " + ser_dict[sers]["filename_reg"])
+                        # prep command line regardless of whether or not work will be done
+                        mask_cmd = ApplyMask()
+                        mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
+                        mask_cmd.inputs.mask_file = combined_mask
+                        mask_cmd.inputs.out_file = ser_masked
+                        mask_cmd.terminal_output = "none"
                         logger.debug(mask_cmd.cmdline)
                         _ = mask_cmd.run()
                         ser_dict[sers].update({"filename_masked": ser_masked})
                 elif os.path.isfile(ser_masked):
                     logger.info("- masked file already exists for " + sers + " at " + ser_masked)
+                    # prep command line regardless of whether or not work will be done
+                    mask_cmd = ApplyMask()
+                    mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
+                    mask_cmd.inputs.mask_file = combined_mask
+                    mask_cmd.inputs.out_file = ser_masked
+                    mask_cmd.terminal_output = "none"
                     logger.debug(mask_cmd.cmdline)
                     ser_dict[sers].update({"filename_masked": ser_masked})
                 elif sers == "info":
@@ -812,58 +826,61 @@ def bias_correct(ser_dict, repeat=False):
             # get name of masked file and the mask itself
             f = os.path.join(os.path.dirname(dcm_dir), idno + "_" + srs + "_wm.nii.gz")
             mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
-            assert os.path.isfile(mask)
-            assert os.path.isfile(f)
-            # generate output filenames for corrected image and bias field
-            biasfile = f.rsplit(".nii", 1)[0] + "_biasmap.nii.gz"
-            truncated_img = f.rsplit(".nii", 1)[0] + "t.nii.gz"
-            biasimg = truncated_img.rsplit(".nii", 1)[0] + "b.nii.gz"
-            # first truncate image intensities, this also removes any negative values
-            if not os.path.isfile(truncated_img) or repeat:
-                logger.info("- truncating image intensities for " + f)
-                thresh = [0.001, 0.999]  # define thresholds
-                mask_img = nib.load(mask)  # load data
-                mask_img = mask_img.get_data()
-                nii = nib.load(f)
-                img = nii.get_data()
-                affine = nii.get_affine()
-                vals = np.sort(img[mask_img>0.], None)  # sort data in order
-                thresh_lo = vals[int(np.round(thresh[0] * len(vals)))]  # define hi and low thresholds
-                thresh_hi = vals[int(np.round(thresh[1] * len(vals)))]
-                img_trunc = np.where(img<thresh_lo, thresh_lo, img)  # truncate low
-                img_trunc = np.where(img_trunc>thresh_hi, thresh_hi, img_trunc)  # truncate hi
-                img_trunc = np.where(mask_img>0., img_trunc, 0.)  # remask data
-                nii = nib.Nifti1Image(img_trunc, affine)  # make nii and save
-                nib.save(nii, str(truncated_img))
+            if not os.path.isfile(f):
+                logger.info("-skipping bias correction for " + srs + " as masked file does not exist.")
+            elif not os.path.isfile(mask):
+                logger.info("-skipping bias correction for " + srs + " as mask image does not exist.")
             else:
-                logger.info("- truncated image already exists at " + truncated_img)
-            # run bias correction on truncated image
-            # apply N4 bias correction
-            n4_cmd = N4BiasFieldCorrection()
-            n4_cmd.inputs.copy_header=True
-            n4_cmd.inputs.input_image=truncated_img
-            n4_cmd.inputs.save_bias=True
-            n4_cmd.inputs.bias_image=biasfile
-            n4_cmd.inputs.bspline_fitting_distance=300
-            n4_cmd.inputs.bspline_order=3
-            n4_cmd.inputs.convergence_threshold=1e-6
-            n4_cmd.inputs.dimension=3
-            # n4_cmd.inputs.environ=
-            n4_cmd.inputs.mask_image=mask
-            n4_cmd.inputs.n_iterations=[50,50,50,50]
-            n4_cmd.inputs.num_threads=multiprocessing.cpu_count()
-            n4_cmd.inputs.output_image=biasimg
-            n4_cmd.inputs.shrink_factor=3
-            #n4_cmd.inputs.weight_image=
-            if not os.path.isfile(biasimg) or repeat:
-                logger.info("- bias correcting " + truncated_img)
-                logger.debug(n4_cmd.cmdline)
-                _ = n4_cmd.run()
-                ser_dict[srs].update({"filename_bias": biasimg})
-            else:
-                logger.info("- bias corrected image already exists at " + biasimg)
-                logger.debug(n4_cmd.cmdline)
-                ser_dict[srs].update({"filename_bias": biasimg})
+                # generate output filenames for corrected image and bias field
+                biasfile = f.rsplit(".nii", 1)[0] + "_biasmap.nii.gz"
+                truncated_img = f.rsplit(".nii", 1)[0] + "t.nii.gz"
+                biasimg = truncated_img.rsplit(".nii", 1)[0] + "b.nii.gz"
+                # first truncate image intensities, this also removes any negative values
+                if not os.path.isfile(truncated_img) or repeat:
+                    logger.info("- truncating image intensities for " + f)
+                    thresh = [0.001, 0.999]  # define thresholds
+                    mask_img = nib.load(mask)  # load data
+                    mask_img = mask_img.get_data()
+                    nii = nib.load(f)
+                    img = nii.get_data()
+                    affine = nii.get_affine()
+                    vals = np.sort(img[mask_img>0.], None)  # sort data in order
+                    thresh_lo = vals[int(np.round(thresh[0] * len(vals)))]  # define hi and low thresholds
+                    thresh_hi = vals[int(np.round(thresh[1] * len(vals)))]
+                    img_trunc = np.where(img<thresh_lo, thresh_lo, img)  # truncate low
+                    img_trunc = np.where(img_trunc>thresh_hi, thresh_hi, img_trunc)  # truncate hi
+                    img_trunc = np.where(mask_img>0., img_trunc, 0.)  # remask data
+                    nii = nib.Nifti1Image(img_trunc, affine)  # make nii and save
+                    nib.save(nii, str(truncated_img))
+                else:
+                    logger.info("- truncated image already exists at " + truncated_img)
+                # run bias correction on truncated image
+                # apply N4 bias correction
+                n4_cmd = N4BiasFieldCorrection()
+                n4_cmd.inputs.copy_header=True
+                n4_cmd.inputs.input_image=truncated_img
+                n4_cmd.inputs.save_bias=True
+                n4_cmd.inputs.bias_image=biasfile
+                n4_cmd.inputs.bspline_fitting_distance=300
+                n4_cmd.inputs.bspline_order=3
+                n4_cmd.inputs.convergence_threshold=1e-6
+                n4_cmd.inputs.dimension=3
+                # n4_cmd.inputs.environ=
+                n4_cmd.inputs.mask_image=mask
+                n4_cmd.inputs.n_iterations=[50,50,50,50]
+                n4_cmd.inputs.num_threads=multiprocessing.cpu_count()
+                n4_cmd.inputs.output_image=biasimg
+                n4_cmd.inputs.shrink_factor=3
+                #n4_cmd.inputs.weight_image=
+                if not os.path.isfile(biasimg) or repeat:
+                    logger.info("- bias correcting " + truncated_img)
+                    logger.debug(n4_cmd.cmdline)
+                    _ = n4_cmd.run()
+                    ser_dict[srs].update({"filename_bias": biasimg})
+                else:
+                    logger.info("- bias corrected image already exists at " + biasimg)
+                    logger.debug(n4_cmd.cmdline)
+                    ser_dict[srs].update({"filename_bias": biasimg})
     return ser_dict
 
 # normalize nifits
