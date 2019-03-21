@@ -4,7 +4,7 @@ import logging
 import os
 from model.utils import Params, set_logger
 from model.prediction import predict
-from model.input_fn import infer_input_fn
+from model.patch_input_fn import infer_input_fn
 from model.model_fn import model_fn
 
 
@@ -14,6 +14,8 @@ parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_p
                     help="Path to params.json")
 parser.add_argument('--infer_dir', default='/media/ecalabr/data2/qc_complete/12309838',
                     help="Path to directory to generate inference from")
+parser.add_argument('--best_last', default='best_weights',
+                    help="Either 'best_weights' or 'last_weights' - whether to use best or last model weights for inference")
 
 if __name__ == '__main__':
 
@@ -22,6 +24,9 @@ if __name__ == '__main__':
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
     params = Params(args.param_file)
     infer_dir = args.infer_dir
+    best_last = args.best_last
+    if best_last not in ['best_weights', 'last_weights']:
+        raise ValueError("Did not understand best_last value: " + str(best_last))
 
     # determine model dir
     if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
@@ -49,4 +54,4 @@ if __name__ == '__main__':
     logging.info("- done.")
 
     # predict using the model
-    predict(infer_model_spec, params.model_dir, params, infer_dir)
+    predict(infer_model_spec, params.model_dir, params, infer_dir, best_last)

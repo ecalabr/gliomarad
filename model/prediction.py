@@ -21,7 +21,7 @@ def predict_sess(sess, model_spec):
 
     # compute predictions over the dataset
     predictions = []
-    n=1
+    n=0
     while True:
         try:
             prediction = sess.run(model_spec['predictions'])
@@ -40,13 +40,14 @@ def predict_sess(sess, model_spec):
     return predictions
 
 
-def predict(model_spec, model_dir, params, infer_dir):
+def predict(model_spec, model_dir, params, infer_dir, best_last):
     """Evaluate the model
     Args:
         model_spec: (dict) contains the graph operations or nodes needed for evaluation
         model_dir: (string) directory containing config, weights and log
         params: (Params) contains hyperparameters of the model.
         infer_dir: (str) the path to the directory for inference
+        best_last: (str) in ['best_weights', 'last_weights'] - whether to use best or last model weights for inference
                 Must define: num_epochs, train_size, batch_size, eval_size, save_summary_steps
     """
 
@@ -66,7 +67,7 @@ def predict(model_spec, model_dir, params, infer_dir):
         sess.run(model_spec['variable_init_op'])
 
         # Reload best weights from the weights subdirectory
-        save_path = os.path.join(model_dir, 'best_weights')
+        save_path = os.path.join(model_dir, best_last)
         logging.info("Restoring parameters from {}".format(save_path))
         if os.path.isdir(save_path):
             save_path = tf.train.latest_checkpoint(save_path)
@@ -90,18 +91,31 @@ def predict(model_spec, model_dir, params, infer_dir):
         if predictions.shape[-1] > 1:
             predictions = np.expand_dims(predictions[:, :, :, 0], axis=-1)
 
-    # make predictions the correct shape (same as input data)
+    # convert to batch dim last and squeeze channels dim
     permute = [2, 3, 0, 1] if params.data_format == 'channels_first' else [1, 2, 0, 3]
     predictions = np.squeeze(np.transpose(predictions, axes=permute))
-    pads = ((0, 0), (0, 0), (0, shape[2]-predictions.shape[-1]))
-    predictions = np.pad(predictions[0:shape[0], 0:shape[1], :], pads, 'constant')
+
+    # convert back to axial
+    if params.data_plane == 'ax':
+        #predictions = np.transpose(predictions, axes=(0, 1, 2, 3))
+        pass
+    elif params.data_plane == 'cor':
+        predictions = np.transpose(predictions, axes=(0, 2, 1))
+    elif params.data_plane == 'sag':
+        predictions = np.transpose(predictions, axes=(2, 0, 1))
+        pass
+    else:
+        raise ValueError("Did not understand specified plane: " + str(params.data_plane))
+
+    # crop back to original shape (same as input data)
+    predictions = predictions[0:shape[0], 0:shape[1], 0:shape[2]]
 
     # mask predictions based on input data
     mask = nii.get_data() > 0
     predictions = predictions * mask
 
     # convert to nifti format and save
-    nii_out = os.path.join(pred_dir, name_prefix + '_predictions_best.nii.gz')
+    nii_out = os.path.join(pred_dir, name_prefix + '_predictions_' + best_last + '.nii.gz')
     img = nib.Nifti1Image(predictions, affine)
     logging.info("Saving predictions to: " + nii_out)
     nib.save(img, nii_out)

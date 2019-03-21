@@ -24,6 +24,7 @@ class Params:
     data_prefix = None
     label_prefix = None
     mask_prefix = None
+    data_plane = None
     train_dims = None
     infer_dims = None
     augment_train_data = None

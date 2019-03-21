@@ -2,7 +2,7 @@ import os
 from glob import glob
 
 # main directory containing subdirs with processed data
-data_dir = "/media/ecalabr/data2/qc_complete"
+data_dir = "/media/ecalabr/data1/new_gbm_download"
 
 # list all subdirs with the processed data
 direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
@@ -21,8 +21,8 @@ if isinstance(direcs, str):
 # run ITK-snap on each one
 for i, direc in enumerate(direcs, 1):
     t1gad = glob(direc + "/*T1gad_w.nii.gz")
-    #mask = glob(direc + "/*combined_brain_mask.nii.gz")
-    mask = glob(direc + "/*tumor_seg.nii.gz")
+    mask = glob(direc + "/*combined_brain_mask.nii.gz")
+    #mask = glob(direc + "/*tumor_seg.nii.gz")
     if t1gad and mask:
         t1gad = t1gad[0]
         mask = mask[0]

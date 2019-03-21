@@ -7,7 +7,7 @@ from model.utils import Params
 from model.utils import set_logger
 from model.training import train_and_evaluate
 from model.patch_input_fn import patch_input_fn
-from model.input_fn import input_fn
+from model.patch_input_fn import patch_input_fn_3d
 from model.model_fn import model_fn
 
 
@@ -41,10 +41,16 @@ if __name__ == '__main__':
     set_logger(log_path)
     logging.info("Log file created at " + log_path)
 
-    # Create the two iterators over the two datasets
+    # Determine if 2d or 3d and create the two iterators over the two datasets
     logging.info("Generating dataset objects...")
-    train_inputs = patch_input_fn(mode='train', params=params)
-    eval_inputs = patch_input_fn(mode='eval', params=params)
+    if len(params.train_dims) < 3:  # handle 2d inputs
+        train_inputs = patch_input_fn(mode='train', params=params)
+        eval_inputs = patch_input_fn(mode='eval', params=params)
+    elif len(params.train_dims) == 3:  # handle 3d inputs
+        train_inputs = patch_input_fn_3d(mode='train', params=params)
+        eval_inputs = patch_input_fn_3d(mode='eval', params=params)
+    else:
+        raise ValueError("Training dimensions must be shape 2 or 3 but is: " + str(params.train_dims))
     logging.info("- done.")
 
     # Define the models (2 different set of nodes that share weights for train and eval)

@@ -9,6 +9,7 @@ import scipy.ndimage.interpolation as interp
 import tensorflow as tf
 from random import shuffle
 
+raise Exception("INPUT_FN.PY IS DEPRECIATED USE PATCH_INPUT_FN.PY instead")
 
 def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, norm=False):
     """
