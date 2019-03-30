@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     # Determine if 2d or 3d and create the two iterators over the two datasets
     logging.info("Generating dataset objects...")
-    if len(params.train_dims) < 3:  # handle 2d inputs
+    if len(params.train_dims) == 2:  # handle 2d inputs
         train_inputs = patch_input_fn(mode='train', params=params)
         eval_inputs = patch_input_fn(mode='eval', params=params)
     elif len(params.train_dims) == 3:  # handle 3d inputs

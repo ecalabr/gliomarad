@@ -203,6 +203,19 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             else:  # for all subsequent loops, add the loss times 0.5, as these are auxiliary losses
                 loss_function = tf.add(loss_function, loss * 0.5)
 
+    # 2.5D MSE loss
+    elif loss_method == 'MSE3D':
+        # get center slice
+        center_pred = predictions[:, : , :, predictions.shape[3] / 2 + 1]
+        center_lab = labels[:, : , :, labels.shape[3] / 2 + 1]
+        center_weights = weights[:, : , :, weights.shape[3] / 2 + 1]
+
+        # define loss
+        loss_function = tf.losses.mean_squared_error(center_lab, center_pred, center_weights)
+
+        # add remaining slices at equal weight
+        loss_function = tf.add(loss_function, tf.losses.mean_squared_error(labels, predictions, weights))
+
     # not implemented loss
     else:
         raise NotImplementedError("Specified loss method is not implemented: " + loss_method)
@@ -210,11 +223,12 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
     return loss_function
 
 
-def display_tf_dataset(dataset_data, data_format):
+def display_tf_dataset(dataset_data, data_format, data_dims):
     """
     Displays tensorflow dataset output images and labels/regression images.
     :param dataset_data: (tf.tensor) output from tf dataset function containing images and labels/regression image
     :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param data_dims: (list or tuple of ints) the data dimensions that come out of the input function
     :return: displays images for 3 seconds then continues
     """
 
@@ -224,29 +238,79 @@ def display_tf_dataset(dataset_data, data_format):
     # define close event and create timer
     def close_event():
         plt.close()
-    timer = fig.canvas.new_timer(interval=4000)
+    timer = fig.canvas.new_timer(interval=3000)
     timer.add_callback(close_event)
 
-    # image data
-    image_data = dataset_data["features"]  # dataset_data[0]
-    if len(image_data.shape) > 3:
-        image_data = np.squeeze(image_data[0, :, :, :])  # handle batch data
-    nplots = image_data.shape[0] + 1 if data_format == 'channels_first' else image_data.shape[2] + 1
-    channels = image_data.shape[0] if data_format == 'channels_first' else image_data.shape[2]
-    for z in range(channels):
-        ax = fig.add_subplot(1, nplots, z + 1)
-        img = np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1) if data_format == 'channels_first' else np.squeeze(
-            image_data[:, :, z])
-        ax.imshow(img, cmap='gray')
-        ax.set_title('Data Image ' + str(z + 1))
+    # handle 2d case
+    if len(data_dims) == 2:
+        # image data
+        image_data = dataset_data["features"]  # dataset_data[0]
+        if len(image_data.shape) > 3:
+            image_data = np.squeeze(image_data[0, :, :, :])  # handle batch data
+        nplots = image_data.shape[0] + 1 if data_format == 'channels_first' else image_data.shape[2] + 1
+        channels = image_data.shape[0] if data_format == 'channels_first' else image_data.shape[2]
+        for z in range(channels):
+            ax = fig.add_subplot(1, nplots, z + 1)
+            data_img = np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1) if data_format == 'channels_first' else np.squeeze(
+                image_data[:, :, z])
+            ax.imshow(data_img, cmap='gray')
+            ax.set_title('Data Image ' + str(z + 1))
 
-    # label data
-    label_data = dataset_data["labels"]  # dataset_data[1]
-    if len(label_data.shape) > 3: label_data = np.squeeze(label_data[0, :, :, :])  # handle batch data
-    ax = fig.add_subplot(1, nplots, nplots)
-    img = np.swapaxes(np.squeeze(label_data), 0, 1) if data_format == 'channels_first' else np.squeeze(label_data)
-    ax.imshow(img, cmap='gray')
-    ax.set_title('Labels')
+        # label data
+        label_data = dataset_data["labels"]  # dataset_data[1]
+        if len(label_data.shape) > 3: label_data = np.squeeze(label_data[0, :, :, :])  # handle batch data
+        ax = fig.add_subplot(1, nplots, nplots)
+        label_img = np.swapaxes(np.squeeze(label_data), 0, 1) if data_format == 'channels_first' else np.squeeze(label_data)
+        ax.imshow(label_img, cmap='gray')
+        ax.set_title('Labels')
+
+    # handle 3d case
+    if len(data_dims) == 3:
+
+        # load image data
+        image_data = dataset_data["features"]  # dataset_data[0]
+
+        # handle channels first and batch data
+        if len(image_data.shape) > 4:
+            if data_format == 'channels_first':
+                image_data = np.transpose(image_data, [0, 2, 3, 4, 1])
+            image_data = np.squeeze(image_data[0, :, :, :, :])  # handle batch data
+        else:
+            if data_format == 'channels_first':
+                image_data = np.transpose(image_data, [1, 2, 3, 0])
+
+        # determine n plots and channels
+        nplots = image_data.shape[-1] + 1
+        channels = image_data.shape[-1]
+
+        # loop through channels
+        for z in range(channels):
+            ax = fig.add_subplot(1, nplots, z + 1)
+            data_img = np.squeeze(image_data[:, :, :, z])
+            # concatenate along z to make 1 2d image per slab
+            data_img = np.reshape(np.transpose(data_img), [data_img.shape[0] * data_img.shape[2], data_img.shape[1]])
+            ax.imshow(data_img, cmap='gray')
+            ax.set_title('Data Image ' + str(z + 1))
+
+        # load label data
+        label_data = dataset_data["labels"]  # dataset_data[1]
+
+        # handle channels first and batch data
+        if len(image_data.shape) > 4:
+            if data_format == 'channels_first':
+                label_data = np.transpose(label_data, [0, 2, 3, 4, 1])
+            label_data = np.squeeze(label_data[0, :, :, :, :])  # handle batch data
+        else:
+            if data_format == 'channels_first':
+                label_data = np.transpose(label_data, [1, 2, 3, 0])
+
+        # add to fig
+        ax = fig.add_subplot(1, nplots, nplots)
+        label_img = np.squeeze(label_data)
+        # concatenate along z to make 1 2d image per slab
+        label_img = np.reshape(np.transpose(label_img), [label_img.shape[0] * label_img.shape[2], label_img.shape[1]])
+        ax.imshow(label_img, cmap='gray')
+        ax.set_title('Labels')
 
     # start timer and show plot
     timer.start()

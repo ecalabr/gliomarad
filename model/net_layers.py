@@ -15,33 +15,34 @@ def _fixed_padding(inputs, kernel_size, strides, data_format='channels_last', ):
     :return: A tensor with the same format as the input with the data either intact or padded (if kernel_size > 1)
     """
 
-    # sanity checks
-    if isinstance(kernel_size, (list, tuple)): kernel_size = kernel_size[0]
-    if isinstance(strides, (list, tuple)): strides = strides[0]
-    if not isinstance(kernel_size, int): raise ValueError("Kernel size must be an int or list/tuple of ints")
-    if not isinstance(strides, int): raise ValueError("Strides must be an int or list/tuple of ints")
-    if data_format not in ['channels_first', 'channels_last']:
-        raise ValueError("Did not recognize data format: " + data_format)
+    # if 1D kernel or strides provided, assume 2D and square
+    if not isinstance(kernel_size, (list, tuple)): kernel_size = [kernel_size, kernel_size]
+    if not isinstance(strides, (list, tuple)): strides = [strides, strides]
+    if any([stride not in [1, 2] for stride in strides]) or not any([stride == 2 for stride in strides]):
+        raise ValueError("To use _fixed_padding, at least one stride must be 2, and no strides can be outside [1, 2]")
 
-    # determine pad start and end
-    pad_total = kernel_size - 1
-    p_beg = pad_total // 2
-    p_end = pad_total - p_beg
+    # define variable
+    pads = []
 
-    # handle 2D strides first
-    if strides == 2:
-        if data_format == 'channels_first':
-            padded_inputs = tf.pad(inputs, [[0, 0], [0, 0], [p_beg, p_end], [p_beg, p_end]])
-        else:  # must be channels_last
-            padded_inputs = tf.pad(inputs, [[0, 0], [p_beg, p_end], [p_beg, p_end], [0, 0]])
-    else:
-        raise ValueError("Stride must be 2 but is: " + str(strides))
+    # go through each dimension of input and determine padding
+    for kernel in kernel_size:
+        # determine pad start and end
+        pad_total = kernel - 1
+        p_beg = pad_total // 2
+        p_end = pad_total - p_beg
+        pads.append([p_beg, p_end])
+
+    # do padding according to data format
+    if data_format == 'channels_first':
+        padded_inputs = tf.pad(inputs, [[0, 0], [0, 0]] + pads)
+    else:  # must be channels_last
+        padded_inputs = tf.pad(inputs, [[0, 0]] + pads + [[0, 0]])
 
     return padded_inputs
 
 
 ################################################################################
-# Basic layer functions
+# Basic layer functions 2D
 ################################################################################
 
 
@@ -276,7 +277,105 @@ def upsample2d_layer(tensor, factor, data_format, name=None):
 
 
 ################################################################################
-# Layer building blocks
+# Basic layer functions 3D
+################################################################################
+
+
+def conv3d_fixed_pad(tensor, filters, kernel_size, strides, dilation, data_format, name=None, reuse=None):
+    """
+    3D strided convolutional layer with explicit padding.
+    The padding is consistent and is based only on `kernel_size`, not on the
+    dimensions of `inputs` (as opposed to using `tf.layers.conv3d` alone).
+    :param tensor: (tf.tensor) the input data tensor
+    :param filters: (int) the number of filters used for the layer
+    :param kernel_size: (tuple/list(int)) the convolution kernel size
+    :param strides: (tuple/list(int)) the strides for the convolution
+    :param dilation: (tuple/list(int)) the dilation used for the convolution
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :return: The 2d convolutional layer with the specified parameters
+    """
+
+    # sanity checks
+    if not len(kernel_size) == 3: raise ValueError("Kernel must be length 3, but is length " + str(len(kernel_size)))
+    if not len(strides) == 3: raise ValueError("Strides must be length 3, but is length " + str(len(strides)))
+    if not len(dilation) == 3: raise ValueError("dilation must be length 3, but is length " + str(len(dilation)))
+    if data_format not in ['channels_first', 'channels_last']:
+        raise ValueError("Did not recognize data format: " + data_format)
+
+    # determine if strided
+    strided = any([stride > 1 for stride in strides])
+    if strided:
+        tensor = _fixed_padding(tensor, kernel_size, strides, data_format)
+
+    return tf.layers.conv3d(
+        inputs=tensor,  # inputs
+        filters=filters,  # filters
+        kernel_size=kernel_size,  # kernel size
+        strides=strides,  # strides
+        padding=('valid' if strided else 'same'),  # if strided
+        data_format=data_format,  # data format
+        dilation_rate=dilation,  # dilation
+        activation=None,
+        use_bias=False,  # false since batch norm is used
+        kernel_initializer=tf.variance_scaling_initializer(),  # custom initializer
+        bias_initializer=tf.zeros_initializer(),
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
+        trainable=True,
+        name=name,  # name
+        reuse=reuse  # reuse
+    )
+
+
+def deconv3d_layer(inputs, filters, kernel_size, strides, data_format, name=None, reuse=None):
+    """
+    Strided 3-D transpose convolution layer, which can be used for upsampling using strides >= 2
+    :param inputs: (tf.tensor) the input data tensor
+    :param filters: (int) the number of filters used for the layer
+    :param kernel_size: (tuple/list(int)) the convolution kernel size
+    :param strides: (tuple/list(int)) the strides for the convolution
+    :param data_format: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :return: The 2d transpose convolutional layer
+    """
+
+    # sanity checks
+    if not len(kernel_size) == 3: raise ValueError("Kernel must be length 3, but is length " + str(len(kernel_size)))
+    if not len(strides) == 3: raise ValueError("Strides must be length 3, but is length " + str(len(strides)))
+    if data_format not in ['channels_first', 'channels_last']:
+        raise ValueError("Did not recognize data format: " + data_format)
+
+    # return 3d conv transpose layer
+    return tf.layers.conv3d_transpose(
+        inputs=inputs,  # inputs
+        filters=filters,  # filters
+        kernel_size=kernel_size,  # kernel size
+        strides=strides,  # strides
+        padding='same',  # padding
+        data_format=data_format,  # data format
+        activation=None,
+        use_bias=False,  # false since batch norm is use
+        kernel_initializer=tf.variance_scaling_initializer(),  # custom initializer
+        bias_initializer=tf.zeros_initializer(),
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
+        trainable=True,
+        name=name,
+        reuse=reuse
+    )
+
+
+################################################################################
+# Layer building blocks 2D
 ################################################################################
 
 
@@ -516,3 +615,60 @@ def embedding_block(tensor, ksize, filt, drpout, is_training, dfmt, act, name, r
     tensor = conv2d_block(tensor, filt, ksize, strd, dil, dfmt, layer_name, reuse, drpout, is_training, act)
 
     return tensor, embed_tensor
+
+
+################################################################################
+# Layer building blocks 3D
+################################################################################
+
+
+def resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dropout, is_training, act):
+    """
+    Creates a 3D single simple residual block with batch normalization and activation
+    Modeled after: https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py
+    :param tensor: (tf.tensor) the inputa data tensor
+    :param filt: (int) the number of filters for the convolutions
+    :param ksize: (list/tuple(int)) the kernel size for convolutions
+    :param strides: (list/tuple(int)) the strides for convolutions
+    :param dil: (list/tuple(int)) the dilation for convolutions
+    :param dfmt: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :param dropout: (float) the dropout rate, if zero, no dropout layer is applied
+    :param is_training: (bool) whether or not the model is training
+    :param act: (str) the name of te activation method, e.g. 'leaky_relu'
+    :return: returns a residual layer as defined in the resnet example above.
+    """
+
+    # define shortcut
+    shortcut = tensor
+
+    # determine if strided
+    if not isinstance(strides, (list, tuple)):
+        strides = [strides] * 3
+    strided = True if any(stride > 1 for stride in strides) else False
+
+    # handle identity versus projection shortcut for outputs of different dimension
+    if strided: # if strides are 2 for example, then project shortcut to output size
+        # accomplish projection with a 1x1 convolution
+        shortcut = conv3d_fixed_pad(tensor, filt, [1, 1, 1], strides, dil, dfmt, name + '_shrtct_conv', reuse)
+        shortcut = batch_norm(shortcut, is_training, dfmt, name + '_shrtct_bn', reuse)
+
+    # Convolution block 1
+    tensor = conv3d_fixed_pad(tensor, filt, ksize, strides, dil, dfmt, name + '_resid_conv1', reuse)
+    tensor = batch_norm(tensor, is_training, dfmt, name + '_resid_conv1_bn', reuse)
+    tensor = activation(tensor, act, name + '_resid_conv1_act')
+
+    # Convolution block 2 (force strides==1)
+    tensor = conv3d_fixed_pad(tensor, filt, ksize, [1, 1, 1], dil, dfmt, name + '_resid_conv2', reuse)
+    tensor = batch_norm(tensor, is_training, dfmt, name + '_resid_conv2_bn', reuse)
+
+    # fuse shortcut with outputs and do one final activation
+    tensor = tf.add(tensor, shortcut, name + '_resid_shrtct_add')
+    tensor = activation(tensor, act, name + '_resid_conv2_act')
+
+    # optional dropout layer
+    if dropout > 0.:
+        tensor = tf.layers.dropout(tensor, rate=dropout, training=is_training, name=name + '_dropout')
+
+    return tensor

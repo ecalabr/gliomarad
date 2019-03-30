@@ -428,20 +428,12 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     mask_bbox = _nonzero_slice_inds3d(mask)
     dim_sizes = [mask_bbox[1] - mask_bbox[0], mask_bbox[3] - mask_bbox[2], mask_bbox[5] - mask_bbox[4]]
 
-    # find the closest multiple of patch_size that encompasses the mask rounding up and get new inds centered on mask
-    add = [patchsize - (dimsize % patchsize) if dimsize % patchsize > 0 else 0 for patchsize, dimsize in zip(patch_size, dim_sizes)]
-    new_bbox = [mask_bbox[0] - np.floor(add[0] / 2.), mask_bbox[1] + np.ceil(add[0] / 2.),
-                mask_bbox[2] - np.floor(add[1] / 2.), mask_bbox[3] + np.ceil(add[1] / 2.),
-                mask_bbox[4], mask_bbox[5]]  # no adjustment needed in z for the 2d case
-    new_bbox = [int(item) for item in new_bbox]
-    new_dim_sizes = [new_bbox[1] - new_bbox[0], new_bbox[3] - new_bbox[2], new_bbox[5] - new_bbox[4]]
-
     # extract the region with zero padding to new bbox if needed
-    data_region = np.zeros(new_dim_sizes + [len(data_files)])
+    data_region = np.zeros(dim_sizes + [len(data_files)])
     for i in range(len(data_files)):
-        data_region[:, :, :, i] = _extract_region(data[:, :, :, i], tuple(new_bbox))
+        data_region[:, :, :, i] = _extract_region(data[:, :, :, i], tuple(mask_bbox))
     data = data_region
-    labels = _extract_region(labels, new_bbox)
+    labels = _extract_region(labels, mask_bbox)
 
     # permute to [batch, x, y, channels] for tensorflow patching
     if plane == 'ax':
@@ -512,7 +504,7 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     # load labels
     labels = nib.load(labels_file).get_fdata()
 
-    # center the tumor in the image usine affine, with optional rotation for data augmentation
+    # center the ROI in the image usine affine, with optional rotation for data augmentation
     if aug:  # if augmenting, select random rotation values for x, y, and z axes
         theta = 0.  # np.random.random() * (np.pi / 2.)  # rotation in yz plane
         phi = 0.  # np.random.random() * (np.pi / 2.)  # rotation in xz plane
@@ -537,20 +529,12 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     mask_bbox = _nonzero_slice_inds3d(mask)
     dim_sizes = [mask_bbox[1] - mask_bbox[0], mask_bbox[3] - mask_bbox[2], mask_bbox[5] - mask_bbox[4]]
 
-    # find the closest multiple of patch_size that encompasses the mask rounding up and get new inds centered on mask
-    delta = [patchsize - (dimsize % patchsize) if dimsize % patchsize > 0 else 0 for patchsize, dimsize in zip(patch_size, dim_sizes)]
-    new_bbox = [mask_bbox[0] - np.floor(delta[0] / 2.), mask_bbox[1] + np.ceil(delta[0] / 2.),
-                mask_bbox[2] - np.floor(delta[1] / 2.), mask_bbox[3] + np.ceil(delta[1] / 2.),
-                mask_bbox[4] - np.floor(delta[2] / 2.), mask_bbox[5] + np.ceil(delta[2] / 2.)]  # z adjustment for 3d case
-    new_bbox = [int(item) for item in new_bbox]
-    new_dim_sizes = [new_bbox[1] - new_bbox[0], new_bbox[3] - new_bbox[2], new_bbox[5] - new_bbox[4]]
-
     # extract the region with zero padding to new bbox if needed
-    data_region = np.zeros(new_dim_sizes + [len(data_files)])
+    data_region = np.zeros(dim_sizes + [len(data_files)])
     for i in range(len(data_files)):
-        data_region[:, :, :, i] = _extract_region(data[:, :, :, i], tuple(new_bbox))
+        data_region[:, :, :, i] = _extract_region(data[:, :, :, i], tuple(mask_bbox))
     data = data_region
-    labels = _extract_region(labels, new_bbox)
+    labels = _extract_region(labels, mask_bbox)
 
     # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
@@ -574,6 +558,73 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
         labels = np.transpose(labels, axes=[0, 4, 1, 2, 3])
 
     return data.astype(np.float32), labels.astype(np.float32)
+
+
+def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, plane='ax'):
+    """
+    Load multicontrast image data and target data/labels.
+    :param study_dir: (str) A directory containing the desired image data.
+    :param feature_prefx: (list) a list of filenames - the data files to be loaded
+    :param label_prefx: (list) a list containing one string, the labels to be loaded
+    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
+    :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
+    """
+
+    # sanity checks
+    if not len(out_dims == 3): raise ValueError("Infer dimensions must be length 3 but is: " + str(out_dims))
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
+    if not all([isinstance(a, str) for a in label_prefx]): raise ValueError("Labels prefixes must be strings")
+    if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
+        "data_dims must be a list/tuple of ints")
+
+    # load multi-contrast data
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)  # normalize input imgs
+
+    # load labels data
+    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane)
+
+    # generate batch size==1 format such that format is [1, x, y, z, c] or [1, c, x, y, z]
+    data = np.expand_dims(data, axis=0)
+    labels = np.expand_dims(labels, axis=0)
+
+    # do data padding to desired dims
+    axes = [1, 2, 3] if data_fmt == 'channels_last' else [2, 3, 4]
+    data = _zero_pad_image(data, out_dims, axes)
+    labels = _zero_pad_image(labels, out_dims, axes)
+
+    return data, labels
+
+
+def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, out_dims, plane):
+    """
+    Load multicontrast image data without cropping or otherwise adjusting size. For use with inference/prediction.
+    :param study_dir: (str) A directory containing the desired image data.
+    :param feature_prefx: (list) a list of filenames - the data files to be loaded
+    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
+    :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
+    """
+
+    # sanity checks
+    if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
+    if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
+    if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
+    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
+        "data_dims must be a list/tuple of ints")
+
+    # load multi-contrast data and normalize, no slice trimming for infer data
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, None],
+                                   norm=True, plane=plane)
+
+    # generate batch size==1 format such that format is [1, x, y, z, c] or [1, c, x, y, z]
+    data = np.expand_dims(data, axis=0)
+
+    return data
 
 
 ##############################################
@@ -620,13 +671,14 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format):
         data = tf.transpose(data, perm=[0, 2, 3, 4, 1])
         labels = tf.transpose(labels, perm=[0, 2, 3, 4, 1])
 
-    # make patches
+    # for sliding window 3d slabs, stride should be 1 in z dim, for x and y move 1/3 of the window
     ksizes = [1] + patch_size + [1]
-    strides = [1] + patch_size + [1]
-    rates = [1, 1, 1, 1, 1]
-    data = tf.extract_image_patches(data, ksizes=ksizes, strides=strides, rates=rates, padding='SAME')
+    strides = [1, patch_size[0] / 3 , patch_size[1] / 3, 1, 1]
+
+    # make patches
+    data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
     data = tf.reshape(data, [-1] + patch_size + [chan_dim])
-    labels = tf.extract_image_patches(labels, ksizes=ksizes, strides=strides, rates=rates, padding='SAME')
+    labels = tf.extract_volume_patches(labels, ksizes=ksizes, strides=strides, padding='SAME')
     labels = tf.reshape(labels, [-1] + patch_size + [1])
 
     # handle channels first
@@ -635,6 +687,22 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format):
         labels = tf.transpose(labels, perm=[0, 4, 1, 2, 3])
 
     return data, labels
+
+
+def _filter_zero_patches(data):
+
+    # if 3D get middle slice of labels, else use entire slice if 2D
+    if len(data['labels'].get_shape()) == 4: # [x, y, z, c]
+        mid_sl = data['labels'][:, :, data['labels'].get_shape()[2]/2 + 1, 0]
+    elif len(data['labels'].get_shape()) == 3: # [x, y, c]
+        mid_sl = data['labels'][:, :, 0]
+    else:
+        raise ValueError("Labels shape must be 2D or 3D but is: " + str((data['labels'].get_shape())))
+
+    # eliminate if label slice is 95% empty
+    thr = tf.constant(0.05, dtype=tf.float32)
+
+    return tf.less(thr, tf.count_nonzero(mid_sl, dtype=tf.float32) / tf.size(mid_sl, out_type=tf.float32))
 
 
 ##############################################
@@ -675,24 +743,26 @@ def patch_input_fn(mode, params):
                           params.data_format,
                           params.augment_train_data,
                           params.label_interp]
-        # map tensorflow dataset variable to data
+        # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
-        dataset = dataset.prefetch(buffer_size=10)
+        # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.py_func(_load_roi_multicon_and_labels,
                                  [x] + py_func_params,
                                  (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)
-        dataset = dataset.prefetch(buffer_size=10)
+        # map each dataset to a series of patches
         dataset = dataset.map(
             lambda x, y: _tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format),
             num_parallel_calls=params.num_threads)
-        dataset = dataset.prefetch(buffer_size=10)
+        # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-        dataset = dataset.prefetch(buffer_size=params.shuffle_size)
+        # filter out zero patches
+        dataset = dataset.filter(_filter_zero_patches)
+        # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
-        dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
-        dataset = dataset.prefetch(buffer_size=params.buffer_size)
+        # generate batch data
+        dataset = dataset.batch(params.batch_size, drop_remainder=True)
 
     # eval mode
     elif mode == 'eval':
@@ -709,7 +779,8 @@ def patch_input_fn(mode, params):
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         dataset = dataset.prefetch(params.buffer_size)
-        dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+        dataset = dataset.batch(params.batch_size, drop_remainder=True)
+        # dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
     # infer mode
     elif mode == 'infer':
         raise ValueError("Please use separate infer data input function.")
@@ -728,9 +799,14 @@ def patch_input_fn(mode, params):
     elif mode == 'eval':
         data_dims = list(params.infer_dims)
     get_next_features = get_next['features']
-    get_next_features.set_shape([params.batch_size, data_dims[0], data_dims[1], len(params.data_prefix)])
     get_next_labels = get_next['labels']
-    get_next_labels.set_shape([params.batch_size, data_dims[0], data_dims[1], len(params.label_prefix)])
+    # handle channels first
+    if params.data_format == 'channels_last':
+        get_next_features.set_shape([params.batch_size] + data_dims + [len(params.data_prefix)])
+        get_next_labels.set_shape([params.batch_size] + data_dims + [len(params.label_prefix)])
+    else:
+        get_next_features.set_shape([params.batch_size] + [len(params.data_prefix)] + data_dims)
+        get_next_labels.set_shape([params.batch_size] + [len(params.label_prefix)] + data_dims)
 
     # Build and return a dictionary containing the nodes / ops
     inputs = {'features': get_next_features, 'labels': get_next_labels, 'iterator_init_op': init_op}
@@ -816,25 +892,26 @@ def patch_input_fn_3d(mode, params):
                           params.data_format,
                           params.augment_train_data,
                           params.label_interp]
-        # map tensorflow dataset variable to data
+        # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
-        # dataset = dataset.prefetch(buffer_size=10)
+        # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.py_func(_load_roi_multicon_and_labels_3d,
                                  [x] + py_func_params,
                                  (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)
-        dataset = dataset.prefetch(buffer_size=10) # prefetch 10 whole datasets prior to patching
+        # map each dataset to a series of patches
         dataset = dataset.map(
             lambda x, y: _tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format),
             num_parallel_calls=params.num_threads)
+        # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-        dataset = dataset.prefetch(buffer_size=params.shuffle_size)  # prefetch shuffle_size examples before shuffling
+        # filter out zero patches
+        dataset = dataset.filter(_filter_zero_patches)
+        # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
-        dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
-        dataset = dataset.prefetch(buffer_size=params.buffer_size)
-
-    raise NotImplemented("Not implemented from this point on")
+        # generate batch data
+        dataset = dataset.batch(params.batch_size, drop_remainder=True)
 
     # eval mode
     elif mode == 'eval':
@@ -846,12 +923,16 @@ def patch_input_fn_3d(mode, params):
         # map tensorflow dataset variable to data
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         dataset = dataset.map(
-            lambda x: tf.py_func(_load_multicon_and_labels,
+            lambda x: tf.py_func(_load_multicon_and_labels_3d,
                                  [x] + py_func_params,
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
+        dataset = dataset.map(
+            lambda x, y: _tf_patches_3d(x, y, params.infer_dims, len(params.data_prefix), params.data_format),
+            num_parallel_calls=params.num_threads)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         dataset = dataset.prefetch(params.buffer_size)
-        dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+        dataset = dataset.batch(params.batch_size, drop_remainder=True)
+        #dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
     # infer mode
     elif mode == 'infer':
         raise ValueError("Please use separate infer data input function.")
@@ -870,9 +951,14 @@ def patch_input_fn_3d(mode, params):
     elif mode == 'eval':
         data_dims = list(params.infer_dims)
     get_next_features = get_next['features']
-    get_next_features.set_shape([params.batch_size, data_dims[0], data_dims[1], len(params.data_prefix)])
     get_next_labels = get_next['labels']
-    get_next_labels.set_shape([params.batch_size, data_dims[0], data_dims[1], len(params.label_prefix)])
+    # handle channels first
+    if params.data_format == 'channels_last':
+        get_next_features.set_shape([params.batch_size] + data_dims + [len(params.data_prefix)])
+        get_next_labels.set_shape([params.batch_size] + data_dims + [len(params.label_prefix)])
+    else:
+        get_next_features.set_shape([params.batch_size] + [len(params.data_prefix)] + data_dims)
+        get_next_labels.set_shape([params.batch_size] + [len(params.label_prefix)] + data_dims)
 
     # Build and return a dictionary containing the nodes / ops
     inputs = {'features': get_next_features, 'labels': get_next_labels, 'iterator_init_op': init_op}
@@ -887,24 +973,27 @@ def infer_input_fn_3d(params, infer_dir):
     :param infer_dir: (str) the directory for inference
     :return: outputs, a dict containing the features, labels, and initializer operation
     """
-    raise NotImplemented("This is not yet implemented")
 
     # force batch size of 1 for inference
     batch_size = 1  # params.batch_size
 
     # prepare pyfunc
     data_dims = list(params.infer_dims)
+    chan_size = len(params.data_prefix)
     py_func_params = [params.data_prefix, params.data_format, data_dims, params.data_plane]
 
     # generate tensorflow dataset object
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
     dataset = dataset.map(
-        lambda x: tf.py_func(_load_multicon_preserve_size,
+        lambda x: tf.py_func(_load_multicon_preserve_size_3d,
                              [x] + py_func_params,
                              tf.float32), num_parallel_calls=params.num_threads)
+    dataset = dataset.map(
+        lambda x, y: _tf_patches_3d(x, y, data_dims, chan_size, params.data_format),
+        num_parallel_calls=params.num_threads)
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
     dataset = dataset.prefetch(params.buffer_size)
-    padded_shapes = ([data_dims[0], data_dims[1], len(params.data_prefix)])
+    padded_shapes = (data_dims + [chan_size])
     dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=0.)
 
     # make iterator and query the output of the iterator for input to the model
@@ -913,7 +1002,10 @@ def infer_input_fn_3d(params, infer_dir):
     init_op = iterator.initializer
 
     # manually set shapes for inputs
-    get_next_features.set_shape([batch_size, data_dims[0], data_dims[1], len(params.data_prefix)])
+    if params.data_format == 'channels_last':
+        get_next_features.set_shape([batch_size] + data_dims + [chan_size])
+    else:
+        get_next_features.set_shape([batch_size] + [chan_size] + data_dims)
 
     # Build and return a dictionary containing the nodes / ops
     inputs = {'features': get_next_features, 'iterator_init_op': init_op}

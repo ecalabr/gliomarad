@@ -23,7 +23,12 @@ if __name__ == '__main__':
         raise ValueError("Specified model directory does not exist")
 
     # load inputs with input function
-    inputs = patch_input_fn(mode='train', params=params)
+    if len(params.train_dims) == 2:  # handle 2d inputs
+        inputs = patch_input_fn(mode='train', params=params)
+    elif len(params.train_dims) == 3:
+        inputs = patch_input_fn_3d(mode='train', params=params)
+    else:
+        raise ValueError("Train dims param must be length 2 or 3 but is: " + str(params.train_dims))
 
     # run tensorflow session
     n = 0
@@ -41,4 +46,4 @@ if __name__ == '__main__':
                 n = n+1
                 print("Processing slice " + str(n) + " epoch " + str(i+1))
                 if n % 5 == 0:
-                    display_tf_dataset(data_slice, params.data_format)
+                    display_tf_dataset(data_slice, params.data_format, params.train_dims)
