@@ -60,20 +60,19 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
                 img = _normalize(img)
             output[:, :, :, ind] = img
 
-    # permute to desired plane in format [batch, x, y, channels] for tensorflow
+    # permute to desired plane in format [x, y, z, channels] for tensorflow
     if plane == 'ax':
-        output = np.transpose(output, axes=(2, 0, 1, 3))
-    elif plane == 'cor':
-        output = np.transpose(output, axes=(1, 0, 2, 3))
-    elif plane == 'sag':
-        #output = np.transpose(output, axes=(0, 1, 2, 3))
         pass
+    elif plane == 'cor':
+        output = np.transpose(output, axes=(0, 2, 1, 3))
+    elif plane == 'sag':
+        output = np.transpose(output, axes=(1, 2, 0, 3))
     else:
         raise ValueError("Did not understand specified plane: " + str(plane))
 
     # handle channels first data format
     if data_format == 'channels_first':
-        output = np.transpose(output, axes=(0, 3, 1, 2))
+        output = np.transpose(output, axes=(3, 0, 1, 2))
 
     return output, nz_inds
 
@@ -359,7 +358,7 @@ def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims, p
 
 
 def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_prefx, patch_size, plane='ax',
-                                  data_fmt='channels_last', aug=True, interp=1):
+                                  data_fmt='channels_last', aug='no', interp=1):
     """
     Patch loader generates 2D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -371,7 +370,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     :param patch_size: (list or tuple of ints) The patch size in pixels (must be shape 2 for 2d)
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param aug: (bool) Whether or not to perform data augmentation with random 3D affine rotation.
+    :param aug: (str) 'yes' or 'no' - Whether or not to perform data augmentation with random 3D affine rotation.
     :param interp: (int) The order of spline interpolation for label data. Must be 0-5
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
@@ -404,14 +403,16 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     labels = nib.load(labels_file).get_fdata()
 
     # center the tumor in the image usine affine, with optional rotation for data augmentation
-    if aug:  # if augmenting, select random rotation values for x, y, and z axes
+    if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
         theta = 0.  # np.random.random() * (np.pi / 2.)  # rotation in yz plane
         phi = 0.  # np.random.random() * (np.pi / 2.)  # rotation in xz plane
         psi = np.random.random() * (np.pi / 2.)  # rotation in xy plane
-    else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
+    elif aug == 'no':  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
         theta = 0.
         phi = 0.
         psi = 0.
+    else:
+        raise ValueError("Augment data param argument must be yes or no but is: " + str(aug))
 
     # make affine, calculate offset using mask center of mass and affine
     affine = _create_affine(theta=theta, phi=phi, psi=psi)
@@ -460,7 +461,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
 
 
 def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, patch_size, plane='ax',
-                                  data_fmt='channels_last', aug=True, interp=1):
+                                  data_fmt='channels_last', aug='no', interp=1):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -472,7 +473,7 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     :param patch_size: (list or tuple of ints) The patch size in pixels (must be shape 3 for 3d)
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param aug: (bool) Whether or not to perform data augmentation with random 3D affine rotation.
+    :param aug: (str) Either yes or no - Whether or not to perform data augmentation with random 3D affine rotation.
     :param interp: (int) The order of spline interpolation for label data. Must be 0-5
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
@@ -505,14 +506,16 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     labels = nib.load(labels_file).get_fdata()
 
     # center the ROI in the image usine affine, with optional rotation for data augmentation
-    if aug:  # if augmenting, select random rotation values for x, y, and z axes
+    if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
         theta = 0.  # np.random.random() * (np.pi / 2.)  # rotation in yz plane
         phi = 0.  # np.random.random() * (np.pi / 2.)  # rotation in xz plane
         psi = np.random.random() * (np.pi / 2.)  # rotation in xy plane
-    else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
+    elif aug == 'no':  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
         theta = 0.
         phi = 0.
         psi = 0.
+    else:
+        raise ValueError("Augment data param argument must be yes or no but is: " + str(aug))
 
     # make affine, calculate offset using mask center of mass and affine
     affine = _create_affine(theta=theta, phi=phi, psi=psi)
@@ -709,6 +712,40 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     return data, labels
 
 
+def _tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
+    """
+    Extract 3D patches from a data array with overlap if desired - no labels, used for inference
+    :param data: (numpy array) the data tensorflow tensor
+    :param patch_size: (list or tupe of ints) the patch dimensions
+    :param chan_dim:  (int) the number of data channels
+    :param data_format: (str) either channels_last or channels_first - the tensorflow data format
+    :param overlap: (int) the divisor for patch strides - determines the patch overlap in x, y (default no overlap)
+    :return: returns tensorflow tensor patches
+    """
+
+    # sanity checks
+    if not len(patch_size) == 3:
+        raise ValueError("Patch size must be shape 3 to use 3D patch function but is: " + str(patch_size))
+
+    # handle channels first
+    if data_format == 'channels_first':
+        data = tf.transpose(data, perm=[0, 2, 3, 4, 1])
+
+    # for sliding window 3d slabs, stride should be 1 in z dim, for x and y move 1/3 of the window
+    ksizes = [1] + patch_size + [1]
+    strides = [1, patch_size[0] / overlap , patch_size[1] / overlap, 1, 1]
+
+    # make patches
+    data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
+    data = tf.reshape(data, [-1] + patch_size + [chan_dim])
+
+    # handle channels first
+    if data_format == 'channels_first':
+        data = tf.transpose(data, perm=[0, 4, 1, 2, 3])
+
+    return data
+
+
 def _filter_zero_patches(data, data_format, mode, thresh=0.05):
     """
     Filters out patches that contain mostly zeros in the label data. Works for 3D and 2D patches.
@@ -800,7 +837,7 @@ def patch_input_fn(mode, params):
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         # filter out zero patches
-        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format))
+        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format, params.dimension_mode))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -953,7 +990,7 @@ def patch_input_fn_3d(mode, params):
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         # filter out zero patches
-        dataset = dataset.filter(_filter_zero_patches)
+        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format, params.dimension_mode))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -1039,11 +1076,11 @@ def infer_input_fn_3d(params, infer_dir):
                              tf.float32), num_parallel_calls=params.num_threads)
     # extract 3D patches from the infer data - no overlap
     dataset = dataset.map(
-        lambda x, y: _tf_patches_3d(x, y, data_dims, chan_size, params.data_format, overlap=1),
+        lambda x: _tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, overlap=1),
         num_parallel_calls=params.num_threads)
     # flatten patches to individual examples
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
-    # batch data to batch size 1 (forced)
+    # batch data to batch size 1 (forced above at beginning of function)
     dataset = dataset.batch(batch_size)
 
     # make iterator and query the output of the iterator for input to the model

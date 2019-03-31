@@ -309,10 +309,10 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
         label_data = dataset_data["labels"]  # dataset_data[1]
 
         # handle channels first and batch data
-        if len(image_data.shape) > 4:
+        if len(label_data.shape) > 4:
             if data_format == 'channels_first':
                 label_data = np.transpose(label_data, [0, 2, 3, 4, 1])
-            label_data = np.squeeze(label_data[0, :, :, :, :])  # handle batch data
+            label_data = label_data[0, :, :, :, :]  # handle batch data
         else:
             if data_format == 'channels_first':
                 label_data = np.transpose(label_data, [1, 2, 3, 0])
@@ -320,6 +320,7 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
         # add to fig
         ax = fig.add_subplot(1, nplots, nplots)
         label_img = np.squeeze(label_data)
+
         # concatenate along z to make 1 2d image per slab
         label_img = np.reshape(np.transpose(label_img), [label_img.shape[0] * label_img.shape[2], label_img.shape[1]])
         ax.imshow(label_img, cmap='gray')

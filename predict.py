@@ -4,7 +4,7 @@ import logging
 import os
 from model.utils import Params, set_logger
 from model.prediction import predict
-from model.patch_input_fn import infer_input_fn
+from model.patch_input_fn import infer_input_fn, infer_input_fn_3d
 from model.model_fn import model_fn
 
 
@@ -14,7 +14,7 @@ parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_p
                     help="Path to params.json")
 parser.add_argument('--infer_dir', default='/media/ecalabr/data2/qc_complete/12309838',
                     help="Path to directory to generate inference from")
-parser.add_argument('--best_last', default='best_weights',
+parser.add_argument('--best_last', default='last_weights',
                     help="Either 'best_weights' or 'last_weights' - whether to use best or last model weights for inference")
 
 if __name__ == '__main__':
@@ -43,9 +43,13 @@ if __name__ == '__main__':
 
     # Create the two iterators over the two datasets
     logging.info("Generating dataset objects...")
-    # the below no longer needed after changes to input function for inference
-    # params.batch_size = 1  # manually set batch size here so there is no dropped remainder
-    infer_inputs = infer_input_fn(params=params, infer_dir=infer_dir)  # can optionally pass specific dirs here
+    # handle 2D vs 3D
+    if params.dimension_mode == '2D':
+        infer_inputs = infer_input_fn(params=params, infer_dir=infer_dir)  # can optionally pass specific dirs here
+    elif params.dimension_mode in ['2.5D', '3D']:
+        infer_inputs = infer_input_fn_3d(params=params, infer_dir=infer_dir)
+    else:
+        raise ValueError("Training dimensions mode not understood: " + str(params.dimension_mode))
     logging.info("- done.")
 
     # Define the models (2 different set of nodes that share weights for train and eval)

@@ -23,12 +23,12 @@ if __name__ == '__main__':
         raise ValueError("Specified model directory does not exist")
 
     # load inputs with input function
-    if len(params.train_dims) == 2:  # handle 2d inputs
+    if params.dimension_mode == '2D':  # handle 2d inputs
         inputs = patch_input_fn(mode='train', params=params)
-    elif len(params.train_dims) == 3:
+    elif params.dimension_mode in ['2.5D', '3D']:
         inputs = patch_input_fn_3d(mode='train', params=params)
     else:
-        raise ValueError("Train dims param must be length 2 or 3 but is: " + str(params.train_dims))
+        raise ValueError("Dimension mode not understood: " + str(params.dimension_mode))
 
     # run tensorflow session
     n = 0

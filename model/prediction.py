@@ -80,10 +80,10 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
     if params.dimension_mode == '2.5D':
         # handle channels last [b, x, y, z, c]
         if params.data_format == 'channels_last':
-            predictions = np.squeeze(predictions[:, :, :, predictions.shape[3]/2 + 1, :], axis=-2)
+            predictions = predictions[:, :, :, predictions.shape[3]/2 + 1, :]
         # handle channels first [b, c, x, y, z]
         elif params.data_format == 'channels_first':
-            predictions = np.squeeze(predictions[:, :, :, :, predictions.shape[3]/2 + 1], axis=-1)
+            predictions = predictions[:, :, :, :, predictions.shape[3]/2 + 1]
         else:
             raise ValueError("Did not understand data format: " + str(params.data_format))
 
@@ -91,7 +91,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
     if infer_dir[-1] == '/': infer_dir = infer_dir[0:-1]  # remove possible trailing slash
     nii = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
     affine = nii.affine
-    shape = nii.shape
+    shape = np.array(nii.shape)
     name_prefix = os.path.basename(infer_dir)
 
     # handle multiple predictions
@@ -108,7 +108,6 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
 
     # convert back to axial
     if params.data_plane == 'ax':
-        #predictions = np.transpose(predictions, axes=(0, 1, 2, 3))
         pass
     elif params.data_plane == 'cor':
         predictions = np.transpose(predictions, axes=(0, 2, 1))
@@ -118,8 +117,12 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
     else:
         raise ValueError("Did not understand specified plane: " + str(params.data_plane))
 
-    # crop back to original shape (same as input data)
-    predictions = predictions[0:shape[0], 0:shape[1], 0:shape[2]]
+    # crop back to original shape (same as input data) - this reverses tensorflow extract patches padding
+    pred_shape = np.array(predictions.shape)
+    pads = pred_shape - shape
+    predictions = predictions[int(np.ceil(pads[0]/2.)):pred_shape[0]-pads[0]/2,
+                  int(np.ceil(pads[1]/2.)):pred_shape[1]-pads[1]/2,
+                  int(np.ceil(pads[2]/2.)):pred_shape[2]-pads[2]/2]
 
     # mask predictions based on input data
     mask = nii.get_data() > 0

@@ -43,14 +43,14 @@ if __name__ == '__main__':
 
     # Determine if 2d or 3d and create the two iterators over the two datasets
     logging.info("Generating dataset objects...")
-    if len(params.train_dims) == 2:  # handle 2d inputs
+    if params.dimension_mode == '2D':  # handle 2d inputs
         train_inputs = patch_input_fn(mode='train', params=params)
         eval_inputs = patch_input_fn(mode='eval', params=params)
-    elif len(params.train_dims) == 3:  # handle 3d inputs
+    elif params.dimension_mode in ['2.5D', '3D']:  # handle 3d inputs
         train_inputs = patch_input_fn_3d(mode='train', params=params)
         eval_inputs = patch_input_fn_3d(mode='eval', params=params)
     else:
-        raise ValueError("Training dimensions must be shape 2 or 3 but is: " + str(params.train_dims))
+        raise ValueError("Training dimensions mode not understood: " + str(params.dimension_mode))
     logging.info("- done.")
 
     # Define the models (2 different set of nodes that share weights for train and eval)
