@@ -632,7 +632,17 @@ def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, out_dims
 ##############################################
 
 
-def _tf_patches(data, labels, patch_size, chan_dim, data_format):
+def _tf_patches(data, labels, patch_size, chan_dim, data_format, overlap=1):
+    """
+    Extract 2D patches from a data array with overlap if desired
+    :param data: (numpy array) the data tensorflow tensor
+    :param labels: (numpy array) the labels tensorflow tensor
+    :param patch_size: (list or tupe of ints) the patch dimensions
+    :param chan_dim:  (int) the number of data channels
+    :param data_format: (str) either channels_last or channels_first - the tensorflow data format
+    :param overlap: (int) the divisor for patch strides - determines the patch overlap in x, y (default no overlap)
+    :return: returns tensorflow tensor patches
+    """
 
     # sanity checks
     if not len(patch_size) == 2:
@@ -645,7 +655,7 @@ def _tf_patches(data, labels, patch_size, chan_dim, data_format):
 
     # make patches
     ksizes = [1] + patch_size + [1]
-    strides = [1] + patch_size + [1]
+    strides = [1, patch_size[0] / overlap , patch_size[1] / overlap, 1]
     rates = [1, 1, 1, 1]
     data = tf.extract_image_patches(data, ksizes=ksizes, strides=strides, rates=rates, padding='SAME')
     data = tf.reshape(data, [-1] + patch_size + [chan_dim])
@@ -660,7 +670,17 @@ def _tf_patches(data, labels, patch_size, chan_dim, data_format):
     return data, labels
 
 
-def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format):
+def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
+    """
+    Extract 3D patches from a data array with overlap if desired
+    :param data: (numpy array) the data tensorflow tensor
+    :param labels: (numpy array) the labels tensorflow tensor
+    :param patch_size: (list or tupe of ints) the patch dimensions
+    :param chan_dim:  (int) the number of data channels
+    :param data_format: (str) either channels_last or channels_first - the tensorflow data format
+    :param overlap: (int) the divisor for patch strides - determines the patch overlap in x, y (default no overlap)
+    :return: returns tensorflow tensor patches
+    """
 
     # sanity checks
     if not len(patch_size) == 3:
@@ -673,7 +693,7 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format):
 
     # for sliding window 3d slabs, stride should be 1 in z dim, for x and y move 1/3 of the window
     ksizes = [1] + patch_size + [1]
-    strides = [1, patch_size[0] / 3 , patch_size[1] / 3, 1, 1]
+    strides = [1, patch_size[0] / overlap , patch_size[1] / overlap, 1, 1]
 
     # make patches
     data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
@@ -689,18 +709,39 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format):
     return data, labels
 
 
-def _filter_zero_patches(data):
+def _filter_zero_patches(data, data_format, mode, thresh=0.05):
+    """
+    Filters out patches that contain mostly zeros in the label data. Works for 3D and 2D patches.
+    :param data: (list of tensors) must have {'labels'} key containing labels data
+    :param data_format: (str) either 'channels_first' or 'channels_last' - the tensorflow data format
+    :param mode: (str) either '2D' '2.5D' or '3D' - the mode for training
+    :param thresh: (float) the threshold percentage for keeping patches. Default is 5%.
+    :return: Returns tf.bool False if less than threshold, else returns tf.bool True
+    """
 
-    # if 3D get middle slice of labels, else use entire slice if 2D
-    if len(data['labels'].get_shape()) == 4: # [x, y, z, c]
-        mid_sl = data['labels'][:, :, data['labels'].get_shape()[2]/2 + 1, 0]
-    elif len(data['labels'].get_shape()) == 3: # [x, y, c]
-        mid_sl = data['labels'][:, :, 0]
+    if data_format == 'channels_last':
+        # handle channels last - if 2.5D get middle slice of labels, use entire slice if 2D, use entire slab if 3D
+        if mode == '2.5D': # [x, y, z, c]
+            mid_sl = data['labels'][:, :, data['labels'].get_shape()[2]/2 + 1, 0]
+        elif mode == '2D': # [x, y, c]
+            mid_sl = data['labels'][:, :, 0]
+        elif mode == ' 3D':
+            mid_sl = data['labels'][:, :, :, 0]
+        else:
+            raise ValueError("Mode must be 2D, 2.5D, or 3D but is: " + str(mode))
     else:
-        raise ValueError("Labels shape must be 2D or 3D but is: " + str((data['labels'].get_shape())))
+        # handle channels first - if 2.5D get middle slice of labels, use entire slice if 2D, use entire slab if 3D
+        if mode == '2.5D':  # [c, x, y, z]
+            mid_sl = data['labels'][0, :, :, data['labels'].get_shape()[2] / 2 + 1]
+        elif mode == '2D':  # [c, x, y]
+            mid_sl = data['labels'][0, :, :]
+        elif mode == '3D':
+            mid_sl = data['labels'][0, :, :, :]
+        else:
+            raise ValueError("Labels shape must be 2D or 3D but is: " + str((data['labels'].get_shape())))
 
     # eliminate if label slice is 95% empty
-    thr = tf.constant(0.05, dtype=tf.float32)
+    thr = tf.constant(thresh, dtype=tf.float32)
 
     return tf.less(thr, tf.count_nonzero(mid_sl, dtype=tf.float32) / tf.size(mid_sl, out_type=tf.float32))
 
@@ -753,12 +794,13 @@ def patch_input_fn(mode, params):
             num_parallel_calls=params.num_threads)
         # map each dataset to a series of patches
         dataset = dataset.map(
-            lambda x, y: _tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format),
+            lambda x, y: _tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format,
+                                     overlap=params.train_patch_overlap),
             num_parallel_calls=params.num_threads)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         # filter out zero patches
-        dataset = dataset.filter(_filter_zero_patches)
+        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -829,15 +871,18 @@ def infer_input_fn(params, infer_dir):
     data_dims = list(params.infer_dims)
     py_func_params = [params.data_prefix, params.data_format, data_dims, params.data_plane]
 
-    # generate tensorflow dataset object
+    # generate tensorflow dataset object from infer directories
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
+    # map infer dirs to data using custom python function
     dataset = dataset.map(
         lambda x: tf.py_func(_load_multicon_preserve_size,
                              [x] + py_func_params,
                              tf.float32), num_parallel_calls=params.num_threads)
+    # flatten dataset to individual slices
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
-    dataset = dataset.prefetch(params.buffer_size)
+    # pad each slice to the desired infer dimensions
     padded_shapes = ([data_dims[0], data_dims[1], len(params.data_prefix)])
+    # batch to specified batch size
     dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=0.)
 
     # make iterator and query the output of the iterator for input to the model
@@ -900,9 +945,10 @@ def patch_input_fn_3d(mode, params):
                                  [x] + py_func_params,
                                  (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)
-        # map each dataset to a series of patches
+        # map each dataset to a series of patches with overlap of 1/3
         dataset = dataset.map(
-            lambda x, y: _tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format),
+            lambda x, y: _tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format,
+                                        overlap=params.train_patch_overlap),
             num_parallel_calls=params.num_threads)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
@@ -915,24 +961,26 @@ def patch_input_fn_3d(mode, params):
 
     # eval mode
     elif mode == 'eval':
-        data_dirs = eval_dirs
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.data_format,
                           params.infer_dims]
-        # map tensorflow dataset variable to data
-        dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
+        # create tensorflow dataset variable from eval data directories
+        dataset = tf.data.Dataset.from_tensor_slices(eval_dirs)
+        # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.py_func(_load_multicon_and_labels_3d,
                                  [x] + py_func_params,
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
+        # map each dataset to a series of patches - no overlap between patches (default)
         dataset = dataset.map(
             lambda x, y: _tf_patches_3d(x, y, params.infer_dims, len(params.data_prefix), params.data_format),
             num_parallel_calls=params.num_threads)
+        # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-        dataset = dataset.prefetch(params.buffer_size)
+        # generate batch data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
-        #dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+
     # infer mode
     elif mode == 'infer':
         raise ValueError("Please use separate infer data input function.")
@@ -982,19 +1030,21 @@ def infer_input_fn_3d(params, infer_dir):
     chan_size = len(params.data_prefix)
     py_func_params = [params.data_prefix, params.data_format, data_dims, params.data_plane]
 
-    # generate tensorflow dataset object
+    # generate tensorflow dataset object from infer directory
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
+    # map infer directory to data using a custom python function
     dataset = dataset.map(
         lambda x: tf.py_func(_load_multicon_preserve_size_3d,
                              [x] + py_func_params,
                              tf.float32), num_parallel_calls=params.num_threads)
+    # extract 3D patches from the infer data - no overlap
     dataset = dataset.map(
-        lambda x, y: _tf_patches_3d(x, y, data_dims, chan_size, params.data_format),
+        lambda x, y: _tf_patches_3d(x, y, data_dims, chan_size, params.data_format, overlap=1),
         num_parallel_calls=params.num_threads)
+    # flatten patches to individual examples
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
-    dataset = dataset.prefetch(params.buffer_size)
-    padded_shapes = (data_dims + [chan_size])
-    dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=0.)
+    # batch data to batch size 1 (forced)
+    dataset = dataset.batch(batch_size)
 
     # make iterator and query the output of the iterator for input to the model
     iterator = dataset.make_initializable_iterator()

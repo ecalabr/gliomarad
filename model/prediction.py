@@ -76,6 +76,17 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
         # predict
         predictions = predict_sess(sess, model_spec)
 
+    # handle 2.5D - take only middle slice from each slab
+    if params.dimension_mode == '2.5D':
+        # handle channels last [b, x, y, z, c]
+        if params.data_format == 'channels_last':
+            predictions = np.squeeze(predictions[:, :, :, predictions.shape[3]/2 + 1, :], axis=-2)
+        # handle channels first [b, c, x, y, z]
+        elif params.data_format == 'channels_first':
+            predictions = np.squeeze(predictions[:, :, :, :, predictions.shape[3]/2 + 1], axis=-1)
+        else:
+            raise ValueError("Did not understand data format: " + str(params.data_format))
+
     # load one of the original images to restore original shape
     if infer_dir[-1] == '/': infer_dir = infer_dir[0:-1]  # remove possible trailing slash
     nii = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])

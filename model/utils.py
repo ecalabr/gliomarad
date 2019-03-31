@@ -24,8 +24,11 @@ class Params:
     data_prefix = None
     label_prefix = None
     mask_prefix = None
+
+    dimension_mode = None  # must be 2D, 2.5D, 3D
     data_plane = None
     train_dims = None
+    train_patch_overlap = None
     infer_dims = None
     augment_train_data = None
     label_interp = None
@@ -205,10 +208,20 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
 
     # 2.5D MSE loss
     elif loss_method == 'MSE3D':
-        # get center slice
-        center_pred = predictions[:, : , :, predictions.shape[3] / 2 + 1]
-        center_lab = labels[:, : , :, labels.shape[3] / 2 + 1]
-        center_weights = weights[:, : , :, weights.shape[3] / 2 + 1]
+        # handle channels last
+        if data_format == 'channels_last':
+            # get center slice for channels last [b, x, y, z, c]
+            center_pred = predictions[:, : , :, predictions.shape[3] / 2 + 1, :]
+            center_lab = labels[:, : , :, labels.shape[3] / 2 + 1, :]
+            center_weights = weights[:, : , :, weights.shape[3] / 2 + 1, :]
+        # handle channels first
+        elif data_format == 'channels_first':
+            # get center slice for channels last [b, c, x, y, z]
+            center_pred = predictions[:, :, :, :, predictions.shape[3] / 2 + 1]
+            center_lab = labels[:, :, :, :, labels.shape[3] / 2 + 1]
+            center_weights = weights[:, :, :, :, weights.shape[3] / 2 + 1]
+        else:
+            raise ValueError("Data format not understood: " + str(data_format))
 
         # define loss
         loss_function = tf.losses.mean_squared_error(center_lab, center_pred, center_weights)
