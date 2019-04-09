@@ -460,7 +460,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     return data.astype(np.float32), labels.astype(np.float32)
 
 
-def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, patch_size, plane='ax',
+def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, plane='ax',
                                   data_fmt='channels_last', aug='no', interp=1):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
@@ -470,7 +470,6 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     :param feature_prefx: (iterable of str) The prefixes for the image files containing the data (features).
     :param label_prefx: (str) The prefixe for the image files containing the labels.
     :param mask_prefx: (str) The prefixe for the image files containing the data mask.
-    :param patch_size: (list or tuple of ints) The patch size in pixels (must be shape 3 for 3d)
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param aug: (str) Either yes or no - Whether or not to perform data augmentation with random 3D affine rotation.
@@ -479,8 +478,6 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     """
 
     # sanity checks
-    if not len(patch_size) == 3:
-        raise ValueError("Patch size must be shape 3 for 3d data loader but is: " + str(patch_size))
     if not plane in ['ax', 'cor', 'sag']:
         raise ValueError("Did not understand specified plane: " + str(plane))
     if not data_fmt in ['channels_last', 'channels_first']:
@@ -563,43 +560,52 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     return data.astype(np.float32), labels.astype(np.float32)
 
 
-def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, plane='ax'):
+def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt, plane='ax'):
     """
-    Load multicontrast image data and target data/labels.
+    Load multicontrast image data and target data/labels without using a target roi. Used primarily for evaluation.
     :param study_dir: (str) A directory containing the desired image data.
     :param feature_prefx: (list) a list of filenames - the data files to be loaded
     :param label_prefx: (list) a list containing one string, the labels to be loaded
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
     # sanity checks
-    if not len(out_dims == 3): raise ValueError("Infer dimensions must be length 3 but is: " + str(out_dims))
     if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
     if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
     if not all([isinstance(a, str) for a in label_prefx]): raise ValueError("Labels prefixes must be strings")
     if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
-    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
-        "data_dims must be a list/tuple of ints")
 
-    # load multi-contrast data
+    # load multi-contrast data with slice trimming in z
     data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)  # normalize input imgs
 
-    # load labels data
+    # load labels data with slice trimming in z
     labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane)
 
-    # generate batch size==1 format such that format is [1, x, y, z, c] or [1, c, x, y, z]
-    data = np.expand_dims(data, axis=0)
-    labels = np.expand_dims(labels, axis=0)
+    # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
+    data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
+    #labels = np.expand_dims(np.expand_dims(labels, axis=3), axis=0)  # add a batch and channel dimension of 1
+    labels = np.expand_dims(labels, axis=0)  # add a channel dimension of 1
 
-    # do data padding to desired dims
-    axes = [1, 2, 3] if data_fmt == 'channels_last' else [2, 3, 4]
-    data = _zero_pad_image(data, out_dims, axes)
-    labels = _zero_pad_image(labels, out_dims, axes)
+    # handle different planes
+    if plane == 'ax':
+        pass
+    elif plane == 'cor':
+        data = np.transpose(data, axes=[0, 1, 3, 2, 4])
+        labels = np.transpose(labels, axes=[0, 1, 3, 2, 4])
+    elif plane == 'sag':
+        data = np.transpose(data, axes=[0, 2, 3, 1, 4])
+        labels = np.transpose(labels, axes=[0, 2, 3, 1, 4])
+    else:
+        raise ValueError("Did not understand specified plane: " + str(plane))
 
-    return data, labels
+    # handle channels first data format
+    if data_fmt == 'channels_first':
+        data = np.transpose(data, axes=[0, 4, 1, 2, 3])
+        labels = np.transpose(labels, axes=[0, 4, 1, 2, 3])
+
+    return data.astype(np.float32), labels.astype(np.float32)
 
 
 def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, out_dims, plane):
@@ -859,7 +865,7 @@ def patch_input_fn(mode, params):
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         dataset = dataset.prefetch(params.buffer_size)
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
-        # dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(params.batch_size))
+
     # infer mode
     elif mode == 'infer':
         raise ValueError("Please use separate infer data input function.")
@@ -969,7 +975,6 @@ def patch_input_fn_3d(mode, params):
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.mask_prefix,
-                          params.train_dims,
                           params.data_plane,
                           params.data_format,
                           params.augment_train_data,
@@ -1001,7 +1006,7 @@ def patch_input_fn_3d(mode, params):
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.data_format,
-                          params.infer_dims]
+                          params.data_plane]
         # create tensorflow dataset variable from eval data directories
         dataset = tf.data.Dataset.from_tensor_slices(eval_dirs)
         # map data directories to the data using a custom python function

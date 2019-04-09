@@ -229,6 +229,29 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
         # add remaining slices at equal weight
         loss_function = tf.add(loss_function, tf.losses.mean_squared_error(labels, predictions, weights))
 
+    # 2.5D MAE loss
+    elif loss_method == 'MAE3D':
+        # handle channels last
+        if data_format == 'channels_last':
+            # get center slice for channels last [b, x, y, z, c]
+            center_pred = predictions[:, :, :, predictions.shape[3] / 2 + 1, :]
+            center_lab = labels[:, :, :, labels.shape[3] / 2 + 1, :]
+            center_weights = weights[:, :, :, weights.shape[3] / 2 + 1, :]
+        # handle channels first
+        elif data_format == 'channels_first':
+            # get center slice for channels last [b, c, x, y, z]
+            center_pred = predictions[:, :, :, :, predictions.shape[3] / 2 + 1]
+            center_lab = labels[:, :, :, :, labels.shape[3] / 2 + 1]
+            center_weights = weights[:, :, :, :, weights.shape[3] / 2 + 1]
+        else:
+            raise ValueError("Data format not understood: " + str(data_format))
+
+        # define loss
+        loss_function = tf.losses.absolute_difference(center_lab, center_pred, center_weights)
+
+        # add remaining slices at equal weight
+        loss_function = tf.add(loss_function, tf.losses.absolute_difference(labels, predictions, weights))
+
     # not implemented loss
     else:
         raise NotImplementedError("Specified loss method is not implemented: " + loss_method)

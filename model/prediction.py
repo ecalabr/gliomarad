@@ -113,16 +113,15 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
         predictions = np.transpose(predictions, axes=(0, 2, 1))
     elif params.data_plane == 'sag':
         predictions = np.transpose(predictions, axes=(2, 0, 1))
-        pass
     else:
         raise ValueError("Did not understand specified plane: " + str(params.data_plane))
 
     # crop back to original shape (same as input data) - this reverses tensorflow extract patches padding
     pred_shape = np.array(predictions.shape)
     pads = pred_shape - shape
-    predictions = predictions[int(np.ceil(pads[0]/2.)):pred_shape[0]-pads[0]/2,
-                  int(np.ceil(pads[1]/2.)):pred_shape[1]-pads[1]/2,
-                  int(np.ceil(pads[2]/2.)):pred_shape[2]-pads[2]/2]
+    predictions = predictions[int(np.floor(pads[0]/2.)):pred_shape[0]-int(np.ceil(pads[0]/2.)),
+                  int(np.floor(pads[1]/2.)):pred_shape[1]-int(np.ceil(pads[1]/2.)),
+                  int(np.floor(pads[2]/2.)):pred_shape[2]-int(np.ceil(pads[2]/2.))]
 
     # mask predictions based on input data
     mask = nii.get_data() > 0
