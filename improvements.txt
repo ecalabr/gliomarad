@@ -1,12 +1,4 @@
 incorporate topup DTI files when/where they exist
-make nets for image segmentation
-still issues with numbering keeper series, 11273473
 
-[x] possibly already done fix restore from functionality in training.py
-test residual layer and upsample residual layer
-get bneck resid working, particularly with upsampling?
 
-need to figure out how prefetch and shuffling works for complex input pipeline
-
-numbering of matched series and keeper series do not match in gbm_prep
-consider adding "gad" back to "not" list for T1 images
+segmentation networks

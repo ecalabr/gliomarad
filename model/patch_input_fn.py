@@ -77,50 +77,33 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
     return output, nz_inds
 
 
-def _extract_region(input_img, region_bbox):
+def _expand_region(input_dims, region_bbox, delta):
     """
-    Extracts a region defined by region_bbox from the input_img with zero padding if needed.
-    :param input_img: (np.ndarray) The image to extract the region from.
-    :param region_bbox: (array like) The indices of the bounding box for the region to be extracted.
-    :return: (np.ndarray) the extracted region from input_img
+    Symmetrically expands a given 3D region bounding box by delta in each dimension without exceeding original image dims
+    :param input_dims: (list or tuple of ints) the original image dimensions
+    :param region_bbox: (list or tuple of ints) the region bounding box to expand
+    :param delta: (int) the amount to expand each dimension by.
+    :return: (list or tuple of ints) the expanded bounding box
     """
 
-    # sanity checks
-    if not isinstance(input_img, np.ndarray):
-        raise TypeError("Input image should be np.ndarray but is: " + str(type(input_img)))
-    if not isinstance(region_bbox, list):
-        try:
-            bbox = list(region_bbox)
-        except:
-            raise TypeError("Provided bounding box cannot be converted to list.")
-    else:
-        bbox = region_bbox
+    # determine how much to add on each side of the bounding box
+    deltas = np.array([-int(np.floor(delta/2.)), int(np.ceil(delta/2.))] * 3)
 
-    # determine zero pads if needed
-    dims = input_img.shape
-    ddims = np.repeat(dims, 2)
-    pads = np.zeros(len(bbox), dtype=np.int)
-    for i, ind in enumerate(bbox):
-        if ind < 0:
-            pads[i] = abs(ind)
-            bbox[i] = 0
-        elif ind > ddims[i]:
-            pads[i] = 1 + ind - ddims[i]  # add one here to correct for indexing vs dim size
-            bbox[i] = ddims[i] - 1  # the last possible ind is shape of that dim - 1
-        else:
-            pads[i] = 0
+    # use deltas to get a new bounding box
+    tmp_bbox = np.array(region_bbox) - deltas
 
-    # extract region
-    region = input_img[bbox[0]:bbox[1], bbox[2]:bbox[3], bbox[4]:bbox[5]]
+    # make sure there are not values outside of the original image
+    new_bbox = []
+    for i, item in enumerate(tmp_bbox):
+        if i % 2 == 0: # for even indices, make sure there are no negatives
+            if item < 0:
+                item = 0
+        else: # for odd indices, make sure they do not exceed original dims
+            if item > input_dims[(i-1)/2]:
+                item = input_dims[(i-1)/2]
+        new_bbox.append(item)
 
-    # pad to desired size
-    if any([pad > 0 for pad in pads]):
-        pad_tuple = ((pads[0], pads[1]), (pads[2], pads[3]), (pads[4], pads[5]))
-        output = np.pad(region, pad_tuple, 'constant')
-    else:
-        output = region
-
-    return output
+    return new_bbox
 
 
 def _create_affine(theta=None, phi=None, psi=None):
@@ -357,7 +340,7 @@ def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims, p
     return data
 
 
-def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_prefx, patch_size, plane='ax',
+def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
                                   data_fmt='channels_last', aug='no', interp=1):
     """
     Patch loader generates 2D patch data for images and labels given a list of 3D input NiFTI images a mask.
@@ -367,7 +350,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     :param feature_prefx: (iterable of str) The prefixes for the image files containing the data (features).
     :param label_prefx: (str) The prefixe for the image files containing the labels.
     :param mask_prefx: (str) The prefixe for the image files containing the data mask.
-    :param patch_size: (list or tuple of ints) The patch size in pixels (must be shape 2 for 2d)
+    :param dilate: (int) The amount to dilate the region by in all dimensions
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param aug: (str) 'yes' or 'no' - Whether or not to perform data augmentation with random 3D affine rotation.
@@ -376,8 +359,6 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     """
 
     # sanity checks
-    if not len(patch_size) == 2:
-        raise ValueError("Patch size must be shape 2 for 2d data loader but is: " + str(patch_size))
     if not plane in ['ax', 'cor', 'sag']:
         raise ValueError("Did not understand specified plane: " + str(plane))
     if not data_fmt in ['channels_last', 'channels_first']:
@@ -426,15 +407,21 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     labels = _affine_transform(labels, affine=affine, offset=offset, order=interp)  # user def interp for labels
 
     # get the tight bounding box of the mask after affine rotation
-    mask_bbox = _nonzero_slice_inds3d(mask)
-    dim_sizes = [mask_bbox[1] - mask_bbox[0], mask_bbox[3] - mask_bbox[2], mask_bbox[5] - mask_bbox[4]]
+    msk_bbox = _nonzero_slice_inds3d(mask)
 
-    # extract the region with zero padding to new bbox if needed
+    # dilate bbox if necessary
+    if dilate:
+        msk_bbox = _expand_region(data_dims, msk_bbox, dilate)
+
+    # determine new dim sizes
+    dim_sizes = [msk_bbox[1] - msk_bbox[0], msk_bbox[3] - msk_bbox[2], msk_bbox[5] - msk_bbox[4]]
+
+    # extract the region from the data
     data_region = np.zeros(dim_sizes + [len(data_files)])
     for i in range(len(data_files)):
-        data_region[:, :, :, i] = _extract_region(data[:, :, :, i], tuple(mask_bbox))
+        data_region[:, :, :, i] = data[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5], i]
     data = data_region
-    labels = _extract_region(labels, mask_bbox)
+    labels = labels[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
 
     # permute to [batch, x, y, channels] for tensorflow patching
     if plane == 'ax':
@@ -446,9 +433,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
         labels = np.expand_dims(labels, axis=3)
         labels = np.transpose(labels, axes=(1, 0, 2, 3))
     elif plane == 'sag':
-        #data = np.transpose(data, axes=(0, 1, 2, 3))
         labels = np.expand_dims(labels, axis=3)
-        #labels = np.transpose(labels, axes=(0, 1, 2, 3))
     else:
         raise ValueError("Did not understand specified plane: " + str(plane))
 
@@ -460,7 +445,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     return data.astype(np.float32), labels.astype(np.float32)
 
 
-def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, plane='ax',
+def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
                                   data_fmt='channels_last', aug='no', interp=1):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
@@ -468,7 +453,8 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     Data is cropped to the nonzero bounding box for the mask file before patches are generated.
     :param study_dir: (str) The path to the study directory to get data from.
     :param feature_prefx: (iterable of str) The prefixes for the image files containing the data (features).
-    :param label_prefx: (str) The prefixe for the image files containing the labels.
+    :param label_prefx: (str) The prefix for the image files containing the labels.
+    :param dilate: (int) The amount to dilate the region by in all dimensions
     :param mask_prefx: (str) The prefixe for the image files containing the data mask.
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
@@ -494,7 +480,7 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     mask = nib.load(mask_file).get_fdata()
     data_dims = mask.shape
 
-    # load data
+    # load data and normalize
     data = np.zeros((data_dims[0], data_dims[1], data_dims[2], len(data_files)))
     for i, im_file in enumerate(data_files):
         data[:, :, :, i] = _normalize(nib.load(im_file).get_fdata())
@@ -526,15 +512,21 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     labels = _affine_transform(labels, affine=affine, offset=offset, order=interp)  # user def interp for labels
 
     # get the tight bounding box of the mask after affine rotation
-    mask_bbox = _nonzero_slice_inds3d(mask)
-    dim_sizes = [mask_bbox[1] - mask_bbox[0], mask_bbox[3] - mask_bbox[2], mask_bbox[5] - mask_bbox[4]]
+    msk_bbox = _nonzero_slice_inds3d(mask)
 
-    # extract the region with zero padding to new bbox if needed
+    # dilate bbox if necessary
+    if dilate:
+        msk_bbox = _expand_region(data_dims,msk_bbox, dilate)
+
+    # determine new dim sizes
+    dim_sizes = [msk_bbox[1] - msk_bbox[0], msk_bbox[3] - msk_bbox[2], msk_bbox[5] - msk_bbox[4]]
+
+    # extract the region from the data
     data_region = np.zeros(dim_sizes + [len(data_files)])
     for i in range(len(data_files)):
-        data_region[:, :, :, i] = _extract_region(data[:, :, :, i], tuple(mask_bbox))
+        data_region[:, :, :, i] = data[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5], i]
     data = data_region
-    labels = _extract_region(labels, mask_bbox)
+    labels = labels[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
 
     # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
@@ -583,10 +575,9 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     # load labels data with slice trimming in z
     labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane)
 
-    # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
+    # add batch dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
-    #labels = np.expand_dims(np.expand_dims(labels, axis=3), axis=0)  # add a batch and channel dimension of 1
-    labels = np.expand_dims(labels, axis=0)  # add a channel dimension of 1
+    labels = np.expand_dims(labels, axis=0)  # add a batch dimension of 1
 
     # handle different planes
     if plane == 'ax':
@@ -975,6 +966,7 @@ def patch_input_fn_3d(mode, params):
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.mask_prefix,
+                          params.mask_dilate,
                           params.data_plane,
                           params.data_format,
                           params.augment_train_data,
@@ -1079,7 +1071,7 @@ def infer_input_fn_3d(params, infer_dir):
         lambda x: tf.py_func(_load_multicon_preserve_size_3d,
                              [x] + py_func_params,
                              tf.float32), num_parallel_calls=params.num_threads)
-    # extract 3D patches from the infer data - no overlap
+    # extract 3D patches from the infer data - force no overlap for infer
     dataset = dataset.map(
         lambda x: _tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, overlap=1),
         num_parallel_calls=params.num_threads)

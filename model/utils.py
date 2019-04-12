@@ -24,6 +24,7 @@ class Params:
     data_prefix = None
     label_prefix = None
     mask_prefix = None
+    mask_dilate = None
 
     dimension_mode = None  # must be 2D, 2.5D, 3D
     data_plane = None
@@ -223,10 +224,10 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
         else:
             raise ValueError("Data format not understood: " + str(data_format))
 
-        # define loss
+        # define loss as only the center slice first.
         loss_function = tf.losses.mean_squared_error(center_lab, center_pred, center_weights)
 
-        # add remaining slices at equal weight
+        # add remaining slices at equal weight to the center slice
         loss_function = tf.add(loss_function, tf.losses.mean_squared_error(labels, predictions, weights))
 
     # 2.5D MAE loss
