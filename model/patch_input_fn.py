@@ -90,7 +90,7 @@ def _expand_region(input_dims, region_bbox, delta):
     deltas = np.array([-int(np.floor(delta/2.)), int(np.ceil(delta/2.))] * 3)
 
     # use deltas to get a new bounding box
-    tmp_bbox = np.array(region_bbox) - deltas
+    tmp_bbox = np.array(region_bbox) + deltas
 
     # make sure there are not values outside of the original image
     new_bbox = []
