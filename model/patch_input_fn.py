@@ -741,7 +741,7 @@ def _tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
     return data
 
 
-def _filter_zero_patches(data, data_format, mode, thresh=0.05):
+def _filter_zero_patches(data, data_format, mode, thresh=0.1):
     """
     Filters out patches that contain mostly zeros in the label data. Works for 3D and 2D patches.
     :param data: (list of tensors) must have {'labels'} key containing labels data
