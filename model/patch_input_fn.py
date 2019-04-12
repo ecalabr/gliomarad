@@ -409,9 +409,8 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     # get the tight bounding box of the mask after affine rotation
     msk_bbox = _nonzero_slice_inds3d(mask)
 
-    # dilate bbox if necessary
-    if dilate:
-        msk_bbox = _expand_region(data_dims, msk_bbox, dilate)
+    # dilate bbox if necessary - this also ensures that the bbox does not exceed original image dims
+    msk_bbox = _expand_region(data_dims, msk_bbox, dilate)
 
     # determine new dim sizes
     dim_sizes = [msk_bbox[1] - msk_bbox[0], msk_bbox[3] - msk_bbox[2], msk_bbox[5] - msk_bbox[4]]
@@ -514,9 +513,8 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     # get the tight bounding box of the mask after affine rotation
     msk_bbox = _nonzero_slice_inds3d(mask)
 
-    # dilate bbox if necessary
-    if dilate:
-        msk_bbox = _expand_region(data_dims,msk_bbox, dilate)
+    # dilate bbox if necessary - this also ensures that the bbox does not exceed original image dims
+    msk_bbox = _expand_region(data_dims,msk_bbox, dilate)
 
     # determine new dim sizes
     dim_sizes = [msk_bbox[1] - msk_bbox[0], msk_bbox[3] - msk_bbox[2], msk_bbox[5] - msk_bbox[4]]
