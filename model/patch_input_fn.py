@@ -79,15 +79,61 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
 
 def _expand_region(input_dims, region_bbox, delta):
     """
-    Symmetrically expands a given 3D region bounding box by delta in each dimension without exceeding original image dims
+    Symmetrically expands a given 3D region bounding box by delta in each dim without exceeding original image dims
+    If delta is a single int then each dim is expanded by this amount. If a list or tuple, of ints then dims are
+    expanded to match the size of each int in the list respectively.
     :param input_dims: (list or tuple of ints) the original image dimensions
     :param region_bbox: (list or tuple of ints) the region bounding box to expand
-    :param delta: (int) the amount to expand each dimension by.
+    :param delta: (int or list/tuple of ints) the amount to expand each dimension by.
     :return: (list or tuple of ints) the expanded bounding box
     """
 
+    # if delta is actually a list, then refer to _expand_region_dims
+    if isinstance(delta, (list, tuple, np.ndarray)):
+        return _expand_region_dims(input_dims, region_bbox, delta)
+
     # determine how much to add on each side of the bounding box
     deltas = np.array([-int(np.floor(delta/2.)), int(np.ceil(delta/2.))] * 3)
+
+    # use deltas to get a new bounding box
+    tmp_bbox = np.array(region_bbox) + deltas
+
+    # make sure there are not values outside of the original image
+    new_bbox = []
+    for i, item in enumerate(tmp_bbox):
+        if i % 2 == 0: # for even indices, make sure there are no negatives
+            if item < 0:
+                item = 0
+        else: # for odd indices, make sure they do not exceed original dims
+            if item > input_dims[(i-1)/2]:
+                item = input_dims[(i-1)/2]
+        new_bbox.append(item)
+
+    return new_bbox
+
+
+def _expand_region_dims(input_dims, region_bbox, out_dims):
+    """
+    Symmetrically expands a given 3D region bounding box to the specified output size
+    :param input_dims: (list or tuple of ints) the original image dimensions
+    :param region_bbox: (list or tuple of ints) the region bounding box to expand
+    :param out_dims: (list or tuple of ints) the desired output dimensions.
+    :return: (list or tuple of ints) the expanded bounding box
+    """
+
+    # determine region dimensions
+    region_dims = [region_bbox[1] - region_bbox[0], region_bbox[3] - region_bbox[2], region_bbox[5] - region_bbox[4]]
+
+    # determine the delta in each dimension - exclude negatives
+    deltas = [x - y for x, y in zip(out_dims, region_dims)]
+    deltas = [0 if d < 0 else d for d in deltas]
+
+    # determine how much to add on each side of the bounding box
+    pre_inds = np.array([-int(np.floor(d/2.)) for d in deltas])
+    post_inds = np.array([int(np.ceil(d/2.)) for d in deltas])
+    deltas = np.empty((pre_inds.size + post_inds.size,), dtype=pre_inds.dtype)
+    deltas[0::2] = pre_inds
+    deltas[1::2] = post_inds
 
     # use deltas to get a new bounding box
     tmp_bbox = np.array(region_bbox) + deltas
@@ -514,7 +560,7 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     msk_bbox = _nonzero_slice_inds3d(mask)
 
     # dilate bbox if necessary - this also ensures that the bbox does not exceed original image dims
-    msk_bbox = _expand_region(data_dims,msk_bbox, dilate)
+    msk_bbox = _expand_region(data_dims, msk_bbox, dilate)
 
     # determine new dim sizes
     dim_sizes = [msk_bbox[1] - msk_bbox[0], msk_bbox[3] - msk_bbox[2], msk_bbox[5] - msk_bbox[4]]
@@ -597,13 +643,12 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     return data.astype(np.float32), labels.astype(np.float32)
 
 
-def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, out_dims, plane):
+def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, plane):
     """
     Load multicontrast image data without cropping or otherwise adjusting size. For use with inference/prediction.
     :param study_dir: (str) A directory containing the desired image data.
     :param feature_prefx: (list) a list of filenames - the data files to be loaded
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
@@ -612,8 +657,6 @@ def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, out_dims
     if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
     if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
     if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
-    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
-        "data_dims must be a list/tuple of ints")
 
     # load multi-contrast data and normalize, no slice trimming for infer data
     data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, None],
@@ -646,6 +689,12 @@ def _tf_patches(data, labels, patch_size, chan_dim, data_format, overlap=1):
     if not len(patch_size) == 2:
         raise ValueError("Patch size must be shape 2 to use 2D patch function but is: " + str(patch_size))
 
+    # handle overlap int vs list/tuple
+    if not isinstance(overlap, (np.ndarray, int, list, tuple)):
+        raise ValueError("Overlap must be a list, tuple, array, or int.")
+    if isinstance(overlap, int):
+        overlap = [overlap] * 2
+
     # handle channels first
     if data_format == 'channels_first':
         data = tf.transpose(data, perm=[0, 2, 3, 1])
@@ -653,7 +702,7 @@ def _tf_patches(data, labels, patch_size, chan_dim, data_format, overlap=1):
 
     # make patches
     ksizes = [1] + patch_size + [1]
-    strides = [1, patch_size[0] / overlap , patch_size[1] / overlap, 1]
+    strides = [1, patch_size[0] / overlap[0] , patch_size[1] / overlap[1], 1]
     rates = [1, 1, 1, 1]
     data = tf.extract_image_patches(data, ksizes=ksizes, strides=strides, rates=rates, padding='SAME')
     data = tf.reshape(data, [-1] + patch_size + [chan_dim])
@@ -676,7 +725,7 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     :param patch_size: (list or tupe of ints) the patch dimensions
     :param chan_dim:  (int) the number of data channels
     :param data_format: (str) either channels_last or channels_first - the tensorflow data format
-    :param overlap: (int) the divisor for patch strides - determines the patch overlap in x, y (default no overlap)
+    :param overlap: (int or list/tuple of ints) the divisor for patch strides - determines the patch overlap in x, y (default no overlap)
     :return: returns tensorflow tensor patches
     """
 
@@ -684,14 +733,20 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     if not len(patch_size) == 3:
         raise ValueError("Patch size must be shape 3 to use 3D patch function but is: " + str(patch_size))
 
+    # handle overlap int vs list/tuple
+    if not isinstance(overlap, (np.ndarray, int, list, tuple)):
+        raise ValueError("Overlap must be a list, tuple, array, or int.")
+    if isinstance(overlap, int):
+        overlap = [overlap] * 3
+
     # handle channels first
     if data_format == 'channels_first':
         data = tf.transpose(data, perm=[0, 2, 3, 4, 1])
         labels = tf.transpose(labels, perm=[0, 2, 3, 4, 1])
 
-    # for sliding window 3d slabs, stride should be 1 in z dim, for x and y move 1/3 of the window
+    # for sliding window 3d slabs
     ksizes = [1] + patch_size + [1]
-    strides = [1, patch_size[0] / overlap , patch_size[1] / overlap, 1, 1]
+    strides = [1, patch_size[0] / overlap[0] , patch_size[1] / overlap[1], patch_size[2] / overlap[2], 1]
 
     # make patches
     data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
@@ -722,13 +777,19 @@ def _tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
     if not len(patch_size) == 3:
         raise ValueError("Patch size must be shape 3 to use 3D patch function but is: " + str(patch_size))
 
+    # handle overlap int vs list/tuple
+    if not isinstance(overlap, (np.ndarray, int, list, tuple)):
+        raise ValueError("Overlap must be a list, tuple, array, or int.")
+    if isinstance(overlap, int):
+        overlap = [overlap] * 3
+
     # handle channels first
     if data_format == 'channels_first':
         data = tf.transpose(data, perm=[0, 2, 3, 4, 1])
 
-    # for sliding window 3d slabs, stride should be 1 in z dim, for x and y move 1/3 of the window
+    # for sliding window 3d slabs
     ksizes = [1] + patch_size + [1]
-    strides = [1, patch_size[0] / overlap , patch_size[1] / overlap, 1, 1]
+    strides = [1, patch_size[0] / overlap[0] , patch_size[1] / overlap[1], patch_size[2] / overlap[2], 1]
 
     # make patches
     data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
@@ -757,7 +818,7 @@ def _filter_zero_patches(data, data_format, mode, thresh=0.1):
             mid_sl = data['labels'][:, :, data['labels'].get_shape()[2]/2 + 1, 0]
         elif mode == '2D': # [x, y, c]
             mid_sl = data['labels'][:, :, 0]
-        elif mode == ' 3D':
+        elif mode == '3D':
             mid_sl = data['labels'][:, :, :, 0]
         else:
             raise ValueError("Mode must be 2D, 2.5D, or 3D but is: " + str(mode))
@@ -961,6 +1022,8 @@ def patch_input_fn_3d(mode, params):
     if mode == 'train':
         data_dirs = train_dirs
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
+        train_dims = list(params.train_dims)
+        chan_size = len(params.data_prefix)
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.mask_prefix,
@@ -979,7 +1042,7 @@ def patch_input_fn_3d(mode, params):
             num_parallel_calls=params.num_threads)
         # map each dataset to a series of patches with overlap of 1/3
         dataset = dataset.map(
-            lambda x, y: _tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format,
+            lambda x, y: _tf_patches_3d(x, y, train_dims, chan_size, params.data_format,
                                         overlap=params.train_patch_overlap),
             num_parallel_calls=params.num_threads)
         # flatten out dataset so that each entry is a single patch and associated label
@@ -993,6 +1056,9 @@ def patch_input_fn_3d(mode, params):
 
     # eval mode
     elif mode == 'eval':
+        # prepare pyfunc params
+        infer_dims = list(params.infer_dims)
+        chan_size = len(params.data_prefix)
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.data_format,
@@ -1006,10 +1072,12 @@ def patch_input_fn_3d(mode, params):
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
         # map each dataset to a series of patches - no overlap between patches (default)
         dataset = dataset.map(
-            lambda x, y: _tf_patches_3d(x, y, params.infer_dims, len(params.data_prefix), params.data_format),
+            lambda x, y: _tf_patches_3d(x, y, infer_dims, chan_size, params.data_format, overlap=1),
             num_parallel_calls=params.num_threads)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
+        # filter out zero patches because they wont contribute much to evaluation metrics
+        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format, params.dimension_mode))
         # generate batch data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
 
@@ -1048,7 +1116,7 @@ def patch_input_fn_3d(mode, params):
 
 def infer_input_fn_3d(params, infer_dir):
     """
-    Input function for UCSF GBM dataset
+    Input function for inferring 3d patches
     :param params: (class) the params class generated from a JSON file
     :param infer_dir: (str) the directory for inference
     :return: outputs, a dict containing the features, labels, and initializer operation
@@ -1060,7 +1128,7 @@ def infer_input_fn_3d(params, infer_dir):
     # prepare pyfunc
     data_dims = list(params.infer_dims)
     chan_size = len(params.data_prefix)
-    py_func_params = [params.data_prefix, params.data_format, data_dims, params.data_plane]
+    py_func_params = [params.data_prefix, params.data_format, params.data_plane]
 
     # generate tensorflow dataset object from infer directory
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
@@ -1069,9 +1137,9 @@ def infer_input_fn_3d(params, infer_dir):
         lambda x: tf.py_func(_load_multicon_preserve_size_3d,
                              [x] + py_func_params,
                              tf.float32), num_parallel_calls=params.num_threads)
-    # extract 3D patches from the infer data - force no overlap for infer
+    # extract 3D patches from the infer data using same overlap
     dataset = dataset.map(
-        lambda x: _tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, overlap=1),
+        lambda x: _tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, params.train_patch_overlap),
         num_parallel_calls=params.num_threads)
     # flatten patches to individual examples
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
@@ -1093,3 +1161,128 @@ def infer_input_fn_3d(params, infer_dir):
     inputs = {'features': get_next_features, 'iterator_init_op': init_op}
 
     return inputs
+
+
+def reconstruct_infer_patches(predictions, infer_dir, params):
+    """
+    Function for reconstructing the input 3D volume from the output predictions after 3D image patch prediction
+    :param predictions: (tf.tensor) - the output of 3D patch prediction
+    :param infer_dir: (str) - the directory containing the inferance dataset
+    :param params: (obj) - the parameter object derived from the param file
+    :return: (np.ndarray) - returns the reconstructed image generated by reversing ExtractVolumePatches
+    """
+
+    # define params - converting all to python native variables as they may be imported as numpy
+    patch_size = params.infer_dims
+    overlap = params.train_patch_overlap
+    data_prefix = [str(item) for item in params.data_prefix]
+    data_format = params.data_format
+    data_plane = params.data_plane
+
+    # for sliding window 3d slabs - must be same as in _tf_patches_3d_infer above
+    ksizes = [1] + patch_size + [1]
+    strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], patch_size[2] / overlap[2], 1]
+
+    # define necessary functions
+    def extract_patches(x):
+        return tf.extract_volume_patches(x, ksizes=ksizes, strides=strides, padding='SAME')
+
+    def extract_patches_inverse(x, y):
+        _x = tf.zeros_like(x)
+        _y = extract_patches(_x)
+        grad = tf.gradients(_y, _x)[0]
+        # Divide by grad, to "average" together the overlapping patches
+        # otherwise they would simply sum up
+        return tf.gradients(_y, _x, grad_ys=y)[0] / grad
+
+    # load original data but convert to only one channel to match output [batch, x, y, z, channel]
+    data = _load_multicon_preserve_size_3d(infer_dir, data_prefix, data_format, data_plane)
+    data = data[:, :, :, :, [1]] if params.data_format == 'channels_last' else data[:, [1], :, :, :]
+
+    # get shape of patches as they would have been generated during inference
+    dummy_patches = extract_patches(data)
+
+    # reshape predictions to original patch shape
+    predictions = tf.reshape(predictions, tf.shape(dummy_patches))
+
+    # reconstruct
+    reconstructed = extract_patches_inverse(data, predictions)
+    with tf.Session() as sess:
+        output = np.squeeze(reconstructed.eval(session=sess))
+
+    return output
+
+
+# define the gradient for ExtractVolumePatches - this allows reversal of patches for inferance
+from tensorflow.python.framework import ops
+from tensorflow.python.framework import sparse_tensor
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import sparse_ops
+from tensorflow.python.ops import gen_array_ops
+from tensorflow.python.ops import math_ops
+
+@ops.RegisterGradient("ExtractVolumePatches")
+def _ExtractVolumePatchesGrad(op, grad):
+  batch_size, planes_in, rows_in, cols_in, channels = [
+      dim.value for dim in op.inputs[0].shape.dims
+  ]
+  input_bphwc = array_ops.shape(op.inputs[0])
+  batch_size = input_bphwc[0]
+  channels = input_bphwc[4]
+
+  # Create indices matrix for input tensor.
+  # Note that 0 is preserved for padding location,
+  # so indices for input start from 1 to 1 + rows_in * cols_in.
+  input_indices_num = 1 + planes_in * rows_in * cols_in
+  input_idx = array_ops.reshape(math_ops.range(1, input_indices_num,
+                                               dtype=ops.dtypes.int64),
+                                (1, planes_in, rows_in, cols_in, 1))
+  input_idx_patched = gen_array_ops.extract_volume_patches(
+      input_idx,
+      op.get_attr("ksizes"),
+      op.get_attr("strides"),
+      op.get_attr("padding"))
+
+  # Create indices matrix for output tensor.
+  _, planes_out, rows_out, cols_out, _ = [dim.value for dim in
+                                          op.outputs[0].shape.dims]
+  _, ksize_p, ksize_r, ksize_c, _ = op.get_attr("ksizes")
+  # Indices for output start from 0.
+  prc_indices_num = planes_out * rows_out * cols_out
+  output_indices_num = prc_indices_num * ksize_p * ksize_r * ksize_c
+  output_idx = array_ops.reshape(math_ops.range(output_indices_num,
+                                                dtype=ops.dtypes.int64),
+                                 (1, planes_out, rows_out, cols_out,
+                                  ksize_p * ksize_r * ksize_c))
+
+  # Construct mapping table for indices: (input -> output).
+  idx_matrix = array_ops.concat(
+      [array_ops.expand_dims(input_idx_patched, axis=-1),
+       array_ops.expand_dims(output_idx, axis=-1)],
+      axis=-1)
+  idx_map = array_ops.reshape(idx_matrix, (-1, 2))
+
+  sp_shape = (input_indices_num, output_indices_num)
+  sp_mat_full = sparse_tensor.SparseTensor(
+      idx_map,
+      array_ops.ones([output_indices_num], dtype=grad.dtype),
+      sp_shape)
+  # Remove all padding locations [0, :].
+  sp_mat = sparse_ops.sparse_slice(sp_mat_full,
+                                   (1, 0),
+                                   (input_indices_num - 1, output_indices_num))
+
+  grad_expanded = array_ops.transpose(
+      array_ops.reshape(
+          grad, (batch_size, planes_out, rows_out, cols_out, ksize_p, ksize_r,
+                 ksize_c, channels)),
+      (1, 2, 3, 4, 5, 6, 0, 7))
+  grad_flat = array_ops.reshape(grad_expanded, (-1, batch_size * channels))
+
+  jac = sparse_ops.sparse_tensor_dense_matmul(sp_mat, grad_flat)
+
+  grad_out = array_ops.reshape(jac, (planes_in, rows_in, cols_in, batch_size,
+                                     channels))
+  grad_out = array_ops.transpose(grad_out, (3, 0, 1, 2, 4))
+
+  return [grad_out]

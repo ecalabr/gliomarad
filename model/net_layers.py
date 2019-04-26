@@ -672,3 +672,57 @@ def resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dropout,
         tensor = tf.layers.dropout(tensor, rate=dropout, training=is_training, name=name + '_dropout')
 
     return tensor
+
+
+def bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dropout, is_training, act):
+    """
+    Creates a 3D single bottleneck residual block with batch normalization and activation
+    Modeled after: https://github.com/tensorflow/models/blob/master/official/resnet/resnet_model.py#L251
+    :param tensor: (tf.tensor) the inputa data tensor
+    :param filt: (int) the number of filters for the convolutions
+    :param ksize: (list/tuple(int)) the kernel size for convolutions
+    :param strides: (list/tuple(int)) the strides for convolutions
+    :param dil: (list/tuple(int)) the dilation for convolutions
+    :param dfmt: (str) the tf data format 'channels_first' or 'channels_last'
+    :param name: (str) the name of the operation
+    :param reuse: (bool) whether or not to reuse weights for this layer
+    :param dropout: (float) the dropout rate, if zero, no dropout layer is applied
+    :param is_training: (bool) whether or not the model is training
+    :param act: (str) the name of te activation method, e.g. 'leaky_relu'
+    :return: returns a residual layer as defined in the resnet example above.
+    """
+
+    # determine if strided - if yes then perform projection shortcut, if not then perform identity shortcut
+    if not isinstance(strides, (list, tuple)):
+        strides = [strides] * 3
+    strided = True if any(stride > 1 for stride in strides) else False
+    if strided:  # if strided do projection shortcut - bn and activation for first conv done first
+        tensor = batch_norm(tensor, is_training, dfmt, name + '_bneck_conv1_bn', reuse)
+        tensor = activation(tensor, act, name + '_bneck_conv1_act')
+        shortcut = conv3d_fixed_pad(tensor, filt, [1, 1, 1], strides, dil, dfmt, name + '_shrtct_proj', reuse)
+    else:  # if not strided then do identity shortcut and then batch norm and relu for first conv
+        shortcut = tensor
+        tensor = batch_norm(tensor, is_training, dfmt, name + '_bneck_conv1_bn', reuse)
+        tensor = activation(tensor, act, name + '_bneck_conv1_act')
+
+    # perform first 1x1 conv for bottleneck block using 1/4 filters - initial bn and act already done above
+    conv3d_fixed_pad(tensor, filt/4, ksize, [1, 1, 1], dil, dfmt, name + '_bneck_conv_1', reuse)
+
+    # perform 3x3 conv for bottleneck block with bn and activation using 1/4 filters
+    tensor = batch_norm(tensor, is_training, dfmt, name + '_bneck_conv2_bn', reuse)
+    tensor = activation(tensor, act, name + '_bneck_conv2_act')
+    tensor = conv3d_fixed_pad(tensor, filt/4, ksize, strides, dil, dfmt, name + '_bneck_conv2', reuse)
+
+    # perform second 1x1 conv with full filters
+    tensor = batch_norm(tensor, is_training, dfmt, name + '_bneck_conv3_bn', reuse)
+    tensor = activation(tensor, act, name + '_bneck_conv3_act')
+    tensor = conv3d_fixed_pad(tensor, filt, ksize, [1, 1, 1], dil, dfmt, name + '_bneck_conv_3', reuse)
+
+    # optional dropout layer
+    if dropout > 0.:
+        tensor = tf.layers.dropout(tensor, rate=dropout, training=is_training, name=name + '_dropout')
+
+    # fuse shortcut with tensor output
+    tensor = tf.add(tensor, shortcut, name + '_bneck_shrtct_add')
+
+    return tensor

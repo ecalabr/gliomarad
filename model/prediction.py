@@ -7,6 +7,7 @@ import nibabel as nib
 import logging
 import time
 from glob import glob
+from patch_input_fn import reconstruct_infer_patches
 
 
 def predict_sess(sess, model_spec):
@@ -29,11 +30,11 @@ def predict_sess(sess, model_spec):
             if type(predictions) != np.ndarray:
                 start = time.time()
                 predictions = prediction
-                logging.info("Processing slice " + str(n) + " took " + str(time.time()-start) + " seconds")
+                logging.info("Processing chunk " + str(n) + " took " + str(time.time()-start) + " seconds")
             else:
                 start = time.time()
                 predictions = np.concatenate([predictions, prediction])  # concatenates on axis=0 by default
-                logging.info("Processing slice " + str(n) + " took " + str(time.time() - start) + " seconds")
+                logging.info("Processing chunk " + str(n) + " took " + str(time.time() - start) + " seconds")
         except tf.errors.OutOfRangeError:
             break
 
@@ -76,54 +77,64 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
         # predict
         predictions = predict_sess(sess, model_spec)
 
-    # handle 2.5D - take only middle slice from each slab
-    if params.dimension_mode == '2.5D':
-        # handle channels last [b, x, y, z, c]
-        if params.data_format == 'channels_last':
-            predictions = predictions[:, :, :, predictions.shape[3]/2 + 1, :]
-        # handle channels first [b, c, x, y, z]
-        elif params.data_format == 'channels_first':
-            predictions = predictions[:, :, :, :, predictions.shape[3]/2 + 1]
-        else:
-            raise ValueError("Did not understand data format: " + str(params.data_format))
-
-    # load one of the original images to restore original shape
+    # load one of the original images to restore original shape and to use for masking
     if infer_dir[-1] == '/': infer_dir = infer_dir[0:-1]  # remove possible trailing slash
     nii = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
     affine = nii.affine
     shape = np.array(nii.shape)
     name_prefix = os.path.basename(infer_dir)
 
-    # handle multiple predictions
-    if params.data_format == 'channels_first':
-        if predictions.shape[1] > 1:
-            predictions = np.expand_dims(predictions[:, 0, :, :], axis=1)
-    if params.data_format == 'channels_last':
-        if predictions.shape[-1] > 1:
-            predictions = np.expand_dims(predictions[:, :, :, 0], axis=-1)
+    # handle 2 and 2.5 dimensional inference
+    if params.dimension_mode in ['2D', '2.5D']:
+        # handle 2.5D - take only middle slice from each slab
+        if params.dimension_mode == '2.5D':
+            # handle channels last [b, x, y, z, c]
+            if params.data_format == 'channels_last':
+                predictions = predictions[:, :, :, predictions.shape[3]/2 + 1, :]
+            # handle channels first [b, c, x, y, z]
+            elif params.data_format == 'channels_first':
+                predictions = predictions[:, :, :, :, predictions.shape[3]/2 + 1]
+            else:
+                raise ValueError("Did not understand data format: " + str(params.data_format))
 
-    # convert to batch dim last and squeeze channels dim
-    permute = [2, 3, 0, 1] if params.data_format == 'channels_first' else [1, 2, 0, 3]
-    predictions = np.squeeze(np.transpose(predictions, axes=permute))
 
-    # convert back to axial
-    if params.data_plane == 'ax':
-        pass
-    elif params.data_plane == 'cor':
-        predictions = np.transpose(predictions, axes=(0, 2, 1))
-    elif params.data_plane == 'sag':
-        predictions = np.transpose(predictions, axes=(2, 0, 1))
+
+        # handle multiple predictions
+        if params.data_format == 'channels_first':
+            if predictions.shape[1] > 1:
+                predictions = np.expand_dims(predictions[:, 0, :, :], axis=1)
+        if params.data_format == 'channels_last':
+            if predictions.shape[-1] > 1:
+                predictions = np.expand_dims(predictions[:, :, :, 0], axis=-1)
+
+        # convert to batch dim last and squeeze channels dim
+        permute = [2, 3, 0, 1] if params.data_format == 'channels_first' else [1, 2, 0, 3]
+        predictions = np.squeeze(np.transpose(predictions, axes=permute))
+
+        # convert back to axial
+        if params.data_plane == 'ax':
+            pass
+        elif params.data_plane == 'cor':
+            predictions = np.transpose(predictions, axes=(0, 2, 1))
+        elif params.data_plane == 'sag':
+            predictions = np.transpose(predictions, axes=(2, 0, 1))
+        else:
+            raise ValueError("Did not understand specified plane: " + str(params.data_plane))
+
+        # crop back to original shape (same as input data) - this reverses tensorflow extract patches padding
+        pred_shape = np.array(predictions.shape)
+        pads = pred_shape - shape
+        predictions = predictions[int(np.floor(pads[0]/2.)):pred_shape[0]-int(np.ceil(pads[0]/2.)),
+                      int(np.floor(pads[1]/2.)):pred_shape[1]-int(np.ceil(pads[1]/2.)),
+                      int(np.floor(pads[2]/2.)):pred_shape[2]-int(np.ceil(pads[2]/2.))]
+
+    # handle 3D inference
+    elif params.dimension_mode == '3D':
+        predictions = reconstruct_infer_patches(predictions, infer_dir, params)
     else:
-        raise ValueError("Did not understand specified plane: " + str(params.data_plane))
+        raise ValueError("Dimension mode must be in [2D, 2.5D, 3D] but is: " + str(params.dimension_mode))
 
-    # crop back to original shape (same as input data) - this reverses tensorflow extract patches padding
-    pred_shape = np.array(predictions.shape)
-    pads = pred_shape - shape
-    predictions = predictions[int(np.floor(pads[0]/2.)):pred_shape[0]-int(np.ceil(pads[0]/2.)),
-                  int(np.floor(pads[1]/2.)):pred_shape[1]-int(np.ceil(pads[1]/2.)),
-                  int(np.floor(pads[2]/2.)):pred_shape[2]-int(np.ceil(pads[2]/2.))]
-
-    # mask predictions based on input data
+    # mask predictions based on original input data
     mask = nii.get_data() > 0
     predictions = predictions * mask
 
