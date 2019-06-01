@@ -347,27 +347,34 @@ def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, o
     if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
         "data_dims must be a list/tuple of ints")
 
-    # load multi-contrast data
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)  # normalize input imgs
+    # load multi-contrast data - normalize input images
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)
 
     # load labels data
     labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane)
 
-    # do data padding to desired dims
-    axes = [1, 2] if data_fmt == 'channels_last' else [2, 3]
+    # do data padding to desired dims - format is [x, y, z, c] or [c, x, y, z]
+    axes = [1, 2] if data_fmt == 'channels_first' else [0, 1]
     data = _zero_pad_image(data, out_dims, axes)
     labels = _zero_pad_image(labels, out_dims, axes)
+
+    # note that load single study handles normalization, image plane, and data format, but does not make z batch dim
+    if data_fmt == 'channels_first':
+        data = np.transpose(data, axes=(3, 0, 1, 2))
+        labels = np.transpose(labels, axes=(3, 0, 1, 2))
+    else:
+        data = np.transpose(data, axes=(2, 0, 1, 3))
+        labels = np.transpose(labels, axes=(2, 0, 1, 3))
 
     return data, labels
 
 
-def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims, plane):
+def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane):
     """
     Load multicontrast image data without cropping or otherwise adjusting size. For use with inference/prediction.
     :param study_dir: (str) A directory containing the desired image data.
     :param feature_prefx: (list) a list of filenames - the data files to be loaded
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
@@ -376,12 +383,14 @@ def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, out_dims, p
     if not os.path.isdir(study_dir): raise ValueError("Specified study_directory does not exist")
     if not all([isinstance(a, str) for a in feature_prefx]): raise ValueError("Data prefixes must be strings")
     if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
-    if not all([np.issubdtype(a, np.integer) for a in out_dims]): raise ValueError(
-        "data_dims must be a list/tuple of ints")
 
     # load multi-contrast data and normalize, no slice trimming for infer data
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, None],
-                                   norm=True, plane=plane)
+    data, nzi = _load_single_study(study_dir,
+                                   feature_prefx,
+                                   data_format=data_fmt,
+                                   slice_trim=[0, None],
+                                   norm=True,
+                                   plane=plane)
 
     return data
 
@@ -613,8 +622,8 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     if not all([isinstance(a, str) for a in label_prefx]): raise ValueError("Labels prefixes must be strings")
     if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
 
-    # load multi-contrast data with slice trimming in z
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)  # normalize input imgs
+    # load multi-contrast data with slice trimming in z - normalize input images
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)
 
     # load labels data with slice trimming in z
     labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane)
@@ -717,6 +726,45 @@ def _tf_patches(data, labels, patch_size, chan_dim, data_format, overlap=1):
     return data, labels
 
 
+def _tf_patches_infer(data, patch_size, chan_dim, data_format, overlap=1):
+    """
+    Extract 2D patches from a data array with overlap if desired - no labels. used for inference
+    :param data: (numpy array) the data tensorflow tensor
+    :param patch_size: (list or tupe of ints) the patch dimensions
+    :param chan_dim:  (int) the number of data channels
+    :param data_format: (str) either channels_last or channels_first - the tensorflow data format
+    :param overlap: (int or list/tuple of ints) the divisor for patch strides - determines the patch overlap in x, y
+    :return: returns tensorflow tensor patches
+    """
+
+    # sanity checks
+    if not len(patch_size) == 2:
+        raise ValueError("Patch size must be shape 2 to use 2D patch function but is: " + str(patch_size))
+
+    # handle overlap int vs list/tuple
+    if not isinstance(overlap, (np.ndarray, int, list, tuple)):
+        raise ValueError("Overlap must be a list, tuple, array, or int.")
+    if isinstance(overlap, int):
+        overlap = [overlap] * 2
+
+    # handle channels first
+    if data_format == 'channels_first':
+        data = tf.transpose(data, perm=[0, 2, 3, 1])
+
+    # make patches
+    ksizes = [1] + patch_size + [1]
+    strides = [1, patch_size[0] / overlap[0] , patch_size[1] / overlap[1], 1]
+    rates = [1, 1, 1, 1]
+    data = tf.extract_image_patches(data, ksizes=ksizes, strides=strides, rates=rates, padding='SAME')
+    data = tf.reshape(data, [-1] + patch_size + [chan_dim])
+
+    # handle channels first
+    if data_format == 'channels_first':
+        data = tf.transpose(data, perm=[0, 3, 1, 2])
+
+    return data
+
+
 def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     """
     Extract 3D patches from a data array with overlap if desired
@@ -725,7 +773,7 @@ def _tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     :param patch_size: (list or tupe of ints) the patch dimensions
     :param chan_dim:  (int) the number of data channels
     :param data_format: (str) either channels_last or channels_first - the tensorflow data format
-    :param overlap: (int or list/tuple of ints) the divisor for patch strides - determines the patch overlap in x, y (default no overlap)
+    :param overlap: (int or list/tuple of ints) the divisor for patch strides - determines the patch overlap in x, y
     :return: returns tensorflow tensor patches
     """
 
@@ -833,7 +881,7 @@ def _filter_zero_patches(data, data_format, mode, thresh=0.1):
         else:
             raise ValueError("Labels shape must be 2D or 3D but is: " + str((data['labels'].get_shape())))
 
-    # eliminate if label slice is 95% empty
+    # eliminate if label slice is 90% empty
     thr = tf.constant(thresh, dtype=tf.float32)
 
     return tf.less(thr, tf.count_nonzero(mid_sl, dtype=tf.float32) / tf.size(mid_sl, out_type=tf.float32))
@@ -872,7 +920,7 @@ def patch_input_fn(mode, params):
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.mask_prefix,
-                          params.train_dims,
+                          params.mask_dilate,
                           params.data_plane,
                           params.data_format,
                           params.augment_train_data,
@@ -913,7 +961,6 @@ def patch_input_fn(mode, params):
                                  [x] + py_func_params,
                                  (tf.float32, tf.float32)), num_parallel_calls=params.num_threads)
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
-        dataset = dataset.prefetch(params.buffer_size)
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
 
     # infer mode
@@ -962,7 +1009,7 @@ def infer_input_fn(params, infer_dir):
 
     # prepare pyfunc
     data_dims = list(params.infer_dims)
-    py_func_params = [params.data_prefix, params.data_format, data_dims, params.data_plane]
+    py_func_params = [params.data_prefix, params.data_format, params.data_plane]
 
     # generate tensorflow dataset object from infer directories
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
@@ -1139,7 +1186,7 @@ def infer_input_fn_3d(params, infer_dir):
                              tf.float32), num_parallel_calls=params.num_threads)
     # extract 3D patches from the infer data using same overlap
     dataset = dataset.map(
-        lambda x: _tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, params.train_patch_overlap),
+        lambda x: _tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
         num_parallel_calls=params.num_threads)
     # flatten patches to individual examples
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
@@ -1165,6 +1212,56 @@ def infer_input_fn_3d(params, infer_dir):
 
 def reconstruct_infer_patches(predictions, infer_dir, params):
     """
+    Function for reconstructing the input 2D patches from the output predictions after 2D image patch prediction
+    :param predictions: (tf.tensor) - the output of 3D patch prediction
+    :param infer_dir: (str) - the directory containing the inferance dataset
+    :param params: (obj) - the parameter object derived from the param file
+    :return: (np.ndarray) - returns the reconstructed image generated by reversing ExtractVolumePatches
+    """
+
+    # define params - converting all to python native variables as they may be imported as numpy
+    patch_size = params.infer_dims
+    overlap = params.infer_patch_overlap
+    data_prefix = [str(item) for item in params.data_prefix]
+    data_format = params.data_format
+    data_plane = params.data_plane
+
+    # for sliding window 2d patcjes - must be same as in _tf_patches_infer above
+    ksizes = [1] + patch_size + [1]
+    strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], 1]
+
+    # define necessary functions
+    def extract_patches(x):
+        return tf.extract_image_patches(x, ksizes=ksizes, strides=strides, padding='SAME')
+
+    def extract_patches_inverse(x, y):
+        _x = tf.zeros_like(x)
+        _y = extract_patches(_x)
+        grad = tf.gradients(_y, _x)[0]
+        # Divide by grad, to "average" together the overlapping patches
+        # otherwise they would simply sum up
+        return tf.gradients(_y, _x, grad_ys=y)[0] / grad
+
+    # load original data but convert to only one channel to match output [batch, x, y, z, channel]
+    data = _load_multicon_preserve_size(infer_dir, data_prefix, data_format, data_plane)
+    data = data[:, :, :, [1]] if params.data_format == 'channels_last' else data[:, [1], :, :]
+
+    # get shape of patches as they would have been generated during inference
+    dummy_patches = extract_patches(data)
+
+    # reshape predictions to original patch shape
+    predictions = tf.reshape(predictions, tf.shape(dummy_patches))
+
+    # reconstruct
+    reconstructed = extract_patches_inverse(data, predictions)
+    with tf.Session() as sess:
+        output = np.squeeze(reconstructed.eval(session=sess))
+
+    return output
+
+
+def reconstruct_infer_patches_3d(predictions, infer_dir, params):
+    """
     Function for reconstructing the input 3D volume from the output predictions after 3D image patch prediction
     :param predictions: (tf.tensor) - the output of 3D patch prediction
     :param infer_dir: (str) - the directory containing the inferance dataset
@@ -1174,7 +1271,7 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
 
     # define params - converting all to python native variables as they may be imported as numpy
     patch_size = params.infer_dims
-    overlap = params.train_patch_overlap
+    overlap = params.infer_patch_overlap
     data_prefix = [str(item) for item in params.data_prefix]
     data_format = params.data_format
     data_plane = params.data_plane

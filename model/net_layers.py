@@ -114,6 +114,14 @@ def activation(tensor, acti_type='leaky_relu', name=None):  # add optional type 
             features=tensor,
             name=name)
 
+    # normal relu
+    elif acti_type == 'prelu':
+        act_func = tf.keras.layers.PReLU(alpha_initializer='zeros',
+                                         alpha_regularizer=None,
+                                         alpha_constraint=None,
+                                         shared_axes=None,
+                                         name=name)(tensor)
+
      # not implemented
     else:
         raise ValueError("Provided type " + str(acti_type) + " is not a known activation type")

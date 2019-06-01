@@ -7,6 +7,7 @@ import nibabel as nib
 import logging
 import time
 from glob import glob
+from patch_input_fn import reconstruct_infer_patches_3d
 from patch_input_fn import reconstruct_infer_patches
 
 
@@ -86,6 +87,9 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
 
     # handle 2 and 2.5 dimensional inference
     if params.dimension_mode in ['2D', '2.5D']:
+        # handle 2D with patches using 2D patch reconstructor
+        if params.dimension_mode == '2D' and any([overlap > 1 for overlap in params.infer_patch_overlap]):
+            predictions = reconstruct_infer_patches(predictions, infer_dir, params)
         # handle 2.5D - take only middle slice from each slab
         if params.dimension_mode == '2.5D':
             # handle channels last [b, x, y, z, c]
@@ -96,8 +100,6 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
                 predictions = predictions[:, :, :, :, predictions.shape[3]/2 + 1]
             else:
                 raise ValueError("Did not understand data format: " + str(params.data_format))
-
-
 
         # handle multiple predictions
         if params.data_format == 'channels_first':
@@ -130,7 +132,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
 
     # handle 3D inference
     elif params.dimension_mode == '3D':
-        predictions = reconstruct_infer_patches(predictions, infer_dir, params)
+        predictions = reconstruct_infer_patches_3d(predictions, infer_dir, params)
     else:
         raise ValueError("Dimension mode must be in [2D, 2.5D, 3D] but is: " + str(params.dimension_mode))
 

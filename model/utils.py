@@ -31,6 +31,7 @@ class Params:
     train_dims = None
     train_patch_overlap = None
     infer_dims = None
+    infer_patch_overlap = None
     augment_train_data = None
     label_interp = None
 
@@ -208,30 +209,33 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
                 loss_function = tf.add(loss_function, loss * 0.5)
 
     # 2.5D MSE loss
-    elif loss_method == 'MSE3D':
+    elif loss_method == 'MSE25D':
+        # cast weights to float
+        weights = tf.cast(weights, tf.float32)
         # handle channels last
         if data_format == 'channels_last':
-            # get center slice for channels last [b, x, y, z, c]
-            center_pred = predictions[:, : , :, predictions.shape[3] / 2 + 1, :]
-            center_lab = labels[:, : , :, labels.shape[3] / 2 + 1, :]
-            center_weights = weights[:, : , :, weights.shape[3] / 2 + 1, :]
+            # get center slice for channels last [b, x, y, z, c] and double weights for this slice
+            center_pred = predictions[:, :, :, predictions.shape[3] / 2 + 1, :]
+            center_lab = labels[:, :, :, labels.shape[3] / 2 + 1, :]
+            center_weights = tf.multiply(weights[:, :, :, weights.shape[3] / 2 + 1, :], 2.)
         # handle channels first
         elif data_format == 'channels_first':
-            # get center slice for channels last [b, c, x, y, z]
+            # get center slice for channels last [b, c, x, y, z] and double weights for this slice
             center_pred = predictions[:, :, :, :, predictions.shape[3] / 2 + 1]
             center_lab = labels[:, :, :, :, labels.shape[3] / 2 + 1]
-            center_weights = weights[:, :, :, :, weights.shape[3] / 2 + 1]
+            center_weights = tf.multiply(weights[:, :, :, :, weights.shape[3] / 2 + 1], 2.)
         else:
             raise ValueError("Data format not understood: " + str(data_format))
 
-        # define loss as only the center slice first.
-        loss_function = tf.losses.mean_squared_error(center_lab, center_pred, center_weights)
+        # define loss as only the center slice first
+        loss_function = tf.losses.mean_squared_error(center_pred, center_lab, center_weights,
+                                                   reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
 
-        # add remaining slices at equal weight to the center slice
-        loss_function = tf.add(loss_function, tf.losses.mean_squared_error(labels, predictions, weights))
+        # add loss for the rest of the slab to the loss
+        #loss_function = tf.add(loss_function, tf.losses.mean_squared_error(predictions, labels, weights, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS))
 
     # 2.5D MAE loss
-    elif loss_method == 'MAE3D':
+    elif loss_method == 'MAE25D':
         # handle channels last
         if data_format == 'channels_last':
             # get center slice for channels last [b, x, y, z, c]

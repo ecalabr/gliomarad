@@ -2,3 +2,5 @@ incorporate topup DTI files when/where they exist
 
 
 segmentation networks
+
+fix 2.5d inference, add option for 2d patch gradient inference

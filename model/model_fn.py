@@ -32,9 +32,8 @@ def model_fn(inputs, params, mode, reuse=False):
         predictions = net_builder(features, params, is_training, reuse)
 
     # Define loss using loss picker function - mask so that loss is only calculated where labels is nonzero
-    mask = labels > 0
-    losses = loss_picker(params.loss, labels, predictions, data_format=params.data_format, weights=mask)
-    loss = tf.reduce_mean(losses)
+    mask = tf.cast(labels > 0,tf.float32)
+    loss = loss_picker(params.loss, labels, predictions, data_format=params.data_format, weights=mask)
 
     # handle predictions with more than 1 prediction
     if params.data_format == 'channels_first':

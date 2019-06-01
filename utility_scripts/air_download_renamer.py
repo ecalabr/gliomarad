@@ -5,8 +5,8 @@ import os
 import subprocess
 import csv
 
-data_dir = "/mnt/DE1A2F2D1A2F01DF/new_gbm_download"
-patient_csv = "/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--2-11-19.csv"
+data_dir = "/media/ecalabr/scratch/work/download_22"
+patient_csv = "/home/ecalabr/Dropbox/idh1_gbm_project/download_result_spreadsheets/feb11_april25_2019_air_mpower_combined.csv"
 
 # get patient list
 mrn_list = []
@@ -54,9 +54,9 @@ for i in folders:
     mrn = int(hdr.PatientID)
     # if MRN/accession don't match add a _ to directory beginning
     if patient_match(mrn_list, access_list, mrn, access):
-        outdir = os.path.join(data_dir, str(access))
+        outdir = os.path.join(data_dir, str(access).zfill(8))
     else:
-        outdir = os.path.join(data_dir, "_" + str(access))
+        outdir = os.path.join(data_dir, "_" + str(access).zfill(8))
     print("mkdir " + outdir)
     if not os.path.isdir(outdir):
         os.mkdir(outdir)
