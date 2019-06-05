@@ -5,7 +5,7 @@ import argparse
 # parse input arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', default='/media/ecalabr/scratch/test_idno',
-                    help="Path to data director")
+                    help="Path to data directory")
 parser.add_argument('--id_csv', default='/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--2-11-19.csv',
                     help="Path to ID CSV")
 parser.add_argument('--anonymize', default="True",

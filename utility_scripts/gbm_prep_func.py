@@ -18,7 +18,7 @@ from nipype.interfaces.fsl import ExtractROI
 from nipype.interfaces.fsl.utils import CopyGeom
 from nipype.interfaces.fsl import Merge
 from nipype.interfaces.ants import N4BiasFieldCorrection
-import external_software.brats17_master.test_ecalabr as test_ecalabr
+#import external_software.brats17_master.test_ecalabr as test_ecalabr
 
 
 ### Set up logging
@@ -57,17 +57,17 @@ def make_log(work_dir):
 # matching strings format is [[strs to match AND], OR [strs to match AND]
 # for NOT strings that are in all caps, the algorithm will ensure the series does not start with that string
 def make_serdict(reg_atlas, dcm_dir):
-    t1_str = [["ax t1"], ["ax", "3d", "bravo", "brainnav"], ["fspgr", "pre", "t1"]]
-    t1_not = ["post", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp", "GAD", " GAD"]
+    t1_str = [["ax t1"], ["ax", "3d", "bravo", "brainnav"], ["fspgr", "pre", "t1"], ["bravo", "pre", "t1"], ["3d", "t1", "brainnav"]]
+    t1_not = ["post", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp", "GAD", " GAD", "ref", "rfmt"]
     t2_str = [["t2"]]
-    t2_not = ["flair", "optic", "motor", "track", "tract", "radiation", "reform"]
+    t2_not = ["flair", "optic", "motor", "track", "tract", "radiation", "reform", "ref", "rfmt"]
     flair_str = [["flair"]]
-    flair_not = ["t1", "reform", "rfmt"]
+    flair_not = ["t1", "reform", "rfmt", "track", "tract", "left", "right", "ref", "arcuate", "radiation", "ifof"]
     dwi_str = [["ax", "dwi"], ["trace"]]
     dwi_not = []
     adc_str = [["adc"], ["apparent", "diffusion"], ["avdc"]]
     adc_not = ["exp", "cor", "sag", "eadc"]
-    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "], ["t1", "gad"], ["t1", "post"]]
+    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "], ["t1", "gad"], ["t1", "post"], ["rssg", "sp", "steo"]]
     t1gad_not = ["pre", "without", "w/o", "reform", "c-sp", "t-sp", "l-sp", "track", "motor", "left", "right"]
     swi_str = [["isi"], ["swan"]]
     swi_not = ["ref", "filt", "pha", "rf", "mip", "min"]
@@ -596,8 +596,25 @@ def split_dwi(ser_dict):
 # split asl and anatomic image (if necessary)
 def split_asl(ser_dict):
     aslperf = ser_dict["ASL"]["filename"]
+    aslperfa = aslperf.rsplit(".nii", 1)[0] + "a.nii.gz"
+    anat_outname = aslperf.rsplit(".nii", 1)[0] + "_anat.nii.gz"
+    anat_json = aslperf.rsplit(".nii", 1)[0] + "_anat.json"
+    perf_json = aslperf.rsplit(".nii", 1)[0] + ".json"
+    a_json = aslperf.rsplit(".nii", 1)[0] + "a.json"
+    # handle when dcm2niix converts to two different files
+    if os.path.isfile(aslperfa):
+        perfnii = nib.load(aslperf)
+        perfanii = nib.load(aslperfa)
+        if np.mean(perfnii.get_data()) > np.mean(perfanii.get_data()):
+            os.rename(aslperf, anat_outname)
+            os.rename(aslperfa, aslperf)
+            os.rename(perf_json, anat_json)
+            os.rename(a_json, perf_json)
+        else:
+            os.rename(aslperfa, anat_outname)
+            os.rename(a_json, anat_json)
+    # handle original case where asl perfusion is a 4D image with anat and perfusion combined
     if os.path.isfile(aslperf):
-        anat_outname = aslperf.rsplit(".nii", 1)[0] + "_anat.nii.gz"
         if not os.path.isfile(anat_outname):
             nii = nib.load(aslperf)
             if len(nii.get_shape()) > 3:

@@ -3,4 +3,9 @@ incorporate topup DTI files when/where they exist
 
 segmentation networks
 
-fix 2.5d inference, add option for 2d patch gradient inference
+
+make 2d eval use image patches
+
+add option to reconstruct infered 2d images from patches
+
+get niftynet working with current tensorflow

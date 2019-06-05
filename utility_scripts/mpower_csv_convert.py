@@ -8,8 +8,8 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('mpower_csv', help="Full path to mpower format csv")
-parser.add_argument('air_csv', help="Full path to ucsf air format csv")
+parser.add_argument('--mpower_csv', help="Full path to mpower format csv")
+parser.add_argument('--air_csv', help="Full path to ucsf air format csv")
 
 
 if __name__ == '__main__':

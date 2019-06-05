@@ -1,6 +1,7 @@
 import sys
 import time
 from gbm_prep_func import *
+import argparse
 
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
 def read_dicom_dir(dcm_dir, rep=False):
@@ -41,32 +42,52 @@ def read_dicom_dir(dcm_dir, rep=False):
 #######################
 #######################
 #######################
-# outside function code
 
+# parse input arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--dcm_dir', default="/media/ecalabr/scratch/work/download_22/",
+                    help="Path to dicom data directory")
+parser.add_argument('--support_dir', default="/media/ecalabr/data1/gbm_data/support_files",
+                    help="Path to support file directory containing bvecs and atlas data")
+parser.add_argument('--start', default=0,
+                    help="Index of directories to start processing at")
+parser.add_argument('--end', default=None,
+                    help="Index of directories to end processing at")
 
-# Define global variables and required files and check that they exist
-reg_atlas = "/media/ecalabr/data1/gbm_data/support_files/atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz"
-dti_index = "/media/ecalabr/data1/gbm_data/support_files/DTI_files/GE_hardi_55_index.txt"
-dti_acqp = "/media/ecalabr/data1/gbm_data/support_files/DTI_files/GE_hardi_55_acqp.txt"
-dti_bvec = "/media/ecalabr/data1/gbm_data/support_files/DTI_files/GE_hardi_55.bvec"
-dti_bval = "/media/ecalabr/data1/gbm_data/support_files/DTI_files/GE_hardi_55.bval"
-for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
-    if not os.path.isfile(file_path):
-        sys.exit("Could not find required file: " + file_path)
+if __name__ == '__main__':
 
-# Define dicom directory and get a list of zip files from a dicom zip folder
-dcm_data_dir = "/media/ecalabr/data1/new_gbm_download/"
-dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
-dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
+    # get arguments and check them
+    args = parser.parse_args()
+    dcm_data_dir = args.dcm_dir
+    assert os.path.isdir(dcm_data_dir), "Data directory not found at {}".format(dcm_data_dir)
+    support_dir = args.support_dir
+    assert os.path.isdir(support_dir), "Support directory not found at {}".format(support_dir)
+    start = args.start
+    end = args.end
 
-# iterate through all dicom folders or just a subset/specific diectories only using options below
-#dcms = dcms[:61] #[46:]  #0:36 done
-#dcms = ["/media/ecalabr/data/qc_complete/10672000/1.2.124.113532.80.22017.45499.20151103.80830.293969749"]
+    # check that all required files are in support directory
+    reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz")
+    dti_index = os.path.join(support_dir, "DTI_files/GE_hardi_55_index.txt")
+    dti_acqp = os.path.join(support_dir, "DTI_files/GE_hardi_55_acqp.txt")
+    dti_bvec = os.path.join(support_dir, "DTI_files/GE_hardi_55.bvec")
+    dti_bval = os.path.join(support_dir, "DTI_files/GE_hardi_55.bval")
+    for file_path in [reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
+        assert os.path.isfile(file_path), "Required support file not found at {}".format(file_path)
 
-if not isinstance(dcms, list):
-    dcms = [dcms]
-for i, dcm in enumerate(dcms, 1):
-    start_t = time.time()
-    serdict = read_dicom_dir(dcm)
-    elapsed_t = time.time() - start_t
-    print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")
+    # get a list of zip files from a dicom zip folder
+    dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
+    dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
+
+    # iterate through all dicom folders or just a subset/specific diectories only using options below
+    if end:
+        dcms = dcms[start:end]
+    else:
+        dcms = dcms[start:]
+
+    if not isinstance(dcms, list):
+        dcms = [dcms]
+    for i, dcm in enumerate(dcms, 1):
+        start_t = time.time()
+        serdict = read_dicom_dir(dcm)
+        elapsed_t = time.time() - start_t
+        print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")

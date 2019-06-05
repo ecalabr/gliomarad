@@ -228,11 +228,12 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             raise ValueError("Data format not understood: " + str(data_format))
 
         # define loss as only the center slice first
-        loss_function = tf.losses.mean_squared_error(center_pred, center_lab, center_weights,
-                                                   reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
+        loss_function = tf.losses.mean_squared_error(
+            center_pred, center_lab, center_weights, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
 
         # add loss for the rest of the slab to the loss
-        #loss_function = tf.add(loss_function, tf.losses.mean_squared_error(predictions, labels, weights, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS))
+        loss_function = tf.add(loss_function, tf.losses.mean_squared_error(
+            predictions, labels, weights, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS))
 
     # 2.5D MAE loss
     elif loss_method == 'MAE25D':

@@ -1,31 +1,44 @@
 import os
 from glob import glob
+import argparse
 
-# main directory containing subdirs with processed data
-data_dir = "/media/ecalabr/data1/new_gbm_download"
+# parse input arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('--data_dir', default="/media/ecalabr/scratch/work/download_22",
+                    help="Path to data directory")
+parser.add_argument('--skip', default=0,
+                    help="Index of directories to start editing at")
+parser.add_argument('--mask', default="combined_brain_mask.nii.gz",
+                    help="Suffix of the mask to be edited")
+parser.add_argument('--anat', default="T1gad_w.nii.gz",
+                    help="Suffix of the anatomy image to use for editing")
 
-# list all subdirs with the processed data
-direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
-direcs = sorted(direcs, key=lambda x: int(os.path.basename(x)))
+if __name__ == '__main__':
+    # get arguments and check them
+    args = parser.parse_args()
+    data_dir = args.data_dir
+    assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
+    mask_suffix = args.mask
+    anat_suffix = args.anat
 
-# set skip for already edited masks here
-skip = 0
-n_total = len(direcs)
-direcs = direcs[skip:]
-if isinstance(direcs, str):
-    direcs = [direcs]
+    # list all subdirs with the processed data
+    direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
+    direcs = sorted(direcs, key=lambda x: int(os.path.basename(x)))
 
-# manual direcs here
-#direcs = ['/media/ecalabr/data/gbm/11936344']
+    # set skip for already edited masks here
+    skip = args.skip if args.skip else 0
+    n_total = len(direcs)
+    direcs = direcs[skip:]
+    if isinstance(direcs, str):
+        direcs = [direcs]
 
-# run ITK-snap on each one
-for i, direc in enumerate(direcs, 1):
-    t1gad = glob(direc + "/*T1gad_w.nii.gz")
-    mask = glob(direc + "/*combined_brain_mask.nii.gz")
-    #mask = glob(direc + "/*tumor_seg.nii.gz")
-    if t1gad and mask:
-        t1gad = t1gad[0]
-        mask = mask[0]
-        cmd = "itksnap -g " + t1gad + " -s " + mask
-        os.system(cmd)
-        print("Done with study " + os.path.basename(direc) + ": " + str(i+skip) + " of " + str(n_total))
+    # run ITK-snap on each one
+    for i, direc in enumerate(direcs, 1):
+        t1gad = glob(direc + "/*" + anat_suffix)
+        mask = glob(direc + "/*" + mask_suffix)
+        if t1gad and mask:
+            t1gad = t1gad[0]
+            mask = mask[0]
+            cmd = "itksnap -g " + t1gad + " -s " + mask
+            os.system(cmd)
+            print("Done with study " + os.path.basename(direc) + ": " + str(i+skip) + " of " + str(n_total))
