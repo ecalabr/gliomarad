@@ -18,7 +18,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     data_dir = args.data_dir
     assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
-    patient_csv = args.patient_csv
+    patient_csv = args.pt_csv
     assert os.path.isfile(patient_csv), "Patient CSV not found at {}".format(patient_csv)
 
     # get patient list
@@ -28,8 +28,8 @@ if __name__ == '__main__':
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         patient_list = list(reader)
     for line in patient_list[1:]:
-        mrn_list.append(int(line[0]))
-        access_list.append(int(line[1]))
+        mrn_list.append(int(line[1]))
+        access_list.append(int(line[2]))
 
     # walk through each directory and find the matching patient
     folders = [direc for direc in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, direc))]

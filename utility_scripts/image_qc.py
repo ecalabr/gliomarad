@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     # set skip for already QCed images here
     if start:
-        skip = start
+        skip = int(start)
     else:
         skip = 0
     n_total = len(direcs)

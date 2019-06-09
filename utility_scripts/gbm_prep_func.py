@@ -18,7 +18,7 @@ from nipype.interfaces.fsl import ExtractROI
 from nipype.interfaces.fsl.utils import CopyGeom
 from nipype.interfaces.fsl import Merge
 from nipype.interfaces.ants import N4BiasFieldCorrection
-#import external_software.brats17_master.test_ecalabr as test_ecalabr
+import external_software.brats17_master.test_ecalabr as test_ecalabr
 
 
 ### Set up logging
@@ -67,7 +67,7 @@ def make_serdict(reg_atlas, dcm_dir):
     dwi_not = []
     adc_str = [["adc"], ["apparent", "diffusion"], ["avdc"]]
     adc_not = ["exp", "cor", "sag", "eadc"]
-    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "], ["t1", "gad"], ["t1", "post"], ["rssg", "sp", "steo"]]
+    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "], ["t1", "gad"], ["t1", "post"], ["rssg", "sp", "steo"], ["bravo", "post"]]
     t1gad_not = ["pre", "without", "w/o", "reform", "c-sp", "t-sp", "l-sp", "track", "motor", "left", "right"]
     swi_str = [["isi"], ["swan"]]
     swi_not = ["ref", "filt", "pha", "rf", "mip", "min"]

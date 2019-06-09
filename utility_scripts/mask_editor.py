@@ -12,6 +12,8 @@ parser.add_argument('--mask', default="combined_brain_mask.nii.gz",
                     help="Suffix of the mask to be edited")
 parser.add_argument('--anat', default="T1gad_w.nii.gz",
                     help="Suffix of the anatomy image to use for editing")
+parser.add_argument('--direc', default=None,
+                    help="Optionally name a specific directory to edit")
 
 if __name__ == '__main__':
     # get arguments and check them
@@ -20,6 +22,10 @@ if __name__ == '__main__':
     assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
     mask_suffix = args.mask
     anat_suffix = args.anat
+    spec_direc = args.direc
+    if spec_direc:
+        fullpath = os.path.join(data_dir, spec_direc)
+        assert(os.path.isdir(fullpath)), "Specified directory does not exist at {}".format(fullpath)
 
     # list all subdirs with the processed data
     direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
@@ -28,9 +34,13 @@ if __name__ == '__main__':
     # set skip for already edited masks here
     skip = args.skip if args.skip else 0
     n_total = len(direcs)
-    direcs = direcs[skip:]
+    direcs = direcs[int(skip):]
     if isinstance(direcs, str):
         direcs = [direcs]
+
+    # handle specific directory
+    if spec_direc:
+        direcs = [spec_direc]
 
     # run ITK-snap on each one
     for i, direc in enumerate(direcs, 1):

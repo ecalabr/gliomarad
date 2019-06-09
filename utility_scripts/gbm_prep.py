@@ -1,4 +1,3 @@
-import sys
 import time
 from gbm_prep_func import *
 import argparse
@@ -80,9 +79,9 @@ if __name__ == '__main__':
 
     # iterate through all dicom folders or just a subset/specific diectories only using options below
     if end:
-        dcms = dcms[start:end]
+        dcms = dcms[int(start):int(end)]
     else:
-        dcms = dcms[start:]
+        dcms = dcms[int(start):]
 
     if not isinstance(dcms, list):
         dcms = [dcms]

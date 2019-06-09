@@ -39,7 +39,7 @@ def test(dir_list):
     data_nm = []
     idno = []
     completed = 0 # number of tumors with existing segmentations
-    modality = ["FLAIR_wm", "T1_wm", "T1gad_wm", "T2_wm"]
+    modality = ["FLAIR_wmtb", "T1_wmtb", "T1gad_wmtb", "T2_wmtb"]
     for i, direc in enumerate(dir_list):
         if direc[-1] == "/":
             direc = direc[:-1]
