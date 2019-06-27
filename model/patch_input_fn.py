@@ -248,7 +248,7 @@ def _normalize(input_img, mode='zero_mean'):
         nzi = np.nonzero(input_img)
         mean = np.mean(input_img[nzi], None)
         std = np.std(input_img[nzi], None)
-        input_img = np.where(input_img != 0., (input_img - mean) / std, 0.)
+        input_img = np.where(input_img != 0., ((input_img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
 
     # handle unit mode
     if mode == 'unit':
@@ -539,8 +539,9 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     for i, im_file in enumerate(data_files):
         data[:, :, :, i] = _normalize(nib.load(im_file).get_fdata())
 
-    # load labels
-    labels = nib.load(labels_file).get_fdata()
+    # load labels with NORMALIZATION - add option for normalized vs non-normalized labels here
+    # labels = nib.load(labels_file).get_fdata()
+    labels = _normalize(nib.load(labels_file).get_fdata())
 
     # center the ROI in the image usine affine, with optional rotation for data augmentation
     if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
@@ -626,7 +627,7 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)
 
     # load labels data with slice trimming in z
-    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane)
+    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, norm=True, plane=plane)
 
     # add batch dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1

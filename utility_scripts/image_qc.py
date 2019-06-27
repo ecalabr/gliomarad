@@ -51,7 +51,7 @@ if __name__ == '__main__':
         t2 = glob(direc + "/*T2_wmtb.nii.gz")
         seg = glob(direc + "/*tumor_seg.nii.gz")
         #img_list = [adc, asl, fa, dwi, flair, swi, t1, t1gad, t2, seg]
-        img_list = [t1, t1gad, t2, flair, dwi, asl, swi, md]
+        img_list = [t1, t1gad, t2, flair, dwi, asl, swi, md, seg]
         if all(img_list):
             print("Directory " + direc + " is complete!")
             # build macro for imageJ

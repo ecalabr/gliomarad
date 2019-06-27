@@ -8,4 +8,5 @@ make 2d eval use image patches
 
 add option to reconstruct infered 2d images from patches
 
-get niftynet working with current tensorflow
+
+add histogram normalization or some other better normalization method that avoids negative values

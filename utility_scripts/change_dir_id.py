@@ -51,15 +51,20 @@ if __name__ == '__main__':
         if len(id_ind) > 1:
             raise ValueError("More than one match in ID CSV for current id " + current_id)
         else:
-            id_ind = id_ind[0]
+            try: # if no index is found this will error
+                id_ind = id_ind[0]
+            except:
+                pass
 
-        # move folder
-        current_folder_path = os.path.join(args.data_dir, folder)
-        new_folder_path = os.path.join(args.data_dir, str(desired_id_list[id_ind]).zfill(8))
-        os.rename(current_folder_path, new_folder_path)
+        # only do something if ID index is found
+        if id_ind:
+            # move folder
+            current_folder_path = os.path.join(args.data_dir, folder)
+            new_folder_path = os.path.join(args.data_dir, str(desired_id_list[id_ind]).zfill(8))
+            os.rename(current_folder_path, new_folder_path)
 
-        # change names of all files in new folder
-        for f in [os.path.join(new_folder_path, direc) for direc in os.listdir(new_folder_path)]:
-            if current_id in f:
-                newname = f.split(current_id)[0] + str(desired_id_list[id_ind]).zfill(8) + f.split(current_id)[1]
-                os.rename(f, newname)
+            # change names of all files in new folder
+            for f in [os.path.join(new_folder_path, direc) for direc in os.listdir(new_folder_path)]:
+                if current_id in f:
+                    newname = f.split(current_id)[0] + str(desired_id_list[id_ind]).zfill(8) + f.split(current_id)[1]
+                    os.rename(f, newname)
