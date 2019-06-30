@@ -35,6 +35,10 @@ class Params:
     augment_train_data = None
     label_interp = None
 
+    norm_data = None
+    norm_labels = None
+    norm_mode = None
+
     model_name = None
     base_filters = None
     layer_layout = None
@@ -75,8 +79,47 @@ class Params:
         members = [getattr(self, attr) for attr in dir(self) if
                    not callable(getattr(self, attr)) and not attr.startswith("__")]
         if any([member is None for member in members]):
-            raise ValueError("One or more parameters is not defined in params.json")
-
+            raise ValueError(
+                "One or more parameters is not defined in params.json. The following must be present:"
+                + "\n data_dir"
+                + "\n model_dir"
+                + "\n overwrite"
+                + "\n restore_dir"
+                + "\n data_prefix"
+                + "\n label_prefix"
+                + "\n mask_prefix"
+                + "\n mask_dilate"
+                + "\n"
+                + "\n dimension_mode"
+                + "\n data_plane"
+                + "\n train_dims "
+                + "\n train_patch_overlap"
+                + "\n infer_dims"
+                + "\n infer_patch_overlap"
+                + "\n augment_train_data"
+                + "\n label_interp"
+                + "\n"
+                + "\n norm_data"
+                + "\n norm_labels"
+                + "\n norm_mode"
+                + "\n"
+                + "\n model_name"
+                + "\n base_filters"
+                + "\n layer_layout"
+                + "\n kernel_size"
+                + "\n data_format"
+                + "\n activation"
+                + "\n"
+                + "\n buffer_size"
+                + "\n shuffle_size"
+                + "\n batch_size"
+                + "\n num_threads"
+                + "\n train_fract"
+                + "\n learning_rate"
+                + "\n learning_rate_decay"
+                + "\n loss"
+                + "\n num_epochs"
+                + "\n dropout_rate")
     @property
     def dict(self):
         """Gives dict-like access to Params instance by `params.dict['learning_rate']`"""

@@ -13,7 +13,8 @@ from random import shuffle
 ##############################################
 
 
-def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, norm=False, plane=None):
+def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, plane=None, norm=False,
+                       norm_mode='zero_mean'):
     """
     Image data I/O function for use in tensorflow Dataset map function. Takes a study directory and file prefixes and
     returns a 4D numpy array containing the image data. Performs optional slice trimming in z and normalization.
@@ -22,8 +23,9 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
     :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param slice_trim: (list, tuple) contains 2 ints, the first and last slice to use for trimming. None = auto trim.
                         [0, -1] does no trimming
-    :param norm: (bool) whether or not to perform per dataset normalization
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :param norm: (bool) whether or not to perform per dataset normalization
+    :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: output - a 4D numpy array containing the image data
     """
 
@@ -49,7 +51,7 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
             first_image = first_image[:, :, nz_inds[0]:nz_inds[1]]
             # do normalization
             if norm:
-                first_image = _normalize(first_image)
+                first_image = _normalize(first_image, norm_mode)
             output_shape = list(first_image.shape)[0:3] + [len(images)]
             output = np.zeros(output_shape, np.float32)
             output[:, :, :, 0] = first_image
@@ -57,7 +59,7 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, n
             img = nib.load(images[ind]).get_fdata()[:, :, nz_inds[0]:nz_inds[1]]
             # do normalization
             if norm:
-                img = _normalize(img)
+                img = _normalize(img, norm_mode)
             output[:, :, :, ind] = img
 
     # permute to desired plane in format [x, y, z, channels] for tensorflow
@@ -248,6 +250,14 @@ def _normalize(input_img, mode='zero_mean'):
         nzi = np.nonzero(input_img)
         mean = np.mean(input_img[nzi], None)
         std = np.std(input_img[nzi], None)
+        input_img = np.where(input_img != 0., ((input_img - mean) / std), 0.)  # add 10 to prevent negatives
+
+    # handle ten mean mode
+    if mode == 'ten_mean':
+        # perform normalization to zero mean unit variance
+        nzi = np.nonzero(input_img)
+        mean = np.mean(input_img[nzi], None)
+        std = np.std(input_img[nzi], None)
         input_img = np.where(input_img != 0., ((input_img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
 
     # handle unit mode
@@ -327,7 +337,8 @@ def _zero_pad_image(input_data, out_dims, axes):
 ##############################################
 
 
-def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, plane='ax'):
+def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, plane='ax', norm=True,
+                              norm_lab=True, norm_mode='zero_mean'):
     """
     Load multicontrast image data and target data/labels.
     :param study_dir: (str) A directory containing the desired image data.
@@ -336,6 +347,9 @@ def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, o
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :param norm: (bool) Whether or not to normalize the input data after loading.
+    :param norm_lab: (bool) whether or not to normalize the label data after loading.
+    :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
@@ -348,10 +362,12 @@ def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, o
         "data_dims must be a list/tuple of ints")
 
     # load multi-contrast data - normalize input images
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, plane=plane, norm=norm,
+                                   norm_mode=norm_mode)
 
     # load labels data
-    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane)
+    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane,
+                                     norm=norm_lab, norm_mode=norm_mode)
 
     # do data padding to desired dims - format is [x, y, z, c] or [c, x, y, z]
     axes = [1, 2] if data_fmt == 'channels_first' else [0, 1]
@@ -369,13 +385,15 @@ def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, o
     return data, labels
 
 
-def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane):
+def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane, norm=True, norm_mode='zero_mean'):
     """
     Load multicontrast image data without cropping or otherwise adjusting size. For use with inference/prediction.
     :param study_dir: (str) A directory containing the desired image data.
     :param feature_prefx: (list) a list of filenames - the data files to be loaded
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :param norm: (bool) Whether or not to normalize the input data after loading.
+    :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
@@ -385,18 +403,15 @@ def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane):
     if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
 
     # load multi-contrast data and normalize, no slice trimming for infer data
-    data, nzi = _load_single_study(study_dir,
-                                   feature_prefx,
-                                   data_format=data_fmt,
-                                   slice_trim=[0, None],
-                                   norm=True,
-                                   plane=plane)
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, None], plane=plane,
+                                   norm=norm, norm_mode=norm_mode)
 
     return data
 
 
 def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
-                                  data_fmt='channels_last', aug='no', interp=1):
+                                  data_fmt='channels_last', aug='no', interp=1, norm=True, norm_lab=True,
+                                  norm_mode='zero_mean'):
     """
     Patch loader generates 2D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -410,6 +425,9 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param aug: (str) 'yes' or 'no' - Whether or not to perform data augmentation with random 3D affine rotation.
     :param interp: (int) The order of spline interpolation for label data. Must be 0-5
+    :param norm: (bool) Whether or not to normalize the input data after loading.
+    :param norm_lab: (bool) whether or not to normalize the label data after loading.
+    :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
 
@@ -433,10 +451,16 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     # load data
     data = np.zeros((data_dims[0], data_dims[1], data_dims[2], len(data_files)))
     for i, im_file in enumerate(data_files):
-        data[:, :, :, i] = _normalize(nib.load(im_file).get_fdata())
+        if norm:
+            data[:, :, :, i] = _normalize(nib.load(im_file).get_fdata(), mode=norm_mode)
+        else:
+            data[:, :, :, i] = nib.load(im_file).get_fdata()
 
     # load labels
-    labels = nib.load(labels_file).get_fdata()
+    if norm_lab:
+        labels = _normalize(nib.load(labels_file).get_fdata(), mode=norm_mode)
+    else:
+        labels = nib.load(labels_file).get_fdata()
 
     # center the tumor in the image usine affine, with optional rotation for data augmentation
     if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
@@ -500,7 +524,8 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
 
 
 def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
-                                  data_fmt='channels_last', aug='no', interp=1):
+                                     data_fmt='channels_last', aug='no', interp=1, norm=True, norm_lab=True,
+                                     norm_mode='zero_mean'):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -514,6 +539,9 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param aug: (str) Either yes or no - Whether or not to perform data augmentation with random 3D affine rotation.
     :param interp: (int) The order of spline interpolation for label data. Must be 0-5
+    :param norm: (bool) Whether or not to normalize the input data after loading.
+    :param norm_lab: (bool) whether or not to normalize the label data after loading.
+    :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
 
@@ -537,11 +565,16 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     # load data and normalize
     data = np.zeros((data_dims[0], data_dims[1], data_dims[2], len(data_files)))
     for i, im_file in enumerate(data_files):
-        data[:, :, :, i] = _normalize(nib.load(im_file).get_fdata())
+        if norm:
+            data[:, :, :, i] = _normalize(nib.load(im_file).get_fdata(), mode=norm_mode)
+        else:
+            data[:, :, :, i] = nib.load(im_file).get_fdata()
 
     # load labels with NORMALIZATION - add option for normalized vs non-normalized labels here
-    # labels = nib.load(labels_file).get_fdata()
-    labels = _normalize(nib.load(labels_file).get_fdata())
+    if norm_lab:
+        labels = _normalize(nib.load(labels_file).get_fdata(), mode=norm_mode)
+    else:
+        labels = nib.load(labels_file).get_fdata()
 
     # center the ROI in the image usine affine, with optional rotation for data augmentation
     if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
@@ -606,7 +639,8 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     return data.astype(np.float32), labels.astype(np.float32)
 
 
-def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt, plane='ax'):
+def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt, plane='ax', norm=True, norm_lab=True,
+                                 norm_mode='zero_mean'):
     """
     Load multicontrast image data and target data/labels without using a target roi. Used primarily for evaluation.
     :param study_dir: (str) A directory containing the desired image data.
@@ -614,6 +648,9 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     :param label_prefx: (list) a list containing one string, the labels to be loaded
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :param norm: (bool) Whether or not to normalize the input data after loading.
+    :param norm_lab: (bool) whether or not to normalize the label data after loading.
+    :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
@@ -624,10 +661,12 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
 
     # load multi-contrast data with slice trimming in z - normalize input images
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, norm=True, plane=plane)
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, plane=plane, norm=norm,
+                                   norm_mode=norm_mode)
 
     # load labels data with slice trimming in z
-    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, norm=True, plane=plane)
+    labels, nzi = _load_single_study(study_dir, label_prefx, data_format=data_fmt, slice_trim=nzi, plane=plane,
+                                     norm=norm_lab, norm_mode=norm_mode)
 
     # add batch dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
@@ -653,13 +692,15 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     return data.astype(np.float32), labels.astype(np.float32)
 
 
-def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, plane):
+def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, plane='ax', norm=True, norm_mode='zero_mean'):
     """
     Load multicontrast image data without cropping or otherwise adjusting size. For use with inference/prediction.
     :param study_dir: (str) A directory containing the desired image data.
     :param feature_prefx: (list) a list of filenames - the data files to be loaded
     :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :param norm: (bool) Whether or not to normalize the input data after loading
+    :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
@@ -669,8 +710,8 @@ def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, plane):
     if data_fmt not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
 
     # load multi-contrast data and normalize, no slice trimming for infer data
-    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, None],
-                                   norm=True, plane=plane)
+    data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, None], plane=plane,
+                                   norm=norm, norm_mode=norm_mode)
 
     # generate batch size==1 format such that format is [1, x, y, z, c] or [1, c, x, y, z]
     data = np.expand_dims(data, axis=0)
@@ -857,7 +898,7 @@ def _filter_zero_patches(data, data_format, mode, thresh=0.1):
     :param data: (list of tensors) must have {'labels'} key containing labels data
     :param data_format: (str) either 'channels_first' or 'channels_last' - the tensorflow data format
     :param mode: (str) either '2D' '2.5D' or '3D' - the mode for training
-    :param thresh: (float) the threshold percentage for keeping patches. Default is 5%.
+    :param thresh: (float) the threshold percentage for keeping patches. Default is 10%.
     :return: Returns tf.bool False if less than threshold, else returns tf.bool True
     """
 
@@ -925,7 +966,10 @@ def patch_input_fn(mode, params):
                           params.data_plane,
                           params.data_format,
                           params.augment_train_data,
-                          params.label_interp]
+                          params.label_interp,
+                          params.norm_data,
+                          params.norm_labels,
+                          params.norm_mode]
         # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         # map data directories to the data using a custom python function
@@ -954,7 +998,11 @@ def patch_input_fn(mode, params):
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.data_format,
-                          params.infer_dims]
+                          params.infer_dims,
+                          params.data_plane,
+                          params.norm_data,
+                          params.norm_labels,
+                          params.norm_mode]
         # map tensorflow dataset variable to data
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         dataset = dataset.map(
@@ -1010,7 +1058,7 @@ def infer_input_fn(params, infer_dir):
 
     # prepare pyfunc
     data_dims = list(params.infer_dims)
-    py_func_params = [params.data_prefix, params.data_format, params.data_plane]
+    py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data, params.norm_mode]
 
     # generate tensorflow dataset object from infer directories
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
@@ -1079,7 +1127,10 @@ def patch_input_fn_3d(mode, params):
                           params.data_plane,
                           params.data_format,
                           params.augment_train_data,
-                          params.label_interp]
+                          params.label_interp,
+                          params.norm_data,
+                          params.norm_labels,
+                          params.norm_method]
         # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         # map data directories to the data using a custom python function
@@ -1110,7 +1161,10 @@ def patch_input_fn_3d(mode, params):
         py_func_params = [params.data_prefix,
                           params.label_prefix,
                           params.data_format,
-                          params.data_plane]
+                          params.data_plane,
+                          params.norm_data,
+                          params.norm_mode,
+                          params.norm_mode]
         # create tensorflow dataset variable from eval data directories
         dataset = tf.data.Dataset.from_tensor_slices(eval_dirs)
         # map data directories to the data using a custom python function
@@ -1176,7 +1230,7 @@ def infer_input_fn_3d(params, infer_dir):
     # prepare pyfunc
     data_dims = list(params.infer_dims)
     chan_size = len(params.data_prefix)
-    py_func_params = [params.data_prefix, params.data_format, params.data_plane]
+    py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data, params.norm_mode]
 
     # generate tensorflow dataset object from infer directory
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
@@ -1230,10 +1284,11 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
     # for sliding window 2d patcjes - must be same as in _tf_patches_infer above
     ksizes = [1] + patch_size + [1]
     strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], 1]
+    rates = [1, 1, 1, 1]
 
     # define necessary functions
     def extract_patches(x):
-        return tf.extract_image_patches(x, ksizes=ksizes, strides=strides, padding='SAME')
+        return tf.extract_image_patches(x, ksizes=ksizes, strides=strides, rates=rates, padding='SAME')
 
     def extract_patches_inverse(x, y):
         _x = tf.zeros_like(x)
@@ -1276,6 +1331,8 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
     data_prefix = [str(item) for item in params.data_prefix]
     data_format = params.data_format
     data_plane = params.data_plane
+    norm = params.norm_data
+    norm_mode = params.norm_mode
 
     # for sliding window 3d slabs - must be same as in _tf_patches_3d_infer above
     ksizes = [1] + patch_size + [1]
@@ -1294,7 +1351,7 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
         return tf.gradients(_y, _x, grad_ys=y)[0] / grad
 
     # load original data but convert to only one channel to match output [batch, x, y, z, channel]
-    data = _load_multicon_preserve_size_3d(infer_dir, data_prefix, data_format, data_plane)
+    data = _load_multicon_preserve_size_3d(infer_dir, data_prefix, data_format, data_plane, norm, norm_mode)
     data = data[:, :, :, :, [1]] if params.data_format == 'channels_last' else data[:, [1], :, :, :]
 
     # get shape of patches as they would have been generated during inference
