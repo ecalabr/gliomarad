@@ -9,4 +9,6 @@ make 2d eval use image patches
 add option to reconstruct infered 2d images from patches
 
 
-add histogram normalization or some other better normalization method that avoids negative values
+add histogram matching
+
+make json param file options consistently use booleans instead of "yes"

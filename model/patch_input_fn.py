@@ -242,7 +242,6 @@ def _normalize(input_img, mode='zero_mean'):
     # sanity checks
     if not isinstance(input_img, np.ndarray):
         raise TypeError("Input image should be np.ndarray but is: " + str(type(input_img)))
-    if mode not in ['unit', 'zero_mean']: raise ValueError("Mode must be 'unit' or 'zero_mean' but is: " + str(mode))
 
     # handle zero mean mode
     if mode == 'zero_mean':
@@ -253,7 +252,7 @@ def _normalize(input_img, mode='zero_mean'):
         input_img = np.where(input_img != 0., ((input_img - mean) / std), 0.)  # add 10 to prevent negatives
 
     # handle ten mean mode
-    if mode == 'ten_mean':
+    elif mode == 'ten_mean':
         # perform normalization to zero mean unit variance
         nzi = np.nonzero(input_img)
         mean = np.mean(input_img[nzi], None)
@@ -261,9 +260,13 @@ def _normalize(input_img, mode='zero_mean'):
         input_img = np.where(input_img != 0., ((input_img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
 
     # handle unit mode
-    if mode == 'unit':
+    elif mode == 'unit':
         # perform normalization to [0, 1]
         input_img *= 1.0 / input_img.max()
+
+    # handle not implemented
+    else:
+        raise NotImplementedError("Specified normalization mode is not implemented yet: " + mode)
 
     return input_img
 
@@ -1130,7 +1133,7 @@ def patch_input_fn_3d(mode, params):
                           params.label_interp,
                           params.norm_data,
                           params.norm_labels,
-                          params.norm_method]
+                          params.norm_mode]
         # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         # map data directories to the data using a custom python function
