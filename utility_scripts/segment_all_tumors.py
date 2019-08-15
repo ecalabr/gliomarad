@@ -1,4 +1,4 @@
-import external_software.brats17_master.test_ecalabr2 as test_ecalabr2
+import external_software.brats17_master.test_ecalabr3 as test_ecalabr2
 from glob import glob
 import os
 import argparse

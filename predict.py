@@ -1,4 +1,3 @@
-
 import argparse
 import logging
 import os
@@ -16,6 +15,8 @@ parser.add_argument('--infer_dir', default='/media/ecalabr/data2/qc_complete/123
                     help="Path to directory to generate inference from")
 parser.add_argument('--best_last', default='last_weights',
                     help="Either 'best_weights' or 'last_weights' - whether to use best or last model weights for inference")
+parser.add_argument('--out_dir', default=None,
+                    help="Optionally specify output directory")
 
 if __name__ == '__main__':
 
@@ -27,6 +28,8 @@ if __name__ == '__main__':
     best_last = args.best_last
     if best_last not in ['best_weights', 'last_weights']:
         raise ValueError("Did not understand best_last value: " + str(best_last))
+    if args.out_dir:
+        assert os.path.isdir(args.out_dir), "Specified output directory does not exist: {}".format(args.out_dir)
 
     # determine model dir
     if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
@@ -58,4 +61,4 @@ if __name__ == '__main__':
     logging.info("- done.")
 
     # predict using the model
-    predict(infer_model_spec, params.model_dir, params, infer_dir, best_last)
+    predict(infer_model_spec, params.model_dir, params, infer_dir, best_last, args.out_dir)

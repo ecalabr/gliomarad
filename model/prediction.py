@@ -42,7 +42,7 @@ def predict_sess(sess, model_spec):
     return predictions
 
 
-def predict(model_spec, model_dir, params, infer_dir, best_last):
+def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
     """Evaluate the model
     Args:
         model_spec: (dict) contains the graph operations or nodes needed for evaluation
@@ -50,15 +50,22 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
         params: (Params) contains hyperparameters of the model.
         infer_dir: (str) the path to the directory for inference
         best_last: (str) in ['best_weights', 'last_weights'] - whether to use best or last model weights for inference
+        out_dir: (str) the path to the specified output directory (optional)
                 Must define: num_epochs, train_size, batch_size, eval_size, save_summary_steps
     """
 
-    # make sure we are not overwriting something important
-    pred_dir = os.path.join(model_dir, 'predictions')
-    if not os.path.isdir(pred_dir):
-        os.mkdir(pred_dir)
-    if params.overwrite != 'yes' and os.listdir(pred_dir):
-        raise ValueError("Overwrite param is not 'yes' but there are files in the predictions directory!")
+    # determine output directory and make sure we are not overwriting something important
+    if out_dir:
+        if os.path.isdir(out_dir):
+            pred_dir = out_dir
+        else:
+            raise ValueError("Specified output directory does not exist: {}".format(out_dir))
+    else:
+        pred_dir = os.path.join(model_dir, 'predictions')
+        if not os.path.isdir(pred_dir):
+            os.mkdir(pred_dir)
+        if params.overwrite != 'yes' and os.listdir(pred_dir):
+            raise ValueError("Overwrite param is not 'yes' but there are files in the predictions directory!")
 
     # Initialize tf.Saver
     saver = tf.train.Saver()
@@ -141,7 +148,8 @@ def predict(model_spec, model_dir, params, infer_dir, best_last):
     predictions = predictions * mask
 
     # convert to nifti format and save
-    nii_out = os.path.join(pred_dir, name_prefix + '_predictions_' + best_last + '.nii.gz')
+    model_name = os.path.basename(model_dir)
+    nii_out = os.path.join(pred_dir, name_prefix + '_predictions_' + model_name + '_' + best_last + '.nii.gz')
     img = nib.Nifti1Image(predictions, affine)
     logging.info("Saving predictions to: " + nii_out)
     nib.save(img, nii_out)
