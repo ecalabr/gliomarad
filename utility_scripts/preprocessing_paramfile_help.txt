@@ -1,0 +1,9 @@
+"T1":	{ (start the dict with the name of the series to be converted. Each series that you wish to convert should have an entry.
+"or": [[each list of words in this nested list is treated as "and" search terms], [the seperate nested lists are treated as "or" search terms]],
+"not": [all words listed in the not list are treated as "not" search terms],
+"reg": options are "trans" (translation only registration), "affine" (affine only), and "diffeo" (affine and diffeomorphic registration). Alternatively, if another series prefix is specified, then the transform files generated from that series registration will be used. This can be useful for warping derived images, such as warping an ADC after registering the DWI.
+"reg_target": either specify the prefix for the series to be used as the registration target, or "atlas" to register to the specified atlas,
+"reg_option": currently options include {"reg_com": 0-2} (initial moving transform for registration - 0=center of image, 1=center of mass, 2=image origins
+"bias": boolean for whether or not to do bias correction,
+"split": this splits a 4D series into one or more subseries. Pass a dict with the series name and the index in the 4D stack. This can result in a 4D series overwriting itself with a 3D series. Example: {"T1FS": 0, "T1gad": 1}
+}

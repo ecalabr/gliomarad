@@ -52,6 +52,14 @@ if __name__ == '__main__':
         seg = glob(direc + "/*tumor_seg.nii.gz")
         #img_list = [adc, asl, fa, dwi, flair, swi, t1, t1gad, t2, seg]
         img_list = [t1, t1gad, t2, flair, dwi, asl, swi, md, seg]
+        # alternative for breast MRI project
+        dwi = glob(direc + "/*DWI_w.nii.gz")
+        t1fs = glob(direc + "/*T1FS.nii.gz")
+        T1gad = glob(direc + "/*T1gad_w.nii.gz")
+        T2FS = glob(direc + "/*T2FS_w.nii.gz")
+        T1 = glob(direc + "/*T1_w.nii.gz")
+        img_list = [dwi, t1fs, T1gad, T2FS, T1]
+
         if all(img_list):
             print("Directory " + direc + " is complete!")
             # build macro for imageJ
@@ -59,8 +67,13 @@ if __name__ == '__main__':
             for item in img_list: # open images
                 macro.append('open("' + item[0] + '");')
             macro.append('run("Tile");')
+            # add for loop for setting slice and windowing
+            macro.append("for (i=0;i<nImages;i++) {")
+            macro.append("     selectImage(i+1);")
+            macro.append("     setSlice(nSlices/2);")
+            macro.append('     run("Enhance Contrast", "saturated=0.35");}')
+            # run synchronize windows
             macro.append('run("Synchronize Windows");')
-
             # write macro
             macro_file = os.path.join(data_dir, 'qc_macro.ijm')
             with open(macro_file, 'w') as f:
@@ -71,5 +84,5 @@ if __name__ == '__main__':
             cmd = ij_java+ ' -Xmx5000m -jar ' + ij_jar + ' -ijpath ' + ij_dir + ' -macro ' + macro_file
             os.system(cmd)
         else:
-            print("Directory " + direc + "is missing some sequences")
+            print("Directory " + direc + " is missing some sequences")
         print("Done with study " + os.path.basename(direc) + ": " + str(i+skip) + " of " + str(n_total))

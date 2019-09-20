@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # make new csv
     lines = [['Patient MRN', 'Accession', 'First Name', 'Last Name', 'Sex', 'DOB', 'Scan Date/Time', 'Images', 'Path',
              'Path 2ndary', 'IDH-1', 'IDH-2', '1p/19q', 'ATRX', 'p53', 'Ki-67/MIB-1', 'pTEN Del', 'EGFR Amp', 'MGMT',
-             'MGMT index', 'Notes']]
+             'MGMT index', 'UCSF 500', 'ASL', 'QC issues', 'Additional images']]
     for i in range(len(mrn)):
         line = [mrn[i], acces[i], first[i], last[i], sex[i], dob[i], scantime[i], nimage[i]]
         lines.append(line)

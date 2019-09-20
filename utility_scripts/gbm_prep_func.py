@@ -19,18 +19,21 @@ from nipype.interfaces.fsl.utils import CopyGeom
 from nipype.interfaces.fsl import Merge
 from nipype.interfaces.ants import N4BiasFieldCorrection
 import external_software.brats17_master.test_ecalabr as test_ecalabr
-
+import json
 
 ### Set up logging
 # takes work dir
 # returns logger
-def make_log(work_dir):
+def make_log(work_dir, repeat=False):
     if not os.path.isdir(work_dir):
         os.mkdir(work_dir)
     # make log file, append to existing
     idno = os.path.basename(work_dir)
     log_file = os.path.join(work_dir, idno + "_log.txt")
-    open(log_file, 'a').close()
+    if repeat:
+        open(log_file, 'w').close()
+    else:
+        open(log_file, 'a').close()
     # make logger
     logger = logging.getLogger("my_logger")
     logger.setLevel(logging.DEBUG) # should this be DEBUG?
@@ -56,37 +59,27 @@ def make_log(work_dir):
 # first check for series_dict to find the appropriate image series from the dicom folder
 # matching strings format is [[strs to match AND], OR [strs to match AND]
 # for NOT strings that are in all caps, the algorithm will ensure the series does not start with that string
-def make_serdict(reg_atlas, dcm_dir):
-    t1_str = [["ax t1"], ["ax", "3d", "bravo", "brainnav"], ["fspgr", "pre", "t1"], ["bravo", "pre", "t1"], ["3d", "t1", "brainnav"]]
-    t1_not = ["post", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp", "GAD", " GAD", "ref", "rfmt"]
-    t2_str = [["t2"]]
-    t2_not = ["flair", "optic", "motor", "track", "tract", "radiation", "reform", "ref", "rfmt"]
-    flair_str = [["flair"]]
-    flair_not = ["t1", "reform", "rfmt", "track", "tract", "left", "right", "ref", "arcuate", "radiation", "ifof"]
-    dwi_str = [["ax", "dwi"], ["trace"]]
-    dwi_not = []
-    adc_str = [["adc"], ["apparent", "diffusion"], ["avdc"]]
-    adc_not = ["exp", "cor", "sag", "eadc"]
-    t1gad_str = [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "], ["t1", "gad"], ["t1", "post"], ["rssg", "sp", "steo"], ["bravo", "post"]]
-    t1gad_not = ["pre", "without", "w/o", "reform", "c-sp", "t-sp", "l-sp", "track", "motor", "left", "right"]
-    swi_str = [["isi"], ["swan"]]
-    swi_not = ["ref", "filt", "pha", "rf", "mip", "min"]
-    asl_str = [["asl"]]
-    asl_not = ["cerebral"]
-    dti_str = [["dti"], ["hardi"]]
-    dti_not = ["roi", "topup"]
-    # note for "reg" key option can be False (no reg), "trans" or "affine" for thos reg types, and "SERIES" to apply transform from another previous series
-    sdict = {"FLAIR": {"or": flair_str, "not": flair_not, "reg": "trans", "reg_target": reg_atlas, "bias": True},
-             "T1": {"or": t1_str, "not": t1_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
-             "T1gad": {"or": t1gad_str, "not": t1gad_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
-             "T2": {"or": t2_str, "not": t2_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
-             "SWI": {"or": swi_str, "not": swi_not, "reg": "affine", "reg_target": "FLAIR", "bias": True},
-             "DWI": {"or": dwi_str, "not": dwi_not, "reg": "diffeo", "reg_target": "FLAIR", "bias": True},
-             "ADC": {"or": adc_str, "not": adc_not, "reg": "DWI"},
-             "DTI": {"or": dti_str, "not": dti_not, "reg": False},
-             "ASL": {"or": asl_str, "not": asl_not, "reg": "diffeo", "reg_target": "FLAIR"},
-             "info":{"filename": "None", "dcmdir": dcm_dir, "id": os.path.basename(os.path.dirname(dcm_dir))}
-             }
+def make_serdict(reg_atlas, dcm_dir, params):
+
+    # load json file
+    assert os.path.isfile(params), "Param file does not exist at " + params
+    with open(params, 'r') as f:
+        json_str = f.read()
+    sdict = json.loads(json_str)
+
+    # handle atlas option for registration target
+    for key in sdict:
+        if 'reg_target' in sdict[key].keys():
+            if sdict[key]['reg_target'] == 'atlas':
+                sdict[key].update({'reg_target': reg_atlas})
+
+    # add info section to series dict
+    sdict.update({"info":{
+        "filename": "None",
+        "dcmdir": dcm_dir,
+        "id": os.path.basename(os.path.dirname(dcm_dir)),
+    }})
+
     return sdict
 
 # unzip dicom directory
@@ -128,7 +121,7 @@ def get_series(dicom_dir):
         dicoms.append(glob(direc + "/*.dcm"))
         hdrs.append(dicom.read_file(dicoms[ind][0]))
         try:
-            series.append(hdrs[ind].SeriesDescription + " [dir=" + direc[-5:] + "]")
+            series.append(hdrs[ind].SeriesDescription.decode('utf8') + " [dir=" + direc[-5:] + "]")
         except Exception:
             logger.info("- Skipping series " + str(ind + 1) + " without series description")
             series.append("none"  + " [dir=" + direc[-5:] + "]")
@@ -274,6 +267,9 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
     logger.info("CONVERTING FILES:")
     # basic converter initiation
     converter = Dcm2niix()
+    converter.inputs.bids_format = False
+    converter.inputs.single_file = True
+    converter.inputs.args = '-w 1'
     converter.inputs.compress = "y"
     converter.inputs.output_dir = os.path.dirname(dicom_dir)
     converter.terminal_output = "allatonce"
@@ -289,18 +285,49 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
             converter.inputs.out_filename = outfilename
             outfilepath = os.path.join(os.path.dirname(dicom_dir), outfilename + ".nii.gz")
             # don't repeat conversion if already done
-            if strs_dict[series]["series"] == "None":
-                logger.info("- no matching series found: " + series)
-                outfilepath = "None"
-            elif not os.path.isfile(outfilepath) or repeat:
+            if os.path.isfile(outfilepath) and repeat:
+                logger.info("- " + outfilename + " already exists, but repeat is True, so it will be overwritten")
                 logger.info("- Converting " + outfilename)
                 logger.debug(converter.cmdline)
-                converter.run()
-            else:
-                logger.info("- " + outfilename + " already exists")
-            # append to outfile list
-            output_ser.append(outfilepath)
-            strs_dict[series].update({"filename": outfilepath})
+                result = converter.run()
+                # make sure that file wasnt named something else during conversion, if so, rename to expected name
+                if isinstance(result.outputs.converted_files, list):
+                    converted = result.outputs.converted_files[0]
+                else:
+                    converted = result.outputs.converted_files
+                if not converted == outfilepath:
+                    logger.info("- converted file is named " + converted + ", renaming " + outfilepath)
+                    os.rename(converted, outfilepath)
+            if not os.path.isfile(outfilepath) and not strs_dict[series]["series"] == "None":
+                logger.info("- Converting " + outfilename)
+                logger.debug(converter.cmdline)
+                result = converter.run()
+                # make sure that file wasnt named something else during conversion
+                if isinstance(result.outputs.converted_files, list):
+                    converted = result.outputs.converted_files[0]
+                else:
+                    converted = result.outputs.converted_files
+                if not converted == outfilepath:
+                    logger.info("- " + series + " converted file is named " + converted + ", renaming " + outfilepath)
+                    os.rename(converted, outfilepath)
+            if os.path.isfile(outfilepath) and not repeat:
+                logger.info("- " + outfilename + " already exists and will not be overwritten")
+            if not os.path.isfile(outfilepath) and strs_dict[series]["series"] == "None":
+                logger.info("- No existing file and no matching series found: " + series)
+            # after running through conversion options, check if file actually exists
+            if os.path.isfile(outfilepath):
+                # if output file exists, regardless of whether created or not append name to outfile list
+                output_ser.append(outfilepath)
+                strs_dict[series].update({"filename": outfilepath})
+                # handle options for post-coversion nifti processing here (only if output file exists)
+                if "split" in strs_dict[series].keys():
+                    logger.info("- Splitting " + outfilename + " per specified parameters")
+                    outnames = split_multiphase(outfilepath, strs_dict[series]['split'], repeat=False)
+                    if outnames:
+                        for k in outnames.keys():
+                            # if series does not already exist in series list then it will not be updated
+                            if k in strs_dict.keys():
+                                strs_dict[k].update({"filename": outnames[k]})
     # print outputs of file conversion
     logger.info("CONVERTED FILES LIST:")
     for ser in strs_dict:
@@ -308,10 +335,47 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
             logger.info("- " + ser + " = " + strs_dict[ser]["filename"])
     return strs_dict
 
+
+# Split multiphase
+# takes a multiphase (or other 4D) nifti and splits into one or more additional series based on options
+def split_multiphase(nii_in, options, repeat=False):
+    # setup return variable
+    outnames = {}
+    # logging
+    logger = logging.getLogger("my_logger")
+    # path prep
+    basepath = nii_in.rsplit('_', 1)[1]
+    # first check if all desired outputs already exist, if so, don't do any work
+    if not repeat and all([os.path.isfile(os.path.join(basepath, ser + '.nii.gz')) for ser in options.keys()]):
+        logger.info("- All specified split outputs already exist and will not be regenerated")
+        for k in options.keys():
+            outnames.update({k: os.path.join(basepath, k + '.nii.gz')})
+        return outnames
+    else:
+        # data loading
+        nii = nib.load(nii_in)
+        data = nii.get_data()
+        # if data is not 4D, then return
+        if len(data.shape) < 4 or data.shape[3] < 2:
+            logger.info("- Split option was specified, but data is not 4D")
+            return outnames
+        # loop through splitting options - THIS WILL OVERWRITE OTHER SERIES
+        for k in options.keys():
+            dirname = os.path.dirname(nii_in)
+            basename = os.path.basename(nii_in)
+            orig_ser = basename.split('_')[1].split('.')[0]
+            outname = os.path.join(dirname, basename.split('_')[0] + '_' + k + '.nii.gz')
+            logger.info("- Splitting " + orig_ser + " phase " + str(options[k]) + " as " + k)
+            new_data = data[:, :, :, options[k]]
+            new_nii = nib.Nifti1Image(new_data, nii.affine)
+            nib.save(new_nii, outname)
+            outnames.update({k: outname})
+        return outnames
+
 # Fast ants affine
 # takes moving and template niis and a work dir
 # performs fast affine registration and returns a list of transforms
-def affine_reg(moving_nii, template_nii, work_dir, repeat=False):
+def affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
     # logging
     logger = logging.getLogger("my_logger")
     # get basenames
@@ -332,7 +396,10 @@ def affine_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.terminal_output='none'
     antsreg.inputs.use_histogram_matching=True
     antsreg.inputs.write_composite_transform=True
-    antsreg.inputs.initial_moving_transform_com=1  # use center of mass for initial transform
+    if isinstance(option, dict) and "reg_com" in option.keys():
+        antsreg.inputs.initial_moving_transform_com = option["reg_com"]
+    else:
+        antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
     antsreg.inputs.winsorize_lower_quantile=0.005
     antsreg.inputs.winsorize_upper_quantile=0.995
     antsreg.inputs.metric=['Mattes', 'Mattes']  # ['MI', 'MI', 'CC']
@@ -356,10 +423,63 @@ def affine_reg(moving_nii, template_nii, work_dir, repeat=False):
         logger.debug(antsreg.cmdline)
     return trnsfm
 
+
+# Faster ants affine
+# takes moving and template niis and a work dir
+# performs fast affine registration and returns a list of transforms
+def fast_affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
+    # logging
+    logger = logging.getLogger("my_logger")
+    # get basenames
+    moving_name = os.path.basename(moving_nii).split(".")[0]
+    template_name = os.path.basename(template_nii).split(".")[0]
+    outprefix = os.path.join(work_dir, moving_name + "_2_" + template_name + "_")
+
+    # registration setup
+    antsreg = Registration()
+    antsreg.inputs.args='--float'
+    antsreg.inputs.fixed_image=template_nii
+    antsreg.inputs.moving_image=moving_nii
+    antsreg.inputs.output_transform_prefix=outprefix
+    antsreg.inputs.num_threads=multiprocessing.cpu_count()
+    antsreg.inputs.smoothing_sigmas=[[6, 4, 1]] * 2
+    antsreg.inputs.sigma_units=['mm'] * 2
+    antsreg.inputs.transforms=['Rigid', 'Affine']  # ['Rigid', 'Affine', 'SyN']
+    antsreg.terminal_output='none'
+    antsreg.inputs.use_histogram_matching=True
+    antsreg.inputs.write_composite_transform=True
+    if isinstance(option, dict) and "reg_com" in option.keys():
+        antsreg.inputs.initial_moving_transform_com = option["reg_com"]
+    else:
+        antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
+    antsreg.inputs.winsorize_lower_quantile=0.005
+    antsreg.inputs.winsorize_upper_quantile=0.995
+    antsreg.inputs.metric=['Mattes', 'Mattes']  # ['MI', 'MI', 'CC']
+    antsreg.inputs.metric_weight=[1.0] * 2
+    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000]] * 2  # [100, 70, 50, 20]
+    antsreg.inputs.convergence_threshold=[1e-04, 1e-04]
+    antsreg.inputs.convergence_window_size=[5, 5]
+    antsreg.inputs.radius_or_number_of_bins=[32, 32]  # 4
+    antsreg.inputs.sampling_strategy=['Regular', 'Regular']  # 'None'
+    antsreg.inputs.sampling_percentage=[0.25, 0.25]  # 1
+    antsreg.inputs.shrink_factors=[[6, 4, 2]] * 2  # *3
+    antsreg.inputs.transform_parameters=[(0.1,), (0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
+
+    trnsfm = outprefix + "Composite.h5"
+    if not os.path.isfile(trnsfm) or repeat:
+        logger.info("- Registering image " + moving_nii + " to " + template_nii)
+        logger.debug(antsreg.cmdline)
+        antsreg.run()
+    else:
+        logger.info("- Warp file already exists at " + trnsfm)
+        logger.debug(antsreg.cmdline)
+    return trnsfm
+
+
 # Fast ants diffeomorphic registration
 # takes moving and template niis and a work dir
 # performs fast diffeomorphic registration and returns a list of transforms
-def diffeo_reg(moving_nii, template_nii, work_dir, repeat=False):
+def diffeo_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
     # logging
     logger = logging.getLogger("my_logger")
     # get basenames
@@ -375,7 +495,10 @@ def diffeo_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.inputs.output_transform_prefix=outprefix
     antsreg.inputs.num_threads=multiprocessing.cpu_count()
     antsreg.terminal_output='none'
-    antsreg.inputs.initial_moving_transform_com=1
+    if isinstance(option, dict) and "reg_com" in option.keys():
+        antsreg.inputs.initial_moving_transform_com = option["reg_com"]
+    else:
+        antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
     antsreg.inputs.winsorize_lower_quantile=0.005
     antsreg.inputs.winsorize_upper_quantile=0.995
     antsreg.inputs.shrink_factors=[[8, 4, 2, 1], [4, 2, 1]]
@@ -404,10 +527,63 @@ def diffeo_reg(moving_nii, template_nii, work_dir, repeat=False):
         logger.debug(antsreg.cmdline)
     return trnsfm
 
+
+# Faster ants diffeomorphic registration
+# takes moving and template niis and a work dir
+# performs fast diffeomorphic registration and returns a list of transforms
+def fast_diffeo_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
+    # logging
+    logger = logging.getLogger("my_logger")
+    # get basenames
+    moving_name = os.path.basename(moving_nii).split(".")[0]
+    template_name = os.path.basename(template_nii).split(".")[0]
+    outprefix = os.path.join(work_dir, moving_name + "_2_" + template_name + "_")
+
+    # registration setup
+    antsreg = Registration()
+    antsreg.inputs.args='--float'
+    antsreg.inputs.fixed_image=template_nii
+    antsreg.inputs.moving_image=moving_nii
+    antsreg.inputs.output_transform_prefix=outprefix
+    antsreg.inputs.num_threads=multiprocessing.cpu_count()
+    antsreg.terminal_output='none'
+    if isinstance(option, dict) and "reg_com" in option.keys():
+        antsreg.inputs.initial_moving_transform_com = option["reg_com"]
+    else:
+        antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
+    antsreg.inputs.winsorize_lower_quantile=0.005
+    antsreg.inputs.winsorize_upper_quantile=0.995
+    antsreg.inputs.shrink_factors=[[6, 4, 2], [4, 2]]
+    antsreg.inputs.smoothing_sigmas=[[4, 2, 1], [2, 1]]
+    antsreg.inputs.sigma_units=['mm', 'mm']
+    antsreg.inputs.transforms=['Affine', 'SyN']
+    antsreg.inputs.use_histogram_matching=[True, True]
+    antsreg.inputs.write_composite_transform=True
+    antsreg.inputs.metric=['Mattes', 'Mattes']
+    antsreg.inputs.metric_weight=[1.0, 1.0]
+    antsreg.inputs.number_of_iterations=[[1000, 500, 250], [50, 50]]
+    antsreg.inputs.convergence_threshold=[1e-05, 1e-05]
+    antsreg.inputs.convergence_window_size=[5, 5]
+    antsreg.inputs.radius_or_number_of_bins=[32, 32]
+    antsreg.inputs.sampling_strategy=['Regular', 'None']  # 'None'
+    antsreg.inputs.sampling_percentage=[0.25, 1]
+    antsreg.inputs.transform_parameters=[(0.1,), (0.1, 3.0, 0.0)]
+
+    trnsfm = outprefix + "Composite.h5"
+    if not os.path.isfile(trnsfm) or repeat:
+        logger.info("- Registering image " + moving_nii + " to " + template_nii)
+        logger.debug(antsreg.cmdline)
+        antsreg.run()
+    else:
+        logger.info("- Warp file already exists at " + trnsfm)
+        logger.debug(antsreg.cmdline)
+    return trnsfm
+
+
 # ANTS translation
 # takes moving and template niis and a work dir
 # performs fast translation only registration and returns a list of transforms
-def trans_reg(moving_nii, template_nii, work_dir, repeat=False):
+def trans_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
     # logging
     logger = logging.getLogger("my_logger")
     # get basenames
@@ -428,7 +604,10 @@ def trans_reg(moving_nii, template_nii, work_dir, repeat=False):
     antsreg.terminal_output='none'
     antsreg.inputs.use_histogram_matching=True
     antsreg.inputs.write_composite_transform=True
-    antsreg.inputs.initial_moving_transform_com=1  # use center of mass for initial transform
+    if isinstance(option, dict) and "reg_com" in option.keys():
+        antsreg.inputs.initial_moving_transform_com = option["reg_com"]
+    else:
+        antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
     antsreg.inputs.winsorize_lower_quantile=0.005
     antsreg.inputs.winsorize_upper_quantile=0.995
     antsreg.inputs.metric=['Mattes']  # ['MI', 'MI', 'CC']
@@ -505,7 +684,10 @@ def reg_series(ser_dict, repeat=False):
     dcm_dir = ser_dict["info"]["dcmdir"]
     # if reg is false, or if there is no input file found, then just make the reg filename same as unreg filename
     for ser in ser_dict:
-        if ser_dict[ser]["filename"] == "None" or not ser_dict[ser]["reg"]:
+        # first, if there is no filename, set to None
+        if not "filename" in ser_dict[ser].keys():
+            ser_dict[ser].update({"filename": "None"})
+        if ser_dict[ser]["filename"] == "None" or not "reg" in ser_dict[ser].keys() or not ser_dict[ser]["reg"]:
             ser_dict[ser].update({"filename_reg": ser_dict[ser]["filename"]})
             ser_dict[ser].update({"transform": "None"})
             ser_dict[ser].update({"reg": False})
@@ -524,7 +706,12 @@ def reg_series(ser_dict, repeat=False):
             else:
                 movingr = ser_dict[ser]["filename"]
                 movinga = ser_dict[ser]["filename"]
-            transforms = trans_reg(movingr, template, os.path.dirname(dcm_dir), repeat)
+            # handle registration options here
+            if "reg_option" in ser_dict[ser].keys():
+                option = ser_dict[ser]["reg_option"]
+            else:
+                option = None
+            transforms = trans_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
             niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
             ser_dict[ser].update({"filename_reg": niiout})
             ser_dict[ser].update({"transform": transforms})
@@ -543,7 +730,36 @@ def reg_series(ser_dict, repeat=False):
                 movingr = ser_dict[ser]["filename"]
                 movinga = ser_dict[ser]["filename"]
             if os.path.isfile(movingr) and os.path.isfile(template): # make sure template and moving files exist
-                transforms = affine_reg(movingr, template, os.path.dirname(dcm_dir), repeat)
+                # handle registration options here
+                if "reg_option" in ser_dict[ser].keys():
+                    option = ser_dict[ser]["reg_option"]
+                else:
+                    option = None
+                transforms = affine_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
+                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                ser_dict[ser].update({"filename_reg": niiout})
+                ser_dict[ser].update({"transform": transforms})
+    # handle faster affine registration
+    for ser in ser_dict:
+        if ser_dict[ser]["reg"] == "fast_affine":
+            if os.path.isfile(ser_dict[ser]["reg_target"]):
+                template = ser_dict[ser]["reg_target"]
+            else:
+                template = ser_dict[ser_dict[ser]["reg_target"]]["filename_reg"]
+            # handle surrogate moving image
+            if "reg_moving" in ser_dict[ser]:
+                movingr = ser_dict[ser]["reg_moving"]
+                movinga = ser_dict[ser]["filename"]
+            else:
+                movingr = ser_dict[ser]["filename"]
+                movinga = ser_dict[ser]["filename"]
+            if os.path.isfile(movingr) and os.path.isfile(template):  # make sure template and moving files exist
+                # handle registration options here
+                if "reg_option" in ser_dict[ser].keys():
+                    option = ser_dict[ser]["reg_option"]
+                else:
+                    option = None
+                transforms = fast_affine_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
                 niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
@@ -562,7 +778,36 @@ def reg_series(ser_dict, repeat=False):
                 movingr = ser_dict[ser]["filename"]
                 movinga = ser_dict[ser]["filename"]
             if os.path.isfile(movingr) and os.path.isfile(template): # check that all files exist prior to reg
-                transforms = diffeo_reg(movingr, template, os.path.dirname(dcm_dir), repeat)
+                # handle registration options here
+                if "reg_option" in ser_dict[ser].keys():
+                    option = ser_dict[ser]["reg_option"]
+                else:
+                    option = None
+                transforms = diffeo_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
+                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                ser_dict[ser].update({"filename_reg": niiout})
+                ser_dict[ser].update({"transform": transforms})
+    # handle faster diffeo registration
+    for ser in ser_dict:
+        if ser_dict[ser]["reg"] == "fast_diffeo":
+            if os.path.isfile(ser_dict[ser]["reg_target"]):
+                template = ser_dict[ser]["reg_target"]
+            else:
+                template = ser_dict[ser_dict[ser]["reg_target"]]["filename_reg"]
+            # handle surrogate moving image
+            if "reg_moving" in ser_dict[ser]:
+                movingr = ser_dict[ser]["reg_moving"]
+                movinga = ser_dict[ser]["filename"]
+            else:
+                movingr = ser_dict[ser]["filename"]
+                movinga = ser_dict[ser]["filename"]
+            if os.path.isfile(movingr) and os.path.isfile(template):  # check that all files exist prior to reg
+                # handle registration options here
+                if "reg_option" in ser_dict[ser].keys():
+                    option = ser_dict[ser]["reg_option"]
+                else:
+                    option = None
+                transforms = fast_diffeo_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
                 niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})

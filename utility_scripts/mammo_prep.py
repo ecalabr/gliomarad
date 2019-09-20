@@ -22,16 +22,9 @@ def read_dicom_dir(dcm_dir, rep=False):
     series_dict = make_serdict(reg_atlas, dcm_dir, param_file)
     series_dict = filter_series(dicoms1, hdrs1, series1, dirs1, series_dict)
     series_dict = dcm_list_2_niis(series_dict, dcm_dir, rep)
-    # series_dict = split_dwi(series_dict) # in theory this is replaced by the "split" function in param file
-    # series_dict = split_asl(series_dict) # in theory this is replaced by the "split" function in param file
-    series_dict = dti_proc(series_dict, dti_index, dti_acqp, dti_bvec, dti_bval)
     series_dict = reg_series(series_dict)
-    series_dict = brain_mask(series_dict)
     series_dict = bias_correct(series_dict)
-    #series_dict = norm_niis(series_dict)
-    #series_dict = make_nii4d(series_dict)
-    #series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
-    series_dict = print_series_dict(series_dict)
+    #series_dict = print_series_dict(series_dict)
 
     return series_dict
 
@@ -43,14 +36,16 @@ def read_dicom_dir(dcm_dir, rep=False):
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--dcm_dir', default="/media/ecalabr/data1/gbm_data/qc_pending",
+parser.add_argument('--dcm_dir', default="/media/ecalabr/data2/breast_work/",
                     help="Path to dicom data directory")
-parser.add_argument('--support_dir', default="/media/ecalabr/data1/gbm_data/support_files",
+parser.add_argument('--support_dir', default="/media/ecalabr/data1/mammo_data/support_files",
                     help="Path to support file directory containing bvecs and atlas data")
 parser.add_argument('--start', default=0,
                     help="Index of directories to start processing at")
 parser.add_argument('--end', default=None,
                     help="Index of directories to end processing at")
+parser.add_argument('--redo', default=False,
+                    help="Repeat work boolean")
 
 if __name__ == '__main__':
 
@@ -62,15 +57,12 @@ if __name__ == '__main__':
     assert os.path.isdir(support_dir), "Support directory not found at {}".format(support_dir)
     start = args.start
     end = args.end
+    redo = args.redo
 
     # check that all required files are in support directory
-    param_file = os.path.join(support_dir, "param_files/gbm.json")
-    reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz")
-    dti_index = os.path.join(support_dir, "DTI_files/GE_hardi_55_index.txt")
-    dti_acqp = os.path.join(support_dir, "DTI_files/GE_hardi_55_acqp.txt")
-    dti_bvec = os.path.join(support_dir, "DTI_files/GE_hardi_55.bvec")
-    dti_bval = os.path.join(support_dir, "DTI_files/GE_hardi_55.bval")
-    for file_path in [param_file, reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
+    param_file = os.path.join(support_dir, "param_files/mammo.json")
+    reg_atlas = os.path.join(support_dir, "atlases/breast_test_atlas.nii.gz")
+    for file_path in [param_file, reg_atlas]:
         assert os.path.isfile(file_path), "Required support file not found at {}".format(file_path)
 
     # get a list of zip files from a dicom zip folder
@@ -87,6 +79,6 @@ if __name__ == '__main__':
         dcms = [dcms]
     for i, dcm in enumerate(dcms, 1):
         start_t = time.time()
-        serdict = read_dicom_dir(dcm)
+        serdict = read_dicom_dir(dcm, rep=redo)
         elapsed_t = time.time() - start_t
         print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")
