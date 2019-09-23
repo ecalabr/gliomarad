@@ -322,12 +322,17 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                 # handle options for post-coversion nifti processing here (only if output file exists)
                 if "split" in strs_dict[series].keys():
                     logger.info("- Splitting " + outfilename + " per specified parameters")
-                    outnames = split_multiphase(outfilepath, strs_dict[series]['split'], repeat=False)
-                    if outnames:
-                        for k in outnames.keys():
-                            # if series does not already exist in series list then it will not be updated
-                            if k in strs_dict.keys():
-                                strs_dict[k].update({"filename": outnames[k]})
+                    # handle use of a custom split function for splitting data
+                    if 'split_func' in strs_dict[series].keys():
+                        if strs_dict[series]['split_func'] in globals():
+                            globals()['split_func'](strs_dict)
+                    else:  # if not using custom split function, split based on split_multiphase
+                        outnames = split_multiphase(outfilepath, strs_dict[series]['split'], repeat=False)
+                        if outnames:
+                            for k in outnames.keys():
+                                # if series does not already exist in series list then it will not be updated
+                                if k in strs_dict.keys():
+                                    strs_dict[k].update({"filename": outnames[k]})
     # print outputs of file conversion
     logger.info("CONVERTED FILES LIST:")
     for ser in strs_dict:
