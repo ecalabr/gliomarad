@@ -269,11 +269,13 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
     converter = Dcm2niix()
     converter.inputs.bids_format = False
     converter.inputs.single_file = True
-    converter.inputs.args = '-w 1'
+    converter.inputs.args = '-w 2'
     converter.inputs.compress = "y"
     converter.inputs.output_dir = os.path.dirname(dicom_dir)
     converter.terminal_output = "allatonce"
     converter.anonymize = True
+    # placeholder list for extra files created during conversion
+    extras = []
 
     # convert all subdirectories from dicom to nii
     for series in strs_dict:
@@ -305,6 +307,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                 # make sure that file wasnt named something else during conversion
                 if isinstance(result.outputs.converted_files, list):
                     converted = result.outputs.converted_files[0]
+                    extras = result.outputs.converted_files.remove(result.outputs.converted_files[0])
                 else:
                     converted = result.outputs.converted_files
                 if not converted == outfilepath:
@@ -325,7 +328,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                     # handle use of a custom split function for splitting data
                     if 'split_func' in strs_dict[series].keys():
                         if strs_dict[series]['split_func'] in globals():
-                            globals()['split_func'](strs_dict)
+                            globals()[strs_dict[series]['split_func']](strs_dict)
                     else:  # if not using custom split function, split based on split_multiphase
                         outnames = split_multiphase(outfilepath, strs_dict[series]['split'], repeat=False)
                         if outnames:
@@ -333,6 +336,12 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                                 # if series does not already exist in series list then it will not be updated
                                 if k in strs_dict.keys():
                                     strs_dict[k].update({"filename": outnames[k]})
+    # after all conversion is done, remove any extra files that may have been created
+    if extras:
+        for item in extras:
+            if os.path.isfile(item):
+                logger.info("- Removing extra file generated during conversion: " + item)
+                os.remove(item)
     # print outputs of file conversion
     logger.info("CONVERTED FILES LIST:")
     for ser in strs_dict:
@@ -849,8 +858,6 @@ def split_asl(ser_dict):
     aslperfa = aslperf.rsplit(".nii", 1)[0] + "a.nii.gz"
     anat_outname = aslperf.rsplit(".nii", 1)[0] + "_anat.nii.gz"
     anat_json = aslperf.rsplit(".nii", 1)[0] + "_anat.json"
-    perf_json = aslperf.rsplit(".nii", 1)[0] + ".json"
-    a_json = aslperf.rsplit(".nii", 1)[0] + "a.json"
     # handle when dcm2niix converts to two different files
     if os.path.isfile(aslperfa):
         perfnii = nib.load(aslperf)
@@ -858,11 +865,8 @@ def split_asl(ser_dict):
         if np.mean(perfnii.get_data()) > np.mean(perfanii.get_data()):
             os.rename(aslperf, anat_outname)
             os.rename(aslperfa, aslperf)
-            os.rename(perf_json, anat_json)
-            os.rename(a_json, perf_json)
         else:
             os.rename(aslperfa, anat_outname)
-            os.rename(a_json, anat_json)
     # handle original case where asl perfusion is a 4D image with anat and perfusion combined
     if os.path.isfile(aslperf):
         if not os.path.isfile(anat_outname):
