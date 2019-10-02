@@ -51,4 +51,4 @@ if __name__ == '__main__':
             mask = mask[0]
             cmd = "itksnap -g " + t1gad + " -s " + mask
             os.system(cmd)
-            print("Done with study " + os.path.basename(direc) + ": " + str(i+skip) + " of " + str(n_total))
+            print("Done with study " + os.path.basename(direc) + ": " + str(i+int(skip)) + " of " + str(n_total))

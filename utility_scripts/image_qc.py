@@ -20,7 +20,7 @@ if __name__ == '__main__':
     assert os.path.isdir(ij_dir), "ImageJ directory not found at {}".format(ij_dir)
     ij_java = os.path.join(ij_dir, "jre/bin/java")
     ij_jar = os.path.join(ij_dir, "ij.jar")
-    start = args.skip
+    start = int(args.skip)
 
     # list all subdirs with the processed data
     direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         T1gad = glob(direc + "/*T1gad_w.nii.gz")
         T2FS = glob(direc + "/*T2FS_w.nii.gz")
         T1 = glob(direc + "/*T1_w.nii.gz")
-        img_list = [dwi, t1fs, T1gad, T2FS, T1]
+        #img_list = [dwi, t1fs, T1gad, T2FS, T1]
 
         if all(img_list):
             print("Directory " + direc + " is complete!")

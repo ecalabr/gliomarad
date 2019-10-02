@@ -17,13 +17,10 @@ def read_dicom_dir(dcm_dir, rep=False):
 
     # Pipeline step by step
     make_log(os.path.dirname(dcm_dir), rep)
-    #dcm_dir = unzip_file(dcm_zip)
     dicoms1, hdrs1, series1, dirs1 = get_series(dcm_dir)
     series_dict = make_serdict(reg_atlas, dcm_dir, param_file)
     series_dict = filter_series(dicoms1, hdrs1, series1, dirs1, series_dict)
     series_dict = dcm_list_2_niis(series_dict, dcm_dir, rep)
-    # series_dict = split_dwi(series_dict) # in theory this is replaced by the "split" function in param file
-    # series_dict = split_asl(series_dict) # in theory this is replaced by the "split" function in param file
     series_dict = dti_proc(series_dict, dti_index, dti_acqp, dti_bvec, dti_bval)
     series_dict = reg_series(series_dict)
     series_dict = brain_mask(series_dict)

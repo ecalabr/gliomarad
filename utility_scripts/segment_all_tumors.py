@@ -1,4 +1,4 @@
-import external_software.brats17_master.test_ecalabr3 as test_ecalabr2
+import external_software.brats17_master.test_ecalabr2 as test_ecalabr2
 from glob import glob
 import os
 import argparse
@@ -17,7 +17,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     data_dir = args.data_dir
     assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
-    start = args.skip
+    start = int(args.skip)
     spec_dir = args.spec_dir
     if spec_dir:
         spec_path = os.path.join(data_dir, spec_dir)

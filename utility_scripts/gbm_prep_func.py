@@ -323,7 +323,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                 output_ser.append(outfilepath)
                 strs_dict[series].update({"filename": outfilepath})
                 # handle options for post-coversion nifti processing here (only if output file exists)
-                if "split" in strs_dict[series].keys():
+                if any([item in strs_dict[series].keys() for item in ['split', 'split_func']]):
                     logger.info("- Splitting " + outfilename + " per specified parameters")
                     # handle use of a custom split function for splitting data
                     if 'split_func' in strs_dict[series].keys():
