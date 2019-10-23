@@ -4,9 +4,9 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default='/media/ecalabr/scratch/test_idno',
+parser.add_argument('--data_dir', default='/media/ecalabr/scratch/qc_complete',
                     help="Path to data directory")
-parser.add_argument('--id_csv', default='/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--2-11-19.csv',
+parser.add_argument('--id_csv', default='/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--8-31-19.csv',
                     help="Path to ID CSV")
 parser.add_argument('--anonymize', default="True",
                     help="True if anonymizing, False if deanonymizing")
@@ -61,7 +61,10 @@ if __name__ == '__main__':
             # move folder
             current_folder_path = os.path.join(args.data_dir, folder)
             new_folder_path = os.path.join(args.data_dir, str(desired_id_list[id_ind]).zfill(8))
-            os.rename(current_folder_path, new_folder_path)
+            try:
+                os.rename(current_folder_path, new_folder_path)
+            except:
+                pass
 
             # change names of all files in new folder
             for f in [os.path.join(new_folder_path, direc) for direc in os.listdir(new_folder_path)]:

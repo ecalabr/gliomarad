@@ -13,6 +13,8 @@ parser.add_argument('--mask', default='tumor_seg',
                     help="Reference file prefix")
 parser.add_argument('--output', default="tumor_mask",
                     help="Target file prefix to copy header info in to")
+parser.add_argument('--val', default=1,
+                    help="Threshold value for generating  if singular, else list of values to match with only commas between: '1,2,5'")
 
 if __name__ == '__main__':
 
@@ -22,6 +24,7 @@ if __name__ == '__main__':
     masks = glob(args.data_dir + '/*/*' + args.mask + '.nii.gz')
     masks.sort()
     assert masks, "No reference files found with prefix {}".format(args.mask)
+    vals_list = [float(x) for x in args.val.split(',')]
 
     # make the list of output arguments
     outputs = []
@@ -33,7 +36,10 @@ if __name__ == '__main__':
     for mask, output in zip(masks, outputs):
         if not os.path.isfile(output):
             nii = nib.load(mask)
-            newimg = nii.get_data()>0
+            if len(vals_list) > 1:
+                newimg = np.isin(nii.get_data(), vals_list)
+            else:
+                newimg = nii.get_data()>vals_list[0]
             newnii = nib.Nifti1Image(newimg.astype(np.uint8), nii.affine)
             nib.save(newnii, output)
             print(output)
