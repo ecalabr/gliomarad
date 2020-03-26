@@ -48,6 +48,7 @@ parser.add_argument('--start', default=0,
                     help="Index of directories to start processing at")
 parser.add_argument('--end', default=None,
                     help="Index of directories to end processing at")
+parser.add_argument('--list', action="store_true", default=False)
 
 if __name__ == '__main__':
 
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     end = args.end
 
     # check that all required files are in support directory
-    param_file = os.path.join(support_dir, "param_files/gbm.json")
+    param_file = os.path.join(support_dir, "param_files/gbm_regex.json")
     reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz")
     dti_index = os.path.join(support_dir, "DTI_files/GE_hardi_55_index.txt")
     dti_acqp = os.path.join(support_dir, "DTI_files/GE_hardi_55_acqp.txt")
@@ -76,14 +77,21 @@ if __name__ == '__main__':
 
     # iterate through all dicom folders or just a subset/specific diectories only using options below
     if end:
-        dcms = dcms[int(start):int(end)]
+        dcms = dcms[int(start):int(end)+1]
     else:
         dcms = dcms[int(start):]
 
-    if not isinstance(dcms, list):
-        dcms = [dcms]
-    for i, dcm in enumerate(dcms, 1):
-        start_t = time.time()
-        serdict = read_dicom_dir(dcm)
-        elapsed_t = time.time() - start_t
-        print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")
+    # handle list flag
+    if args.list:
+        for i, item in enumerate(dcms, 0):
+            print(str(i) + ': ' + item.rsplit('/', 1)[0])
+
+    # process if list flag not set
+    if not args.list:
+        if not isinstance(dcms, list):
+            dcms = [dcms]
+        for i, dcm in enumerate(dcms, 1):
+            start_t = time.time()
+            serdict = read_dicom_dir(dcm)
+            elapsed_t = time.time() - start_t
+            print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")

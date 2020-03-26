@@ -8,9 +8,9 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default="/media/ecalabr/data1/gbm_data/qc_pending",
+parser.add_argument('--data_dir', default="/media/ecalabr/data1/lgg_data/access",
                     help="Path to data directory")
-parser.add_argument('--pt_csv', default="/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--8-31-19.csv",
+parser.add_argument('--pt_csv', default="/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_glioma_9-20-15--8-31-19.csv",
                     help="Path to csv with accession data")
 parser.add_argument('--mrn_col', default=1,
                     help="Index of MRN column in patient CSV file")

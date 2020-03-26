@@ -20,6 +20,7 @@ from nipype.interfaces.fsl import Merge
 from nipype.interfaces.ants import N4BiasFieldCorrection
 import external_software.brats17_master.test_ecalabr as test_ecalabr
 import json
+import re
 
 ### Set up logging
 # takes work dir
@@ -138,17 +139,17 @@ def get_series(dicom_dir):
             try:
                 fileout.write("%s" % str(hdrs[ind].SliceThickness).rstrip("0").rstrip("."))
             except Exception:
-                pass
+                fileout.write("%s" % "None")
             fileout.write("%s" % "\tacqmtx=")
             try:
                 fileout.write("%s" % str(hdrs[ind].AcquisitionMatrix))
             except Exception:
-                pass
+                fileout.write("%s" % "None")
             fileout.write("%s" % "\trowcol=")
             try:
                 fileout.write("%s" % str(hdrs[ind].Rows) + "x" + str(hdrs[ind].Columns))
             except Exception:
-                pass
+                fileout.write("%s" % "None")
             fileout.write("%s" % "\tslices=")
             try:
                 fileout.write("%s" % str(hdrs[ind].ImagesInAcquisition))
@@ -158,40 +159,36 @@ def get_series(dicom_dir):
             try:
                 fileout.write("%s" % str(hdrs[ind].AcquisitionTime))
             except Exception:
-                pass
+                fileout.write("%s" % "None")
             fileout.write("%s" % "\n")
 
     return dicoms, hdrs, series, dirs
 
-# first define function to get filter substring matches by criteria
+# function to get filter substring matches by criteria, returns a list of indices for matching series
 def substr_list(strings, substrs, substrnot):
     # logging
     logger = logging.getLogger("my_logger")
     # define variables
     inds = []
-    # determine if any not strings are all caps, if  so treat them as "does not start with this string"
-    substrnotstart = [x.lower() for x in substrnot if x.isupper()]
-    # remove all caps (not starts with) substrs from the substrnot list
-    substrnot = [x for x in substrnot if not x.isupper()]
     # for each input series description
     number = 1
     for ind, string in enumerate(strings, 0):
         match = False
         # for each substr list in substrs
         for substrlist in substrs:
-            # if all substrs match and no NOT substrs match then append to matches
-            # also, if there are any all caps NOT substrs, make sure the string does not start with that substr
-            if all(ss.lower() in string.lower() for ss in substrlist) \
-                    and not any(ssn.lower() in string.lower() for ssn in substrnot) \
-                    and not any(string.lower().startswith(ssns) for ssns in substrnotstart):
-                inds.append(ind)
-                match = True
+            # match strings using regex
+            # first make sure all strings in a given substring list match the target string
+            if all([re.search(item, string) for item in substrlist]):
+                # then make sure none of the not strings match the target string
+                if not any([re.search(item2, string) for item2 in substrnot]):
+                    # only add new unique inds to the matching ind list
+                    if not ind in inds:
+                        inds.append(ind)
+                        match = True
+        # report matches
         if match:
             logger.info("- matched series: " + string + " (" + str(number) + ")")
             number = number + 1 # step the number of matching series
-    # return only unique inds if inds is not empty
-    if inds:
-        inds = list(set(inds)) # returns only unique values for inds
     return inds
 
 # get filtered series list
@@ -204,37 +201,44 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
     new_series = []
     new_dirs = []
     # for each output, find match and append to new list for conversion
-    keeper = []
-    number = 1 # series number chosen to report in the logger info
     for srs in srs_dict:
         # only search if terms are provided
         if "or" in srs_dict[srs].keys() and "not" in srs_dict[srs].keys():
             logger.info("FINDING SERIES: " + srs)
             inds = substr_list(series, srs_dict[srs]["or"], srs_dict[srs]["not"]) # calls above function
             # if there are inds of matches, pick the first match by default and check for more slices or repeat series
-            if inds:  # if only 1 ind, then use it
+            if inds or inds == 0:  # if only 1 ind is passed, then use it (set keeper to the only ind)
+                keeper = []
+                number = 'None'
                 if len(inds) == 1:
-                    inds = inds[0]
+                    keeper = inds[0]
+                    number = 1  # series number chosen to report in the logger info
                 else:  # if more than 1 inds, try to find the one with the most slices, otherwise just pick first one
-                    for i in inds:
-                        if inds.index(i) == 0: # pick first ind by default (this method works bc inds is unique set)
+                    for n, i in enumerate(inds, 1):
+                        if n == 1: # pick first ind by default
                             keeper = i
+                            number = n
                         if hasattr(hdrs[i], "ImagesInAcquisition") and hasattr(hdrs[keeper], "ImagesInAcquisition"):
                             # if another series has more images, pick it instead
                             if int(hdrs[i].ImagesInAcquisition) > int(hdrs[keeper].ImagesInAcquisition):
                                 keeper = i
+                                number = n
                             # if another series has the same # images:
                             elif int(hdrs[i].ImagesInAcquisition) == int(hdrs[keeper].ImagesInAcquisition):
                                 # and was acquired later, keep it instead
                                 if hasattr(hdrs[i], "AcquisitionTime") and hasattr(hdrs[keeper], "AcquisitionTime"):
-                                    if int(hdrs[i].AcquisitionTime) > int(hdrs[keeper].AcquisitionTime):
-                                        keeper = i
+                                    try:
+                                        if float(hdrs[i].AcquisitionTime) > float(hdrs[keeper].AcquisitionTime):
+                                            keeper = i
+                                            number = n
+                                    except:
+                                        pass
                                 # and description contains "repeat" or "redo", keep it instead
                                 if any(example in series[i] for example in ["repeat", "redo"]):
                                     keeper = i
-                    number = inds.index(keeper) + 1 # number of index chosen (starting at 1 for index 0)
-                    inds = keeper # replace inds with just the keeper index
-            if inds or inds == 0:  # this handles 0 index matches
+                                    number = n
+                # Report keeper series
+                inds = keeper # replace inds with just the keeper index
                 logger.info("- keeping series: " + series[inds] + " (" + str(number) + ")")
                 new_dicoms.append(dicoms[inds])
                 srs_dict[srs].update({"dicoms": dicoms[inds]})
@@ -286,20 +290,8 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
             outfilename = idno + "_" + series
             converter.inputs.out_filename = outfilename
             outfilepath = os.path.join(os.path.dirname(dicom_dir), outfilename + ".nii.gz")
-            # don't repeat conversion if already done
-            if os.path.isfile(outfilepath) and repeat:
-                logger.info("- " + outfilename + " already exists, but repeat is True, so it will be overwritten")
-                logger.info("- Converting " + outfilename)
-                logger.debug(converter.cmdline)
-                result = converter.run()
-                # make sure that file wasnt named something else during conversion, if so, rename to expected name
-                if isinstance(result.outputs.converted_files, list):
-                    converted = result.outputs.converted_files[0]
-                else:
-                    converted = result.outputs.converted_files
-                if not converted == outfilepath:
-                    logger.info("- converted file is named " + converted + ", renaming " + outfilepath)
-                    os.rename(converted, outfilepath)
+
+            # handle case where output file does not exist yet and pre-reqs are presebt
             if not os.path.isfile(outfilepath) and not strs_dict[series]["series"] == "None":
                 logger.info("- Converting " + outfilename)
                 logger.debug(converter.cmdline)
@@ -310,32 +302,63 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                     extras = result.outputs.converted_files.remove(result.outputs.converted_files[0])
                 else:
                     converted = result.outputs.converted_files
+                # handle case where converted files is undefined
+                if not converted:
+                    converted = outfilepath
                 if not converted == outfilepath:
-                    logger.info("- " + series + " converted file is named " + converted + ", renaming " + outfilepath)
+                    logger.info("- " + series + " converted file is named " + os.path.basename(converted) +
+                                ", renaming " + os.path.basename(outfilepath))
                     os.rename(converted, outfilepath)
-            if os.path.isfile(outfilepath) and not repeat:
-                logger.info("- " + outfilename + " already exists and will not be overwritten")
-            if not os.path.isfile(outfilepath) and strs_dict[series]["series"] == "None":
-                logger.info("- No existing file and no matching series found: " + series)
-            # after running through conversion options, check if file actually exists
+                # identify any extra files generated during conversion
+                more_extras = glob(outfilepath.rsplit('.', 1)[0] + '*.nii.gz')
+                extras = list(set(extras + more_extras))
+            else:
+                # handle cases where output file already exists but repeat is true
+                if os.path.isfile(outfilepath) and repeat:
+                    logger.info("- " + outfilename + " already exists, but repeat is True, so it will be overwritten")
+                    logger.info("- Converting " + outfilename)
+                    logger.debug(converter.cmdline)
+                    result = converter.run()
+                    # make sure that file wasnt named something else during conversion, if so, rename to expected name
+                    if isinstance(result.outputs.converted_files, list):
+                        converted = result.outputs.converted_files[0]
+                    else:
+                        converted = result.outputs.converted_files
+                    # handle case where converted files is undefined
+                    if not converted:
+                        converted = outfilepath
+                    if not converted == outfilepath:
+                        logger.info("- " + series + " converted file is " + converted + ", renaming to " + outfilepath)
+                        os.rename(converted, outfilepath)
+                    # identify any extra files generated during conversion
+                    more_extras = glob(outfilepath.rsplit('.', 1)[0] + '*.nii.gz')
+                    extras = list(set(extras + more_extras))
+
+                # handle case where outfile aready exists and repeat is false, or where prerequisites don't exist
+                if os.path.isfile(outfilepath) and not repeat:
+                    logger.info("- " + outfilename + " already exists and will not be overwritten")
+                if not os.path.isfile(outfilepath) and strs_dict[series]["series"] == "None":
+                    logger.info("- No existing file and no matching series found: " + series)
+
+            # after running through conversion process, check if output file actually exists and update series dict
             if os.path.isfile(outfilepath):
                 # if output file exists, regardless of whether created or not append name to outfile list
                 output_ser.append(outfilepath)
                 strs_dict[series].update({"filename": outfilepath})
                 # handle options for post-coversion nifti processing here (only if output file exists)
                 if any([item in strs_dict[series].keys() for item in ['split', 'split_func']]):
-                    logger.info("- Splitting " + outfilename + " per specified parameters")
                     # handle use of a custom split function for splitting data
                     if 'split_func' in strs_dict[series].keys():
                         if strs_dict[series]['split_func'] in globals():
                             globals()[strs_dict[series]['split_func']](strs_dict)
                     else:  # if not using custom split function, split based on split_multiphase
-                        outnames = split_multiphase(outfilepath, strs_dict[series]['split'], repeat=False)
+                        outnames = split_multiphase(outfilepath, strs_dict[series]['split'], series, repeat=False)
                         if outnames:
                             for k in outnames.keys():
                                 # if series does not already exist in series list then it will not be updated
                                 if k in strs_dict.keys():
                                     strs_dict[k].update({"filename": outnames[k]})
+
     # after all conversion is done, remove any extra files that may have been created
     if extras:
         for item in extras:
@@ -352,7 +375,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
 
 # Split multiphase
 # takes a multiphase (or other 4D) nifti and splits into one or more additional series based on options
-def split_multiphase(nii_in, options, repeat=False):
+def split_multiphase(nii_in, options, series, repeat=False):
     # setup return variable
     outnames = {}
     # logging
@@ -361,7 +384,7 @@ def split_multiphase(nii_in, options, repeat=False):
     basepath = nii_in.rsplit('_', 1)[1]
     # first check if all desired outputs already exist, if so, don't do any work
     if not repeat and all([os.path.isfile(os.path.join(basepath, ser + '.nii.gz')) for ser in options.keys()]):
-        logger.info("- All specified split outputs already exist and will not be regenerated")
+        logger.info("- split option was specified for " + series + " but split outputs already exist")
         for k in options.keys():
             outnames.update({k: os.path.join(basepath, k + '.nii.gz')})
         return outnames
@@ -371,15 +394,15 @@ def split_multiphase(nii_in, options, repeat=False):
         data = nii.get_data()
         # if data is not 4D, then return
         if len(data.shape) < 4 or data.shape[3] < 2:
-            logger.info("- Split option was specified, but data is not 4D")
+            logger.info("- split option was specified for " + series +
+                        ", and split outputs do not exist, but data is not 4D")
             return outnames
         # loop through splitting options - THIS WILL OVERWRITE OTHER SERIES
         for k in options.keys():
             dirname = os.path.dirname(nii_in)
             basename = os.path.basename(nii_in)
-            orig_ser = basename.split('_')[1].split('.')[0]
             outname = os.path.join(dirname, basename.split('_')[0] + '_' + k + '.nii.gz')
-            logger.info("- Splitting " + orig_ser + " phase " + str(options[k]) + " as " + k)
+            logger.info("- Splitting " + series + " phase " + str(options[k]) + " as " + k)
             new_data = data[:, :, :, options[k]]
             new_nii = nib.Nifti1Image(new_data, nii.affine)
             nib.save(new_nii, outname)
@@ -857,7 +880,7 @@ def split_asl(ser_dict):
     aslperf = ser_dict["ASL"]["filename"]
     aslperfa = aslperf.rsplit(".nii", 1)[0] + "a.nii.gz"
     anat_outname = aslperf.rsplit(".nii", 1)[0] + "_anat.nii.gz"
-    anat_json = aslperf.rsplit(".nii", 1)[0] + "_anat.json"
+    # anat_json = aslperf.rsplit(".nii", 1)[0] + "_anat.json"
     # handle when dcm2niix converts to two different files
     if os.path.isfile(aslperfa):
         perfnii = nib.load(aslperf)
@@ -895,7 +918,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
     idno = ser_dict["info"]["id"]
     # dcm_dir prep
     dcm_dir = ser_dict["info"]["dcmdir"]
-    if os.path.isfile(ser_dict["DTI"]["filename"]):
+    if "filename" in ser_dict["DTI"].keys() and os.path.isfile(ser_dict["DTI"]["filename"]):
         # define DTI input
         dti_in = ser_dict["DTI"]["filename"]
         logger.info("PROCESSING DTI")
@@ -948,48 +971,51 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
                 logger.debug(eddy.cmdline)
                 _ = eddy.run()
             except Exception:
-                logger.info("- Could not eddy correct DTI")
+                logger.info("- DTI eddy correction failed")
         else:
             logger.info("- Eddy corrected DWIs already exist at " + dti_outfile)
             logger.debug(eddy.cmdline)
-        # do DTI processing
-        fa_out = dti_out + "_FA.nii.gz"
-        dti = DTIFit()
-        dti.inputs.dwi = dti_outfile
-        dti.inputs.bvecs = dti_out + ".eddy_rotated_bvecs"
-        dti.inputs.bvals = dti_bval
-        dti.inputs.base_name = dti_out
-        dti.inputs.mask = dti_mask
-        # dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
-        dti.terminal_output = "none"
-        dti.inputs.save_tensor = True
-        # dti.ignore_exception = True  # for some reason running though nipype causes error at end
-        if os.path.isfile(dti_outfile) and not os.path.isfile(fa_out) or os.path.isfile(dti_outfile) and repeat:
-            logger.info("- Fitting DTI")
-            try:
-                logger.debug(dti.cmdline)
-                _ = dti.run()
-                # if DTI processing fails to create FA, it may be due to least squares option, so remove and run again
-                if not os.path.isfile(fa_out):
-                    dti.inputs.args = ""
+        # do DTI processing only if eddy corrected DTI exists
+        if os.path.isfile(dti_outfile):
+            fa_out = dti_out + "_FA.nii.gz"
+            dti = DTIFit()
+            dti.inputs.dwi = dti_outfile
+            dti.inputs.bvecs = dti_out + ".eddy_rotated_bvecs"
+            dti.inputs.bvals = dti_bval
+            dti.inputs.base_name = dti_out
+            dti.inputs.mask = dti_mask
+            # dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
+            dti.terminal_output = "none"
+            dti.inputs.save_tensor = True
+            # dti.ignore_exception = True  # for some reason running though nipype causes error at end
+            if os.path.isfile(dti_outfile) and not os.path.isfile(fa_out) or os.path.isfile(dti_outfile) and repeat:
+                logger.info("- Fitting DTI")
+                try:
                     logger.debug(dti.cmdline)
                     _ = dti.run()
-            except Exception:
-                if not os.path.isfile(fa_out):
-                    logger.info("- could not process DTI")
-                else:
-                    logger.info("- DTI processing completed")
-        else:
+                    # if DTI processing fails to create FA, it may be due to least squares option, so remove and run again
+                    if not os.path.isfile(fa_out):
+                        dti.inputs.args = ""
+                        logger.debug(dti.cmdline)
+                        _ = dti.run()
+                except Exception:
+                    if not os.path.isfile(fa_out):
+                        logger.info("- could not process DTI")
+                    else:
+                        logger.info("- DTI processing completed")
+            else:
+                if os.path.isfile(fa_out):
+                    logger.info("- DTI outputs already exist with prefix " + dti_out)
+                    logger.debug(dti.cmdline)
+            # if DTI processing completed, add DTI to series_dict for registration (note, DTI is masked at this point)
             if os.path.isfile(fa_out):
-                logger.info("- DTI outputs already exist with prefix " + dti_out)
-                logger.debug(dti.cmdline)
-        # if DTI processing completed, add DTI to series_dict for registration (note, DTI is masked at this point)
-        if os.path.isfile(fa_out):
-            ser_dict.update({"DTI_FA": {"filename": dti_out + "_FA.nii.gz", "reg": "DTI_b0"}})
-            ser_dict.update({"DTI_MD": {"filename": dti_out + "_MD.nii.gz", "reg": "DTI_b0", "no_norm": True}})
-            ser_dict.update({"DTI_L1": {"filename": dti_out + "_L1.nii.gz", "reg": "DTI_b0", "no_norm": True}})
-            ser_dict.update({"DTI_L2": {"filename": dti_out + "_L2.nii.gz", "reg": "DTI_b0", "no_norm": True}})
-            ser_dict.update({"DTI_L3": {"filename": dti_out + "_L3.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+                ser_dict.update({"DTI_FA": {"filename": dti_out + "_FA.nii.gz", "reg": "DTI_b0"}})
+                ser_dict.update({"DTI_MD": {"filename": dti_out + "_MD.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+                ser_dict.update({"DTI_L1": {"filename": dti_out + "_L1.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+                ser_dict.update({"DTI_L2": {"filename": dti_out + "_L2.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+                ser_dict.update({"DTI_L3": {"filename": dti_out + "_L3.nii.gz", "reg": "DTI_b0", "no_norm": True}})
+        else:
+            logger.info("- skipping DTI processing since eddy corrected DTI does not exist")
     return ser_dict
 
 # make mask based on t1gad and flair and apply to all other images
@@ -1008,27 +1034,30 @@ def brain_mask(ser_dict, repeat=False):
     masks = []  # list of completed masks
     for contrast in to_mask:
         # if original and registered files exist for this contrast
-        if os.path.isfile(ser_dict[contrast]["filename"]) and os.path.isfile(ser_dict[contrast]["filename_reg"]):
-            maskfile = os.path.join(os.path.dirname(dcm_dir), idno + "_" + contrast + "_w_mask.nii.gz")
-            bet = BET()
-            bet.inputs.in_file = ser_dict[contrast]["filename_reg"]
-            bet.inputs.out_file = ser_dict[contrast]["filename_reg"]  # no output prevents overwrite
-            bet.inputs.mask = True
-            bet.inputs.no_output = True
-            bet.inputs.frac = 0.5
-            bet.terminal_output = "none"
-            if not os.path.isfile(maskfile):
-                logger.info("- making brain mask based on " + contrast)
-                logger.debug(bet.cmdline)
-                _ = bet.run()
-                if os.path.isfile(maskfile):
+        if all(item in ser_dict[contrast].keys() for item in ["filename", "filename_reg"]):
+            if os.path.isfile(ser_dict[contrast]["filename"]) and os.path.isfile(ser_dict[contrast]["filename_reg"]):
+                maskfile = os.path.join(os.path.dirname(dcm_dir), idno + "_" + contrast + "_w_mask.nii.gz")
+                bet = BET()
+                bet.inputs.in_file = ser_dict[contrast]["filename_reg"]
+                bet.inputs.out_file = ser_dict[contrast]["filename_reg"]  # no output prevents overwrite
+                bet.inputs.mask = True
+                bet.inputs.no_output = True
+                bet.inputs.frac = 0.5
+                bet.terminal_output = "none"
+                if not os.path.isfile(maskfile):
+                    logger.info("- making brain mask based on " + contrast)
+                    logger.debug(bet.cmdline)
+                    _ = bet.run()
+                    if os.path.isfile(maskfile):
+                        masks.append(maskfile)
+                else:
+                    logger.info("- " + contrast + " brain mask already exists at " + maskfile)
+                    logger.debug(bet.cmdline)
                     masks.append(maskfile)
             else:
-                logger.info("- " + contrast + " brain mask already exists at " + maskfile)
-                logger.debug(bet.cmdline)
-                masks.append(maskfile)
+                logger.info("- could not find registered " + contrast + ", skipping brain masking for this contrast")
         else:
-            logger.info("- could not find registered " + contrast + ", skipping brain masking for this contrast")
+            logger.info("- no registered filename exists for " + contrast + ", skipping brain masking for this contrast")
 
     # combine brain masks using majority voting
     combined_mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
