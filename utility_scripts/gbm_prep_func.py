@@ -21,6 +21,7 @@ from nipype.interfaces.ants import N4BiasFieldCorrection
 import external_software.brats17_master.test_ecalabr as test_ecalabr
 import json
 import re
+import csv
 
 ### Set up logging
 # takes work dir
@@ -121,43 +122,67 @@ def get_series(dicom_dir):
     for ind, direc in enumerate(dirs):
         dicoms.append(glob(direc + "/*.dcm"))
         hdrs.append(dicom.read_file(dicoms[ind][0]))
-        try:
-            series.append(hdrs[ind].SeriesDescription.decode('utf8') + " [dir=" + direc[-5:] + "]")
-        except Exception:
+        # add extra text to decription of postcontrast series indicating contrast was given
+        # only if contrast agent is specified and is not empty
+        con_str = ' '
+        if hasattr(hdrs[ind], 'ContrastBolusAgent'):
+            if not str(hdrs[ind].ContrastBolusAgent) == '':
+                con_str = ' postcon '
+        # add extra text to description of reformatted series indicating reformat
+        if hasattr(hdrs[ind], 'ImageType'):
+            if 'REFORMATTED' in hdrs[ind].ImageType:
+                con_str = con_str + 'ref '
+        # if there is a series description then add it to the list
+        if hasattr(hdrs[ind], 'SeriesDescription'):
+            if hdrs[ind].SeriesDescription:
+                series.append(str(hdrs[ind].SeriesDescription) + con_str + "[dir=" + direc[-5:] + "]")
+        else:
             logger.info("- Skipping series " + str(ind + 1) + " without series description")
-            series.append("none"  + " [dir=" + direc[-5:] + "]")
+            series.append("none" + con_str + "[dir=" + direc[-5:] + "]")
 
     # save series list
     series_file = os.path.join(os.path.dirname(dicom_dir), idno + "_series_list.txt")
-    if not os.path.isfile(series_file):
+    remove_temporary_true_below = True
+    if not os.path.isfile(series_file) or True:
         fileout = open(series_file, 'w')
         for ind, item in enumerate(series):
             fileout.write("%s" % item)
             nspaces = 75 - len(item) # assume no series description longer than 75
             fileout.write("%s" % " " * nspaces)
+            # Slice thickness, rounded to 3 decimal places
             fileout.write("%s" % "\tslthick=")
             try:
-                fileout.write("%s" % str(hdrs[ind].SliceThickness).rstrip("0").rstrip("."))
+                fileout.write("%s" % str(round(float(hdrs[ind].SliceThickness), 3)))
             except Exception:
                 fileout.write("%s" % "None")
+            # Acquisition matrix
             fileout.write("%s" % "\tacqmtx=")
             try:
                 fileout.write("%s" % str(hdrs[ind].AcquisitionMatrix))
             except Exception:
-                fileout.write("%s" % "None")
+                fileout.write("%s" % "None\t")
+            # rows x columns
             fileout.write("%s" % "\trowcol=")
             try:
                 fileout.write("%s" % str(hdrs[ind].Rows) + "x" + str(hdrs[ind].Columns))
             except Exception:
                 fileout.write("%s" % "None")
+            # slices
             fileout.write("%s" % "\tslices=")
             try:
                 fileout.write("%s" % str(hdrs[ind].ImagesInAcquisition))
             except Exception:
                 fileout.write("%s" % "None" )
+            # acquisition time rounded to nearest int
             fileout.write("%s" % "\tacqtime=")
             try:
-                fileout.write("%s" % str(hdrs[ind].AcquisitionTime))
+                fileout.write("%s" % str(round(hdrs[ind].AcquisitionTime)))
+            except Exception:
+                fileout.write("%s" % "None")
+            # contrast agent removing redundant spaces
+            fileout.write("%s" % "\tcontrast=")
+            try:
+                fileout.write("%s" % " ".join(str(hdrs[ind].ContrastBolusAgent).split()))
             except Exception:
                 fileout.write("%s" % "None")
             fileout.write("%s" % "\n")
@@ -300,6 +325,8 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                 if isinstance(result.outputs.converted_files, list):
                     converted = result.outputs.converted_files[0]
                     extras = result.outputs.converted_files.remove(result.outputs.converted_files[0])
+                    if not extras:
+                        extras = []
                 else:
                     converted = result.outputs.converted_files
                 # handle case where converted files is undefined
@@ -310,8 +337,9 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                                 ", renaming " + os.path.basename(outfilepath))
                     os.rename(converted, outfilepath)
                 # identify any extra files generated during conversion
-                more_extras = glob(outfilepath.rsplit('.', 1)[0] + '*.nii.gz')
-                extras = list(set(extras + more_extras))
+                more_extras = glob(outfilepath.rsplit('.nii', 1)[0] + '*.nii.gz').remove(outfilepath)
+                if more_extras:
+                    extras = list(set(extras + more_extras))
             else:
                 # handle cases where output file already exists but repeat is true
                 if os.path.isfile(outfilepath) and repeat:
@@ -348,6 +376,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                 # handle options for post-coversion nifti processing here (only if output file exists)
                 if any([item in strs_dict[series].keys() for item in ['split', 'split_func']]):
                     # handle use of a custom split function for splitting data
+                    # this is where split_asl and combine_dti55 functions are used via finding it in the globals
                     if 'split_func' in strs_dict[series].keys():
                         if strs_dict[series]['split_func'] in globals():
                             globals()[strs_dict[series]['split_func']](strs_dict)
@@ -359,7 +388,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                                 if k in strs_dict.keys():
                                     strs_dict[k].update({"filename": outnames[k]})
 
-    # after all conversion is done, remove any extra files that may have been created
+    # after all conversion and splitting is done, remove any extra files that may have been created
     if extras:
         for item in extras:
             if os.path.isfile(item):
@@ -877,6 +906,10 @@ def split_dwi(ser_dict):
 
 # split asl and anatomic image (if necessary)
 def split_asl(ser_dict):
+    # logging
+    logger = logging.getLogger("my_logger")
+    logger.info("- splitting ASL using split_asl function")
+    # define files
     aslperf = ser_dict["ASL"]["filename"]
     aslperfa = aslperf.rsplit(".nii", 1)[0] + "a.nii.gz"
     anat_outname = aslperf.rsplit(".nii", 1)[0] + "_anat.nii.gz"
@@ -909,6 +942,96 @@ def split_asl(ser_dict):
     else:
         ser_dict.update({"ASL": {"filename": "None", "reg": False}})
     return ser_dict
+
+# combine a split 55 direction DTI file if necessary
+def combine_dti55(ser_dict):
+    # logging
+    logger = logging.getLogger("my_logger")
+    # define file names
+    dti = ser_dict["DTI"]["filename"]
+    dtia = dti.rsplit(".nii", 1)[0] + "a.nii.gz"
+    dti_bvals = dti.rsplit(".nii", 1)[0] + ".bval"
+    dti_bvecs = dti.rsplit(".nii", 1)[0] + ".bvec"
+    dtia_bvals = dti.rsplit(".nii", 1)[0] + "a.bval"
+    dtia_bvecs = dti.rsplit(".nii", 1)[0] + "a.bvec"
+    # first check how many bvals in original DTI and return if exactly 56 (55 directions + 1 B0)
+    with open(dti_bvals, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        rows = [item for item in reader]
+    if len(rows[0]) == 56:
+        return ser_dict
+    # handle case where directions > 56
+    logger.info("- averaging multiple B0s in DTI data")
+    if len(rows[0]) > 56:
+        # assume multiple b0s and average them
+        num_b0 = len(rows[0]) - 55
+        dti_f = nib.load(dti)
+        dti_d = dti_f.get_data()
+        b0s = np.mean(dti_d[:, :, :, 0:num_b0], axis=3)
+        dti_d = np.concatenate([np.expand_dims(b0s, axis=3), dti_d[:, :, :, num_b0:]], axis=3)
+        dti_f = nib.Nifti1Image(dti_d, dti_f.affine, dti_f.header)
+        nib.save(dti_f, dti)
+        # remove extra zeros from bvals and vecs
+        # read original vals
+        with open(dti_bvals, 'r') as f:
+            reader = csv.reader(f, delimiter='\t')
+            rows = [item[num_b0-1:] for item in reader]
+        with open(dti_bvals, 'w+') as f:
+            writer = csv.writer(f, delimiter='\t')
+            writer.writerows(rows)
+        # read original vecs
+        with open(dti_bvecs, 'r') as f:
+            reader = csv.reader(f, delimiter='\t')
+            rows = [item[num_b0-1:] for item in reader]
+        with open(dti_bvecs, 'w+') as f:
+            writer = csv.writer(f, delimiter='\t')
+            writer.writerows(rows)
+        return ser_dict
+    # now check if DTIa exists, if not, then return
+    if not os.path.isfile(dtia):
+        return ser_dict
+    # DTIa exists and DTI has less than 56 volumes, combine DTI and DTIa
+    logger.info("- combining split DTI file using combine_dti55 function")
+    dti_f = nib.load(dti)
+    dti_d = dti_f.get_data()
+    dtia_f = nib.load(dtia)
+    dtia_d = dtia_f.get_data()
+    dti_d = np.concatenate([dti_d, np.reshape(dtia_d, [dtia_d.shape[0], dtia_d.shape[1], dtia_d.shape[2],-1])], axis=3)
+    dti_f = nib.Nifti1Image(dti_d, dti_f.affine, dti_f.header)
+    nib.save(dti_f, dti)
+    # combine bvals
+    # read original vals
+    with open(dti_bvals, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        rows = [item for item in reader]
+    # read a vals
+    with open(dtia_bvals, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        rowsa = [item for item in reader]
+    # combine vals
+    outrows = [row + rowa for row, rowa in zip(rows, rowsa)]
+    with open(dti_bvals, 'w+') as outfile:
+        writer = csv.writer(outfile, delimiter='\t')
+        writer.writerows(outrows)
+    # combine bvecs
+    # read original vecs
+    with open(dti_bvecs, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        rows = [item for item in reader]
+    # read a vecs
+    with open(dtia_bvecs, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        rowsa = [item for item in reader]
+    # combine vecs
+    outrows = [row + rowa for row, rowa in zip(rows, rowsa)]
+    with open(dti_bvecs, 'w+') as outfile:
+        writer = csv.writer(outfile, delimiter='\t')
+        writer.writerows(outrows)
+    # remove a files
+    delete = [dtia, dtia_bvals, dtia_bvecs]
+    for item in delete:
+        if os.path.isfile(item):
+            os.remove(item)
 
 # DTI processing if present
 def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
@@ -1057,7 +1180,7 @@ def brain_mask(ser_dict, repeat=False):
             else:
                 logger.info("- could not find registered " + contrast + ", skipping brain masking for this contrast")
         else:
-            logger.info("- no registered filename exists for " + contrast + ", skipping brain masking for this contrast")
+            logger.info("- no registered filename exists for " + contrast + ", skipping brain mask for this contrast")
 
     # combine brain masks using majority voting
     combined_mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
@@ -1127,9 +1250,9 @@ def bias_correct(ser_dict, repeat=False):
             f = os.path.join(os.path.dirname(dcm_dir), idno + "_" + srs + "_wm.nii.gz")
             mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
             if not os.path.isfile(f):
-                logger.info("-skipping bias correction for " + srs + " as masked file does not exist.")
+                logger.info("- skipping bias correction for " + srs + " as masked file does not exist.")
             elif not os.path.isfile(mask):
-                logger.info("-skipping bias correction for " + srs + " as mask image does not exist.")
+                logger.info("- skipping bias correction for " + srs + " as mask image does not exist.")
             else:
                 # generate output filenames for corrected image and bias field
                 biasfile = f.rsplit(".nii", 1)[0] + "_biasmap.nii.gz"
@@ -1283,7 +1406,8 @@ def tumor_seg(ser_dict):
     return ser_dict
 
 # print and save series dict
-def print_series_dict(series_dict, repeat=False):
+remove_true_from_next_line = True
+def print_series_dict(series_dict, repeat=True):
     dcm_dir = series_dict["info"]["dcmdir"]
     # first save as a numpy file
     serdict_outfile = os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata.npy")
@@ -1306,5 +1430,5 @@ def print_series_dict(series_dict, repeat=False):
             return new_dict
         hr_serdict = remove_nonstr_from_dict(series_dict)
         with open(hr_serdict_outfile, 'w') as f:
-            f.write("%s" % yaml.dump(hr_serdict))
+            f.write("%s" % yaml.safe_dump(hr_serdict))
     return series_dict

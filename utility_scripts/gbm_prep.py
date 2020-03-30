@@ -75,23 +75,23 @@ if __name__ == '__main__':
     dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
     dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
 
-    # iterate through all dicom folders or just a subset/specific diectories only using options below
-    if end:
-        dcms = dcms[int(start):int(end)+1]
-    else:
-        dcms = dcms[int(start):]
-
     # handle list flag
     if args.list:
         for i, item in enumerate(dcms, 0):
-            print(str(i) + ': ' + item.rsplit('/', 1)[0])
+            print(str(i) + ': ' + item.rsplit('/', 1)[0]) # removes dicom dir and only gives parent dir
+        exit()
 
-    # process if list flag not set
-    if not args.list:
-        if not isinstance(dcms, list):
-            dcms = [dcms]
-        for i, dcm in enumerate(dcms, 1):
-            start_t = time.time()
-            serdict = read_dicom_dir(dcm)
-            elapsed_t = time.time() - start_t
-            print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")
+    # iterate through all dicom folders or just a subset/specific diectories only using options below
+    if end:
+        dcms = dcms[int(start):int(end) + 1]
+    else:
+        dcms = dcms[int(start):]
+    if not isinstance(dcms, list):
+        dcms = [dcms]
+
+    # process directories
+    for i, dcm in enumerate(dcms, 1):
+        start_t = time.time()
+        serdict = read_dicom_dir(dcm)
+        elapsed_t = time.time() - start_t
+        print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")
