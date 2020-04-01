@@ -1,3 +1,5 @@
+""" script for renaming data directories to a different alternate ID """
+
 import os
 import csv
 import argparse

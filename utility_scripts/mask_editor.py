@@ -1,3 +1,5 @@
+""" opens label files from a given data directory in ITK snap for manual correction """
+
 import os
 from glob import glob
 import argparse

@@ -22,6 +22,7 @@ import external_software.brats17_master.test_ecalabr as test_ecalabr
 import json
 import re
 import csv
+import shutil
 
 ### Set up logging
 # takes work dir
@@ -102,7 +103,7 @@ def unzip_file(dicom_zip):
     return dicomdir
 
 # function to get complete series list from dicom directory
-def get_series(dicom_dir):
+def get_series(dicom_dir, repeat=False):
     # logging
     logger = logging.getLogger("my_logger")
     logger.info("GETTING SERIES LIST:")
@@ -142,8 +143,7 @@ def get_series(dicom_dir):
 
     # save series list
     series_file = os.path.join(os.path.dirname(dicom_dir), idno + "_series_list.txt")
-    remove_temporary_true_below = True
-    if not os.path.isfile(series_file) or True:
+    if not os.path.isfile(series_file) or repeat:
         fileout = open(series_file, 'w')
         for ind, item in enumerate(series):
             fileout.write("%s" % item)
@@ -891,19 +891,6 @@ def reg_series(ser_dict, repeat=False):
             pass
     return ser_dict
 
-# split b0 and dwi and discard b0 (if necessary)
-def split_dwi(ser_dict):
-    dwib0 = ser_dict["DWI"]["filename"]
-    if os.path.isfile(dwib0):
-        dwinii = nib.load(dwib0)
-        if len(dwinii.get_shape()) > 3:
-            dwib0img = dwinii.get_data()
-            dwi = np.squeeze(dwib0img[:, :, :, 0])
-            aff = dwinii.get_affine()
-            dwinii = nib.Nifti1Image(dwi, aff)
-            nib.save(dwinii, dwib0)
-    return ser_dict
-
 # split asl and anatomic image (if necessary)
 def split_asl(ser_dict):
     # logging
@@ -943,6 +930,43 @@ def split_asl(ser_dict):
         ser_dict.update({"ASL": {"filename": "None", "reg": False}})
     return ser_dict
 
+# splitter for handling multi-direction dwi data
+def split_dwi(ser_dict):
+    # logging
+    logger = logging.getLogger("my_logger")
+    # define filenames
+    dwi = ser_dict["DWI"]["filename"]
+    dwi_bvals = dwi.rsplit(".nii", 1)[0] + ".bval"
+    dwi_bvecs = dwi.rsplit(".nii", 1)[0] + ".bvec"
+    # first check if bvals is present, if so, then average all non B0
+    if os.path.isfile(dwi_bvals):
+        logger.info("- creating DWI from multidirection data")
+        with open(dwi_bvals, 'r') as f:
+            reader = csv.reader(f, delimiter='\t')
+            rows = [item for item in reader]
+            vals_bool = [int(item)>0 for item in rows[0]]
+        # load data and average if there is more than 1 item in 4th dimension
+        dwi_nii = nib.load(dwi)
+        dwi_d = dwi_nii.get_data()
+        if len(dwi_d.shape) > 3:
+            avg_dwi = np.mean(dwi_d[:, :, :, vals_bool], axis=3)
+            dwi_nii = nib.Nifti1Image(avg_dwi, dwi_nii.affine, dwi_nii.header)
+            nib.save(dwi_nii, dwi)
+    # if bvals is not present, then check if dwi is multidimensional, if so, just take first item
+    else:
+        logger.info("- splitting first volume from multidirection DWI image")
+        dwi_nii = nib.load(dwi)
+        if len(dwi_nii.shape) > 3:
+            dwi_d = dwi_nii.get_data()
+            dwi_d = np.squeeze(dwi_d[:, :, :, 0])
+            dwi_nii = nib.Nifti1Image(dwi_d, dwi_nii.affine, dwi_nii.header)
+            nib.save(dwi_nii, dwi)
+    # regardless of what was done, delete bvals and vecs if present
+    for f in [dwi_bvals, dwi_bvecs]:
+        if os.path.isfile(f):
+            os.remove(f)
+    return ser_dict
+
 # combine a split 55 direction DTI file if necessary
 def combine_dti55(ser_dict):
     # logging
@@ -954,7 +978,10 @@ def combine_dti55(ser_dict):
     dti_bvecs = dti.rsplit(".nii", 1)[0] + ".bvec"
     dtia_bvals = dti.rsplit(".nii", 1)[0] + "a.bval"
     dtia_bvecs = dti.rsplit(".nii", 1)[0] + "a.bvec"
-    # first check how many bvals in original DTI and return if exactly 56 (55 directions + 1 B0)
+    # first check if DTI bvals is present, if not, nothing can be done
+    if not os.path.isfile(dti_bvals):
+        return ser_dict
+    # next check how many bvals in original DTI and return if exactly 56 (55 directions + 1 B0)
     with open(dti_bvals, 'r') as f:
         reader = csv.reader(f, delimiter='\t')
         rows = [item for item in reader]
@@ -980,17 +1007,21 @@ def combine_dti55(ser_dict):
             writer = csv.writer(f, delimiter='\t')
             writer.writerows(rows)
         # read original vecs
-        with open(dti_bvecs, 'r') as f:
-            reader = csv.reader(f, delimiter='\t')
-            rows = [item[num_b0-1:] for item in reader]
-        with open(dti_bvecs, 'w+') as f:
-            writer = csv.writer(f, delimiter='\t')
-            writer.writerows(rows)
+        if os.path.isfile(dtia_bvecs):
+            with open(dti_bvecs, 'r') as f:
+                reader = csv.reader(f, delimiter='\t')
+                rows = [item[num_b0-1:] for item in reader]
+            with open(dti_bvecs, 'w+') as f:
+                writer = csv.writer(f, delimiter='\t')
+                writer.writerows(rows)
         return ser_dict
     # now check if DTIa exists, if not, then return
     if not os.path.isfile(dtia):
         return ser_dict
     # DTIa exists and DTI has less than 56 volumes, combine DTI and DTIa
+    # first make sure bvals files are present
+    if not os.path.isfile(dtia_bvals):
+        return ser_dict
     logger.info("- combining split DTI file using combine_dti55 function")
     dti_f = nib.load(dti)
     dti_d = dti_f.get_data()
@@ -1013,25 +1044,77 @@ def combine_dti55(ser_dict):
     with open(dti_bvals, 'w+') as outfile:
         writer = csv.writer(outfile, delimiter='\t')
         writer.writerows(outrows)
-    # combine bvecs
-    # read original vecs
-    with open(dti_bvecs, 'r') as f:
-        reader = csv.reader(f, delimiter='\t')
-        rows = [item for item in reader]
-    # read a vecs
-    with open(dtia_bvecs, 'r') as f:
-        reader = csv.reader(f, delimiter='\t')
-        rowsa = [item for item in reader]
-    # combine vecs
-    outrows = [row + rowa for row, rowa in zip(rows, rowsa)]
-    with open(dti_bvecs, 'w+') as outfile:
-        writer = csv.writer(outfile, delimiter='\t')
-        writer.writerows(outrows)
-    # remove a files
+    # combine bvecs if both of the necessary files exist
+    if all([os.path.isfile(f) for f in [dti_bvecs, dtia_bvecs]]):
+        # read original vecs
+        with open(dti_bvecs, 'r') as f:
+            reader = csv.reader(f, delimiter='\t')
+            rows = [item for item in reader]
+        # read a vecs
+        with open(dtia_bvecs, 'r') as f:
+            reader = csv.reader(f, delimiter='\t')
+            rowsa = [item for item in reader]
+        # combine vecs
+        outrows = [row + rowa for row, rowa in zip(rows, rowsa)]
+        with open(dti_bvecs, 'w+') as outfile:
+            writer = csv.writer(outfile, delimiter='\t')
+            writer.writerows(outrows)
+    # remove a_vecs and a_vals files if they exist
     delete = [dtia, dtia_bvals, dtia_bvecs]
     for item in delete:
         if os.path.isfile(item):
             os.remove(item)
+
+# function for converting dcm2nii bval and bvecs files to the necessary inputs for FSL eddy
+# returns a list of filenames [bvals, bvecs, acqp, index] or None if files cannot be made
+def bvec_convert(bvals, bvecs):
+    # logging
+    logger = logging.getLogger("my_logger")
+    # get base directory define outputs and check that files exist
+    if not any([os.path.isfile(f) for f in [bvals, bvecs]]):
+        return None
+    path_stem = bvals.rsplit('.bval', 1)[0]
+    acqp = path_stem + '_acqp.txt'
+    index = path_stem + '_index.txt'
+    # if all the diseried outputs already exist, then return their paths
+    if all([os.path.isfile(f) for f in [bvals, bvecs, acqp, index]]):
+        return [bvals, bvecs, acqp, index]
+    # here bvals and bvecs exist but other files are missing, do conversion
+    # bvecs first - read from file as tab delimited (dcm2nii output format), write as space delimited (FSL format)
+    logger.info("- generating param files for FSL eddy using bval and bvec files from dicom conversion")
+    with open(bvecs, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        bvecs_rows = [row for row in reader]
+    # check if bvecs was actually space delimited, if so don't rewrite
+    if len(bvecs_rows[0])>1:
+        with open(bvecs, 'w+') as f:
+            writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
+            writer.writerows(bvecs_rows)
+    # bvals next - read from file as tab delimited (dcm2nii output format), write as space delimited (FSL format)
+    with open(bvals, 'r') as f:
+        reader = csv.reader(f, delimiter='\t')
+        bvals_rows = [row for row in reader]
+    if len(bvals_rows[0]) > 1:
+        with open(bvals, 'w+') as f:
+            writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
+            writer.writerows(bvals_rows)
+    # make acqp and index files
+    # acqp is hard coded for 4th param
+    # he fourth element in each row is the time (in seconds) between reading the center of the first echo and reading
+    # the center of the last echo. It is the "dwell time" multiplied by "number of PE steps - 1" and it is also the
+    # reciprocal of the PE bandwidth/pixel.
+    acqp_list = [[0, 1, 0, 0.0655]]
+    with open(acqp, 'w+') as f:
+        writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
+        writer.writerows(acqp_list)
+    # index length here is determined by number of bvals, also checks if the read bvals was actually space delimited
+    index_len = len(bvals_rows[0]) if len(bvals_rows[0]) > 1 else len(bvals_rows[0][0].split(' '))
+    index_list = [[1] * index_len]
+    with open(index, 'w+') as f:
+        writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
+        writer.writerows(index_list)
+    # return outputs as a list
+    return [bvals, bvecs, acqp, index]
 
 # DTI processing if present
 def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
@@ -1074,6 +1157,24 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
         else:
             logger.info("- DTI BET masking already exists at " + dti_mask)
             logger.debug(btr.cmdline)
+        # if bvces/bvals files exist then use these as params, else use defaults
+        bvals = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI.bval")
+        bvecs = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI.bvec")
+        acqp = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_acqp.txt")
+        index = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_index.txt")
+        dti_params = bvec_convert(bvals, bvecs)
+        # if result was not None, set params to new values, if it was None, then use defaults
+        if dti_params:
+            my_dti_bval, my_dti_bvec, my_dti_acqp, my_dti_index = dti_params
+        else:
+            if not all([os.path.isfile(f) for f in [bvals, bvecs, acqp, index]]):
+                # copy deafult DTI param files to data directory if the dont exist
+                shutil.copy2(dti_bval, bvals)
+                shutil.copy2(dti_bvec, bvecs)
+                shutil.copy2(dti_acqp, acqp)
+                shutil.copy2(dti_index, index)
+            # set processing params to local file names
+            my_dti_bval, my_dti_bvec, my_dti_acqp, my_dti_index = [bvals, bvecs, acqp, index]
         # do eddy correction with outlier replacement
         dti_out = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_eddy")
         dti_outfile = os.path.join(os.path.dirname(dcm_dir), idno + "_DTI_eddy.nii.gz")
@@ -1081,10 +1182,10 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
         eddy.inputs.in_file = dti_in
         eddy.inputs.out_base = dti_out
         eddy.inputs.in_mask = dti_mask
-        eddy.inputs.in_index = dti_index
-        eddy.inputs.in_acqp = dti_acqp
-        eddy.inputs.in_bvec = dti_bvec
-        eddy.inputs.in_bval = dti_bval
+        eddy.inputs.in_index = my_dti_index
+        eddy.inputs.in_acqp = my_dti_acqp
+        eddy.inputs.in_bvec = my_dti_bvec
+        eddy.inputs.in_bval = my_dti_bval
         eddy.inputs.use_cuda = True
         eddy.inputs.repol = True
         eddy.terminal_output = "none"
@@ -1104,7 +1205,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
             dti = DTIFit()
             dti.inputs.dwi = dti_outfile
             dti.inputs.bvecs = dti_out + ".eddy_rotated_bvecs"
-            dti.inputs.bvals = dti_bval
+            dti.inputs.bvals = my_dti_bval
             dti.inputs.base_name = dti_out
             dti.inputs.mask = dti_mask
             # dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
@@ -1406,8 +1507,7 @@ def tumor_seg(ser_dict):
     return ser_dict
 
 # print and save series dict
-remove_true_from_next_line = True
-def print_series_dict(series_dict, repeat=True):
+def print_series_dict(series_dict, repeat=False):
     dcm_dir = series_dict["info"]["dcmdir"]
     # first save as a numpy file
     serdict_outfile = os.path.join(os.path.dirname(dcm_dir), series_dict["info"]["id"] + "_metadata.npy")

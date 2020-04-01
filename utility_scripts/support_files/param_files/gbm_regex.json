@@ -1,0 +1,73 @@
+{
+"FLAIR":{
+	"or": [["(?i)flair"]],
+	"not": ["(?i)t1", "(?i)(ref|rfmt)", "(?i)(track|tract|left|right|arcuate|optic|ifof|slf|radiation|motor|roi)"],
+	"reg": "trans",
+	"reg_target": "atlas",
+	"bias": true
+	},
+
+"T1":	{
+	"or": [["(?i)(t1|bravo|spgr)"]],
+	"not": ["(?i)post", "(?i)flair", "\\+", "(?i) pg ", "(?i)(c|t|l)-sp", "(?i)spine", "(?i)^gad", "(?i)(ref|rfmt)", "(?i)rho"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"T1gad":{
+	"or": [["(?i)(t1|bravo|spgr)", "(?i)(gad|post| pg |\\+c)"], ["(?i)rssg", "(?i)sp", "(?i)steo"]],
+	"not": ["(?i)pre", "(?i)without", "(?i)w/o", "(?i)(ref|rfmt)", "(?i)(c|t|l)-sp", "(?i)spine", "(?i)(track|tract|left|right|arcuate|optic|ifof|slf|radiation|motor|roi)"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"T2": 	{
+	"or": [["(?i)t2"], ["(?i)fse"]],
+	"not": ["(?i)flair",  "(?i)t1", "(?i)(ref|rfmt)", "(?i)(track|tract|left|right|arcuate|optic|ifof|slf|radiation|motor|roi)"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"SWI": 	{
+	"or": [["(?i)isi"], ["(?i)swan"]],
+	"not": ["(?i)(ref|rf)", "(?i)filt", "(?i)pha", "(?i)mip", "(?i)min"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"DWI": 	{
+	"or": [["(?i)dwi"], ["(?i)trace"], ["(?i)diffusion"], ["(?i)dw", "(?i)epi"], ["(?i)isotropic image"], ["(?i)b=1000"]],
+	"not": ["(?i)(ref|rfmt)", "(?i)exp", "(?i)cor", "(?i)sag", "(?i)eadc", "(?i)apparent"],
+	"reg": "diffeo",
+	"reg_target": "FLAIR",
+	"bias": true,
+	"split_func": "split_dwi"
+	},
+
+"ADC": 	{
+	"or": [["(?i)adc"], ["(?i)apparent", "(?i)diffusion"], ["(?i)avdc"], ["(?i)average", "(?i)dc"]],
+	"not": ["(?i)exp", "(?i)cor", "(?i)sag", "(?i)eadc"],
+	"reg": "DWI"
+	},
+
+"DTI": 	{
+	"or": [["(?i)dti"], ["(?i)hardi"]],
+	"not": ["(?i)roi", "(?i)topup", "(?i)seed", "(?i)target"],
+	"reg": false,
+	"split_func": "combine_dti55"
+	},
+
+"ASL": 	{
+	"or": [["(?i)asl"]],
+	"not": ["(?i)cerebral", "(?i)aslant"],
+	"reg": false,
+	"split": {"ASL": 0, "ASL_anat": -1},
+	"split_func": "split_asl",
+	"reg": "diffeo",
+	"reg_target": "FLAIR"
+	}
+}

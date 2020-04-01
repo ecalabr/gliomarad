@@ -1,3 +1,5 @@
+""" takes a list of IDs and converts it into a numpy format list of data directories """
+
 import os
 import random
 import numpy as np

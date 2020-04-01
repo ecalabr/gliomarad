@@ -1,8 +1,8 @@
+""" separates UCSF500 result text copied from PDFs into specific CSV columns based on a list of gene keywords"""
+
 import os
 import csv
-from glob import glob
 import argparse
-import subprocess
 
 # parse input arguments
 parser = argparse.ArgumentParser()

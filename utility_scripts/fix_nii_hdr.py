@@ -1,3 +1,5 @@
+""" copies nii header information from one image to another """
+
 import os
 from glob import glob
 import argparse

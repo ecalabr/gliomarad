@@ -1,0 +1,72 @@
+{
+"FLAIR":{
+	"or": [["flair"]],
+	"not": ["t1", "reform", "rfmt", "track", "tract", "left", "right", "ref", "arcuate", "radiation", "ifof"],
+	"reg": "trans",
+	"reg_target": "atlas",
+	"bias": true
+	},
+
+"T1":	{
+	"or": [["ax t1"], ["ax", "3d", "bravo", "brainnav"], ["fspgr", "pre", "t1"], ["bravo", "pre", "t1"], ["3d", "t1", "brainnav"], ["3d", "t1", "bravo"]],
+	"not": ["post", "flair", "+", " pg ", "c-sp", "t-sp", "l-sp", "GAD", "ref", "rfmt"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"T1gad":{
+	"or": [["spgr", "gad"], ["bravo", "gad"], ["+c", "t1"], ["fspgr", "bravo"], ["t1", " pg "], ["t1", "gad"], ["t1", "post"], ["rssg", "sp", "steo"], ["bravo", "post"]],
+	"not": ["pre", "without", "w/o", "reform", "c-sp", "t-sp", "l-sp", "track", "motor", "left", "right", "roi"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"T2": 	{
+	"or": [["t2"]],
+	"not": ["flair", "optic", "motor", "track", "tract", "radiation", "reform", "ref", "rfmt"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"SWI": 	{
+	"or": [["isi"], ["swan"]],
+	"not": ["ref", "filt", "pha", "rf", "mip", "min"],
+	"reg": "affine",
+	"reg_target": "FLAIR",
+	"bias": true
+	},
+
+"DWI": 	{
+	"or": [["ax", "dwi"], ["trace"]],
+	"not": [],
+	"reg": "diffeo",
+	"reg_target": "FLAIR",
+	"bias": true,
+	"split": {"DWI": 0}
+	},
+
+"ADC": 	{
+	"or": [["adc"], ["apparent", "diffusion"], ["avdc"]],
+	"not": ["exp", "cor", "sag", "eadc"],
+	"reg": "DWI"
+	},
+
+"DTI": 	{
+	"or": [["dti"], ["hardi"]],
+	"not": ["roi", "topup"],
+	"reg": false
+	},
+
+"ASL": 	{
+	"or": [["asl", "perfusion"]],
+	"not": ["cerebral"],
+	"reg": false,
+	"split": {"ASL": 0, "ASL_anat": -1},
+	"split_func": "split_asl",
+	"reg": "diffeo",
+	"reg_target": "FLAIR"
+	}
+}

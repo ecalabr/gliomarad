@@ -1,3 +1,5 @@
+""" checks if specified images are present in data directories, then displays them in imageJ and allows annotation """
+
 import os
 from glob import glob
 import argparse
@@ -33,6 +35,9 @@ if __name__ == '__main__':
     # list all subdirs with the processed data
     direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
     direcs = sorted(direcs, key=lambda x: int(os.path.basename(x)))
+
+    # define ij macro out
+    macro_file = os.path.join(data_dir, 'qc_macro.ijm')
 
     # handle list flag
     if args.list:
@@ -120,10 +125,12 @@ if __name__ == '__main__':
             macro.append('File.append(qc_str, "' + textout + '");')
             macro.append('run("Quit");')
             # write macro
-            macro_file = os.path.join(data_dir, 'qc_macro.ijm')
             with open(macro_file, 'w') as f:
                 for item in macro:
                     f.write("%s\n" % item)
             # Run macro
             cmd = ij_java+ ' -Xmx5000m -jar ' + ij_jar + ' -ijpath ' + ij_dir + ' -macro ' + macro_file
             os.system(cmd)
+    # clean up
+    if os.path.isfile(macro_file):
+        os.remove(macro_file)

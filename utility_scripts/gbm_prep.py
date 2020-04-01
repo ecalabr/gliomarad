@@ -42,8 +42,8 @@ def read_dicom_dir(dcm_dir, rep=False):
 parser = argparse.ArgumentParser()
 parser.add_argument('--dcm_dir', default="/media/ecalabr/data1/gbm_data/qc_pending",
                     help="Path to dicom data directory")
-parser.add_argument('--support_dir', default="/media/ecalabr/data1/gbm_data/support_files",
-                    help="Path to support file directory containing bvecs and atlas data")
+parser.add_argument('--support_dir', default="support_files",
+                    help="Name of support file directory relative to script path containing bvecs and atlas data")
 parser.add_argument('--start', default=0,
                     help="Index of directories to start processing at")
 parser.add_argument('--end', default=None,
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dcm_data_dir = args.dcm_dir
     assert os.path.isdir(dcm_data_dir), "Data directory not found at {}".format(dcm_data_dir)
-    support_dir = args.support_dir
+    support_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), args.support_dir)
     assert os.path.isdir(support_dir), "Support directory not found at {}".format(support_dir)
     start = args.start
     end = args.end
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     if not isinstance(dcms, list):
         dcms = [dcms]
 
-    # process directories
+    # process directories, parralelisation could be added here
     for i, dcm in enumerate(dcms, 1):
         start_t = time.time()
         serdict = read_dicom_dir(dcm)

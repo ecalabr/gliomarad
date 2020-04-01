@@ -1,7 +1,8 @@
+""" takes a multi-label mask and converts it to a single label binary mask """
+
 import os
 from glob import glob
 import argparse
-import subprocess
 import nibabel as nib
 import numpy as np
 
