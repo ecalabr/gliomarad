@@ -19,12 +19,19 @@ parser.add_argument('--list', action="store_true", default=False,
                     help="List all directories and exit")
 parser.add_argument('--m', action="store_true", default=False,
                     help="Include directories with missing data")
+parser.add_argument('--direc', default=None,
+                    help="Optionally name a specific directory to edit")
 
 if __name__ == '__main__':
     # get arguments and check them
     args = parser.parse_args()
+    spec_direc = args.direc
     data_dir = args.data_dir
-    assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
+    if spec_direc:
+        assert os.path.isdir(spec_direc), "Specified directory does not exist at {}".format(spec_direc)
+    else:
+        assert data_dir, "Must specify data directory using param --data_dir"
+        assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
     ij_dir = args.ij_dir
     assert os.path.isdir(ij_dir), "ImageJ directory not found at {}".format(ij_dir)
     ij_java = os.path.join(ij_dir, "jre/bin/java")
@@ -32,9 +39,13 @@ if __name__ == '__main__':
     start = args.start
     end = args.end
 
-    # list all subdirs with the processed data
-    direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
-    direcs = sorted(direcs, key=lambda x: int(os.path.basename(x)))
+    # handle specific directory
+    if spec_direc:
+        direcs = [spec_direc]
+    else:
+        # list all subdirs with the processed data
+        direcs = [item for item in glob(data_dir + "/*") if os.path.isdir(item)]
+        direcs = sorted(direcs, key=lambda x: int(os.path.basename(x)))
 
     # define ij macro out
     macro_file = os.path.join(data_dir, 'qc_macro.ijm')

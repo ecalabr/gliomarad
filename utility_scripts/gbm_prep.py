@@ -40,7 +40,7 @@ def read_dicom_dir(dcm_dir, rep=False):
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--dcm_dir', default="/media/ecalabr/data1/gbm_data/qc_pending",
+parser.add_argument('--data_dir', default=None,
                     help="Path to dicom data directory")
 parser.add_argument('--support_dir', default="support_files",
                     help="Name of support file directory relative to script path containing bvecs and atlas data")
@@ -49,13 +49,20 @@ parser.add_argument('--start', default=0,
 parser.add_argument('--end', default=None,
                     help="Index of directories to end processing at")
 parser.add_argument('--list', action="store_true", default=False)
+parser.add_argument('--direc', default=None,
+                    help="Optionally name a specific directory to edit")
 
 if __name__ == '__main__':
 
     # get arguments and check them
     args = parser.parse_args()
-    dcm_data_dir = args.dcm_dir
-    assert os.path.isdir(dcm_data_dir), "Data directory not found at {}".format(dcm_data_dir)
+    dcm_data_dir = args.data_dir
+    spec_direc = args.direc
+    if spec_direc:
+        assert os.path.isdir(spec_direc), "Specified directory does not exist at {}".format(spec_direc)
+    else:
+        assert dcm_data_dir, "Must specify data directory using param --data_dir"
+        assert os.path.isdir(dcm_data_dir), "Data directory not found at {}".format(dcm_data_dir)
     support_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), args.support_dir)
     assert os.path.isdir(support_dir), "Support directory not found at {}".format(support_dir)
     start = args.start
@@ -71,9 +78,13 @@ if __name__ == '__main__':
     for file_path in [param_file, reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
         assert os.path.isfile(file_path), "Required support file not found at {}".format(file_path)
 
-    # get a list of zip files from a dicom zip folder
-    dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
-    dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
+    # handle specific directory
+    if spec_direc:
+        dcms = [item for item in glob(spec_direc + "/*") if os.path.isdir(item)]
+    else:
+        # get a list of zip files from a dicom zip folder
+        dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
+        dcms = sorted(dcms, key=lambda x: int(os.path.basename(os.path.dirname(x))))  # sorts on accession no
 
     # handle list flag
     if args.list:
