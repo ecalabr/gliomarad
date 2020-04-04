@@ -6,7 +6,7 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default="/media/ecalabr/scratch/work/download_22",
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
 parser.add_argument('--start', default=0,
                     help="Index of directories to start processing at")
@@ -18,6 +18,8 @@ parser.add_argument('--mask', default="combined_brain_mask.nii.gz",
                     help="Suffix of the mask to be edited")
 parser.add_argument('--anat', default="T1gad_w.nii.gz",
                     help="Suffix of the anatomy image to use for editing")
+parser.add_argument('--addl', default="FLAIR_w.nii.gz",
+                    help="Suffix of additional anatomy image to use for editing")
 parser.add_argument('--direc', default=None,
                     help="Optionally name a specific directory to edit")
 
@@ -33,6 +35,7 @@ if __name__ == '__main__':
         assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
     mask_suffix = args.mask
     anat_suffix = args.anat
+    addl_suffix = args.addl
 
     start = args.start
     end = args.end
@@ -70,6 +73,10 @@ if __name__ == '__main__':
         if t1gad and mask:
             t1gad = t1gad[0]
             mask = mask[0]
-            cmd = "itksnap -g " + t1gad + " -s " + mask
+            cmd = "itksnap --geometry 1920x1080 -g " + t1gad + " -s " + mask
+            if addl_suffix:
+                addl = glob(direc + "/*" + addl_suffix)[0]
+                cmd = cmd + " -o " + addl
+            #print(cmd)
             os.system(cmd)
             print("Done with study " + os.path.basename(direc) + ": " + str(i) + " of " + str(n_total))

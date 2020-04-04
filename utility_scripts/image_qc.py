@@ -7,9 +7,9 @@ import time
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default="/media/ecalabr/scratch/qc_complete",
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
-parser.add_argument('--ij_dir', default="/home/ecalabr/ImageJ",
+parser.add_argument('--ij_dir', default=os.path.expanduser("~/ImageJ"),
                     help="Path to imageJ")
 parser.add_argument('--start', default=0,
                     help="Index of directories to start processing at")

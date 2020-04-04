@@ -177,6 +177,7 @@ def custom_resid_unet(features, params, is_training, reuse=False):
     # define fixed params
     layer_layout = params.layer_layout
     filt = params.base_filters
+    out_filt = params.output_filters
     dfmt = params.data_format
     dpout = params.dropout_rate
     ksize = params.kernel_size
@@ -256,7 +257,7 @@ def custom_resid_unet(features, params, is_training, reuse=False):
             tensor = activation(tensor, act, 'dec_conv_act_' + str(n) + '_' + str(layer))
 
     # output layer
-    tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
+    tensor = conv2d_fixed_pad(tensor, out_filt, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
 
     return tensor
 
@@ -543,6 +544,7 @@ def unet_25D_bneck(features, params, is_training, reuse=False):
     # define fixed params
     layer_layout = params.layer_layout
     filt = params.base_filters
+    out_filt = params.output_filters
     dfmt = params.data_format
     dpout = params.dropout_rate
     ksize = params.kernel_size
@@ -616,7 +618,7 @@ def unet_25D_bneck(features, params, is_training, reuse=False):
                 bneck_resid3d_layer(tensor, filt, [1, 1, 3], strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
 
     # output layer
-    tensor = conv3d_fixed_pad(tensor, 1, [1, 1, 1], [1, 1, 1], [1, 1, 1], dfmt, 'final_conv', reuse)
+    tensor = conv3d_fixed_pad(tensor, out_filt, [1, 1, 1], [1, 1, 1], [1, 1, 1], dfmt, 'final_conv', reuse)
 
     return tensor
 
@@ -779,9 +781,9 @@ def net_builder(features, params, is_training, reuse=False):
     elif params.model_name == 'bneck_resunet':
         network = bneck_resunet(features, params, is_training, reuse)
     elif params.model_name == 'custom_unet_maxpool':
-        network = custom_unet_maxpool(features, params, is_training,reuse)
+        network = custom_unet_maxpool(features, params, is_training, reuse)
     elif params.model_name == 'custom_resid_unet':
-        network = custom_resid_unet(features, params, is_training,reuse)
+        network = custom_resid_unet(features, params, is_training, reuse)
     elif params.model_name == 'deep_embed_net':
         network = deep_embed_net(features, params, is_training)
     elif params.model_name == 'deep_embed_resnet':

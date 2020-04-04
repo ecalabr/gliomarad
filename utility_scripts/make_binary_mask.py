@@ -8,7 +8,7 @@ import numpy as np
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default='/media/ecalabr/scratch/qc_complete',
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
 parser.add_argument('--mask', default='tumor_seg',
                     help="Reference file prefix")
@@ -21,6 +21,7 @@ if __name__ == '__main__':
 
     # check input arguments
     args = parser.parse_args()
+    assert args.data_dir, "Muse specify data directory using --data_dir="
     assert os.path.isdir(args.data_dir), "No data directory found at {}".format(args.data_dir)
     masks = glob(args.data_dir + '/*/*' + args.mask + '.nii.gz')
     masks.sort()

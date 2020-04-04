@@ -11,7 +11,7 @@ def model_fn(inputs, params, mode, reuse=False):
     :param reuse: (bool) whether or not to reuse variables within the tf model variable scope
     :return: model_spec (dict) contains all the data/nodes and ops for tensorflow training/evaluation
     """
-    # handle infer mode
+    # handle infer mode, which only has features and no labels, then return to calling function
     if mode == 'infer':
         with tf.variable_scope('model', reuse=reuse):
             # generate the model and compute the output predictions
@@ -36,6 +36,7 @@ def model_fn(inputs, params, mode, reuse=False):
     loss = loss_picker(params.loss, labels, predictions, data_format=params.data_format, weights=mask)
 
     # handle predictions with more than 1 prediction
+    # not sure if this section does anything?
     if params.data_format == 'channels_first':
         if predictions.shape[1] > 1:
             predictions = tf.expand_dims(predictions[:, 0, :, :], axis=1)
@@ -57,9 +58,9 @@ def model_fn(inputs, params, mode, reuse=False):
     # Metrics for evaluation using tf.metrics (average over whole dataset)
     with tf.variable_scope('metrics'):
         metrics = {
-            'mean_absolute_error': tf.metrics.mean_absolute_error(labels=labels, predictions=predictions, weights=mask),
-            'mean_squared_error': tf.metrics.mean_squared_error(labels=labels, predictions=predictions, weights=mask),
-            'RMS_error': tf.metrics.root_mean_squared_error(labels=labels, predictions=predictions, weights=mask),
+            #'mean_absolute_error': tf.metrics.mean_absolute_error(labels=labels, predictions=predictions, weights=mask),
+            #'mean_squared_error': tf.metrics.mean_squared_error(labels=labels, predictions=predictions, weights=mask),
+            #'RMS_error': tf.metrics.root_mean_squared_error(labels=labels, predictions=predictions, weights=mask),
             'loss': tf.metrics.mean(loss)
         }
 

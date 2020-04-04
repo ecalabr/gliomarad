@@ -7,7 +7,7 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default="/media/ecalabr/scratch/qc_complete",
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
 parser.add_argument('--skip', default=0,
                     help="Index of directories to start processing at")
@@ -18,6 +18,7 @@ if __name__ == '__main__':
     # get arguments and check them
     args = parser.parse_args()
     data_dir = args.data_dir
+    assert data_dir, "Must specify data directory using --data_dir"
     assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
     start = int(args.skip)
     spec_dir = args.spec_dir

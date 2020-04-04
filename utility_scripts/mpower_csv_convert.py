@@ -16,8 +16,10 @@ if __name__ == '__main__':
 
     # parse args
     args = parser.parse_args()
-    assert os.path.isfile(args.mpower_csv)
-    assert os.path.isfile(args.air_csv)
+    assert args.mpower_csv, "Must specify mPower CSV using --mpower_csv"
+    assert os.path.isfile(args.mpower_csv), "No mPower CSV found at {}".format(args.mpower_csv)
+    assert args.air_csv, "Must specify AIR CSV using --mpower_csv"
+    assert os.path.isfile(args.air_csv), "No AIR CSV found at {}".format(args.air_csv)
 
     # define lists
     mrn = []

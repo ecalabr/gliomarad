@@ -26,18 +26,16 @@ def predict_sess(sess, model_spec):
     n=0
     while True:
         try:
+            start = time.time()
             prediction = sess.run(model_spec['predictions'])
             n = n+1
-            if type(predictions) != np.ndarray:
-                start = time.time()
-                predictions = prediction
-                logging.info("Processing chunk " + str(n) + " took " + str(time.time()-start) + " seconds")
-            else:
-                start = time.time()
-                predictions = np.concatenate([predictions, prediction])  # concatenates on axis=0 by default
-                logging.info("Processing chunk " + str(n) + " took " + str(time.time() - start) + " seconds")
+            predictions.append(prediction)
+            logging.info("Processing chunk " + str(n) + " took " + str(time.time() - start) + " seconds")
         except tf.errors.OutOfRangeError:
             break
+
+    # concatenate before returning
+    predictions = np.concatenate(predictions)
 
     return predictions
 
@@ -97,7 +95,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
         # handle 2D with patches using 2D patch reconstructor
         if params.dimension_mode == '2D' and any([overlap > 1 for overlap in params.infer_patch_overlap]):
             predictions = reconstruct_infer_patches(predictions, infer_dir, params)
-        # handle 2.5D - take only middle slice from each slab
+        # handle 2.5D - take only middle z slice from each slab
         if params.dimension_mode == '2.5D':
             # handle channels last [b, x, y, z, c]
             if params.data_format == 'channels_last':
@@ -108,34 +106,32 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
             else:
                 raise ValueError("Did not understand data format: " + str(params.data_format))
 
-        # handle multiple predictions
-        if params.data_format == 'channels_first':
-            if predictions.shape[1] > 1:
-                predictions = np.expand_dims(predictions[:, 0, :, :], axis=1)
-        if params.data_format == 'channels_last':
-            if predictions.shape[-1] > 1:
-                predictions = np.expand_dims(predictions[:, :, :, 0], axis=-1)
+        # at this point all 2 and 2.5 d data is in this format: [b, x, y, c] or [b, c, x, y]
+        if not len(predictions.shape) == 4:
+            raise ValueError("Predictions is wrong shape in prediction.py")
 
-        # convert to batch dim last and squeeze channels dim
+        # convert to [x, y, b, c], note that b is the z dim since 1 batch was used per slice for inferring
         permute = [2, 3, 0, 1] if params.data_format == 'channels_first' else [1, 2, 0, 3]
-        predictions = np.squeeze(np.transpose(predictions, axes=permute))
+        predictions = np.transpose(predictions, axes=permute)
 
-        # convert back to axial
+        # convert back to axial leaving channels in final position
         if params.data_plane == 'ax':
-            pass
+            pass # already in axial
         elif params.data_plane == 'cor':
-            predictions = np.transpose(predictions, axes=(0, 2, 1))
+            predictions = np.transpose(predictions, axes=(0, 2, 1, 3))
         elif params.data_plane == 'sag':
-            predictions = np.transpose(predictions, axes=(2, 0, 1))
+            predictions = np.transpose(predictions, axes=(2, 0, 1, 3))
         else:
             raise ValueError("Did not understand specified plane: " + str(params.data_plane))
 
         # crop back to original shape (same as input data) - this reverses tensorflow extract patches padding
-        pred_shape = np.array(predictions.shape)
+        pred_shape = np.array(predictions.shape[:3])
         pads = pred_shape - shape
-        predictions = predictions[int(np.floor(pads[0]/2.)):pred_shape[0]-int(np.ceil(pads[0]/2.)),
+        predictions = predictions[
+                      int(np.floor(pads[0]/2.)):pred_shape[0]-int(np.ceil(pads[0]/2.)),
                       int(np.floor(pads[1]/2.)):pred_shape[1]-int(np.ceil(pads[1]/2.)),
-                      int(np.floor(pads[2]/2.)):pred_shape[2]-int(np.ceil(pads[2]/2.))]
+                      int(np.floor(pads[2]/2.)):pred_shape[2]-int(np.ceil(pads[2]/2.)),
+                      :] # do not pad channels dim
 
     # handle 3D inference
     elif params.dimension_mode == '3D':
@@ -144,8 +140,8 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
         raise ValueError("Dimension mode must be in [2D, 2.5D, 3D] but is: " + str(params.dimension_mode))
 
     # mask predictions based on original input data
-    mask = nii.get_data() > 0
-    predictions = predictions * mask
+    #mask = nii.get_data() > 0
+    #predictions = predictions * mask
 
     # convert to nifti format and save
     model_name = os.path.basename(model_dir)

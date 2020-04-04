@@ -43,7 +43,7 @@ def train_sess(sess, model_spec, writer, params):
                 logging.info("Global step = " + str(global_step_val))
             else:
                 _, _, loss_val = sess.run([train_op, update_metrics, loss])
-                logging.info("Batch = " + str(n).zfill(6) + " Loss = " + "%010.2f" % loss_val)
+                logging.info("Batch = " + str(n).zfill(6) + " Loss = " + "%.10e" % loss_val)
             n=n+1
         except tf.errors.OutOfRangeError:
             break

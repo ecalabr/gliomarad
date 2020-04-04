@@ -1,4 +1,4 @@
-""" script for renaming data directories to a different alternate ID """
+""" script for renaming data directories to a different alternate ID using an ID csv file """
 
 import os
 import csv
@@ -6,9 +6,9 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default='/media/ecalabr/scratch/qc_complete',
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
-parser.add_argument('--id_csv', default='/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--8-31-19.csv',
+parser.add_argument('--id_csv', default=None,
                     help="Path to ID CSV")
 parser.add_argument('--anonymize', default="True",
                     help="True if anonymizing, False if deanonymizing")
@@ -17,7 +17,9 @@ if __name__ == '__main__':
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
+    assert args.data_dir, "No data directory specified. Use --data_dir="
     assert os.path.isdir(args.data_dir), "No data directory found at {}".format(args.data_dir)
+    assert args.id_csv, "No patient CSV specified. Use --id_csv="
     assert os.path.isfile(args.id_csv), "No CSV file found at {}".format(args.id_csv)
     assert args.anonymize in ['True', 'False'], "Anonymize option must be either 'True' or 'False'"
 

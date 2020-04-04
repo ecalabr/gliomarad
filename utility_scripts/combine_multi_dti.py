@@ -9,7 +9,7 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default="/media/ecalabr/data1/lgg_data/access/05967711/1.2.124.113532.192.9.54.60.20071130.93519.5769222/dti_tmp",
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
 parser.add_argument('--first', action="store_true", default=False,
                     help="Forces b0 as first volume in each file")
@@ -122,12 +122,12 @@ def combine_multi_dti(directory, b0first=False):
 
 if __name__ == '__main__':
 
-
     # run
     args = parser.parse_args()
     data_dir = args.data_dir
     b0_first = args.first
     # sanity check
+    assert data_dir, "No data directory specified. Use --data_dir="
     if not os.path.isdir(data_dir):
         print("- no data dir found at " + data_dir)
     else:

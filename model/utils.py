@@ -24,7 +24,8 @@ class Params:
     data_prefix = None
     label_prefix = None
     mask_prefix = None
-    mask_dilate = None
+    mask_dilate = None # must have same number of dims as mask
+    filter_zero = None # set the threshold for filtering out patches where labels is mostly zero
 
     dimension_mode = None  # must be 2D, 2.5D, 3D
     data_plane = None
@@ -41,6 +42,7 @@ class Params:
 
     model_name = None
     base_filters = None
+    output_filters = None
     layer_layout = None
     kernel_size = None
     data_format = None
@@ -76,50 +78,14 @@ class Params:
 
     def check(self):
         """Checks that all required parameters are defined in params.json file"""
-        members = [getattr(self, attr) for attr in dir(self) if
+        member_val = [getattr(self, attr) for attr in dir(self) if
                    not callable(getattr(self, attr)) and not attr.startswith("__")]
-        if any([member is None for member in members]):
+        members = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
+        if any([member is None for member in member_val]):
             raise ValueError(
-                "One or more parameters is not defined in params.json. The following must be present:"
-                + "\n data_dir"
-                + "\n model_dir"
-                + "\n overwrite"
-                + "\n restore_dir"
-                + "\n data_prefix"
-                + "\n label_prefix"
-                + "\n mask_prefix"
-                + "\n mask_dilate"
-                + "\n"
-                + "\n dimension_mode"
-                + "\n data_plane"
-                + "\n train_dims "
-                + "\n train_patch_overlap"
-                + "\n infer_dims"
-                + "\n infer_patch_overlap"
-                + "\n augment_train_data"
-                + "\n label_interp"
-                + "\n"
-                + "\n norm_data"
-                + "\n norm_labels"
-                + "\n norm_mode"
-                + "\n"
-                + "\n model_name"
-                + "\n base_filters"
-                + "\n layer_layout"
-                + "\n kernel_size"
-                + "\n data_format"
-                + "\n activation"
-                + "\n"
-                + "\n buffer_size"
-                + "\n shuffle_size"
-                + "\n batch_size"
-                + "\n num_threads"
-                + "\n train_fract"
-                + "\n learning_rate"
-                + "\n learning_rate_decay"
-                + "\n loss"
-                + "\n num_epochs"
-                + "\n dropout_rate")
+                "Missing the following parameter(s) in params.json: "
+                + " ".join([attr for attr in members if getattr(self, attr) is None]))
+
     @property
     def dict(self):
         """Gives dict-like access to Params instance by `params.dict['learning_rate']`"""
@@ -216,7 +182,9 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
 
     # sanity checks
     if not isinstance(loss_method, (str, unicode)): raise ValueError("Loss method parameter must be a string")
-    if weights is None: weights = 1.0
+    if weights is None:
+        weights = 1.0
+    loss_methods = ['MSE', 'MAE', 'auxiliary_MAE', 'MSE25D', 'MAE25D', 'softmaxCE', 'weighted_dice', 'gen_dice']
 
     # chooser for decay method
     # MSE loss
@@ -288,7 +256,7 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             center_weights = weights[:, :, :, weights.shape[3] / 2 + 1, :]
         # handle channels first
         elif data_format == 'channels_first':
-            # get center slice for channels last [b, c, x, y, z]
+            # get center slice for channels first [b, c, x, y, z]
             center_pred = predictions[:, :, :, :, predictions.shape[3] / 2 + 1]
             center_lab = labels[:, :, :, :, labels.shape[3] / 2 + 1]
             center_weights = weights[:, :, :, :, weights.shape[3] / 2 + 1]
@@ -301,9 +269,83 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
         # add remaining slices at equal weight
         loss_function = tf.add(loss_function, tf.losses.absolute_difference(labels, predictions, weights))
 
+    # softmax cross entropy w logits
+    elif loss_method == 'softmaxCE':
+        # handle channels last
+        if data_format == 'channels_last':
+            # channels last [b, x, y, z, c]
+            axis = -1
+        # handle channels first
+        elif data_format == 'channels_first':
+            # channels first [b, c, x, y, z]
+            axis = 1
+        else:
+            raise ValueError("Data format not understood: " + str(data_format))
+        # define loss function
+        loss_function = tf.losses.sparse_softmax_cross_entropy(
+            labels=tf.cast(labels, tf.int32),
+            logits=predictions,
+            weights=1.0, # not weighting using mask as mask is target
+            reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS
+        )
+
+    # weighted DICE loss - not working as expected atm - likely need to flatten
+    elif loss_method == 'weighted_dice':
+        axis = -1 if data_format == 'channels_last' else 1
+        smooth=0.00001
+        y = tf.cast(labels, tf.float32)
+        if data_format == 'channels_last':
+            y_pred = tf.nn.softmax(predictions, axis=axis)[..., 1, np.newaxis]
+        else:
+            y_pred = tf.nn.softmax(predictions, axis=axis)[:, 1, np.newaxis, ...]
+        intersection = tf.reduce_sum(y * y_pred, axis=axis)
+        union = tf.reduce_sum(y, axis=axis) + tf.reduce_sum(y_pred, axis=axis)
+        weighted_dice =  tf.reduce_mean(2. * (intersection + smooth / 2) / (union + smooth))
+        loss_function = - weighted_dice
+
+    # generalized DICE loss for 2D and 2.5D networks
+    elif loss_method == 'gen_dice':
+
+        # convert labels to int and softmax pred
+        y = tf.cast(labels, tf.float32)
+        y_pred = tf.nn.softmax(predictions, axis=-1 if data_format == 'channels_last' else 1)
+
+        # handle 2.5D by making a triangle weight kernel weighting center slice the most and sum=1
+        if len(y_pred.shape) == 5 and data_format == 'channels_last':
+            # for channels last [b, x, y, z, c]
+            kerlen = y_pred.get_shape().as_list()[3]
+            kernel = (float(kerlen) + 1. - np.abs(np.arange(float(kerlen)) - np.arange(float(kerlen))[::-1])) / 2.
+            kernel /= kernel.sum()
+            kernel = tf.reshape(tf.constant(kernel, dtype=tf.float32), shape=[1, 1, 1, kerlen, 1])
+            y = tf.reduce_sum(tf.multiply(y, kernel), axis=3)
+            y_pred = tf.reduce_sum(tf.multiply(y_pred, kernel), axis=3)
+        # handle channels first
+        elif len(y_pred.shape) == 5 and data_format == 'channels_first':
+            # for channels first [b, c, x, y, z]
+            kerlen = y_pred.get_shape().as_list()[4]
+            kernel = (kerlen + 1 - np.abs(np.arange(kerlen) - np.arange(kerlen)[::-1])) / 2
+            kernel /= kernel.sum()
+            kernel = tf.reshape(tf.constant(kernel, dtype=tf.float32), shape=[1, 1, 1, 1, kerlen])
+            y = tf.reduce_sum(tf.multiply(y, kernel), axis=4)
+            y_pred = tf.reduce_sum(tf.multiply(y_pred, kernel), axis=4)
+
+        mean = 0.5 # the weight is the proportion of 1s to 0s in the label set
+        w_1 = 1. / mean ** 2.
+        w_0 = 1. / (1. - mean) ** 2.
+        y_true_f_1 = tf.reshape(y, [-1])
+        y_pred_f_1 = tf.reshape(y_pred[..., 1] if data_format == 'channels_last' else y_pred[:, 1, ...], [-1])
+        y_true_f_0 = tf.reshape(1 - y, [-1])
+        y_pred_f_0 = tf.reshape(y_pred[..., 0] if data_format == 'channels_last' else y_pred[:, 0, ...], [-1])
+        int_0 = tf.reduce_sum(y_true_f_0 * y_pred_f_0)
+        int_1 = tf.reduce_sum(y_true_f_1 * y_pred_f_1)
+        gen_dice = 2. * (w_0 * int_0 + w_1 * int_1) / ((w_0 * (tf.reduce_sum(y_true_f_0) + tf.reduce_sum(y_pred_f_0))) +
+                                                       (w_1 * (tf.reduce_sum(y_true_f_1) + tf.reduce_sum(y_pred_f_1))))
+        loss_function = - gen_dice
+
     # not implemented loss
     else:
-        raise NotImplementedError("Specified loss method is not implemented: " + loss_method)
+        raise NotImplementedError("Specified loss method is not implemented: " + loss_method +
+                                  ". Possible options are: " + ' '.join(loss_methods))
 
     return loss_function
 

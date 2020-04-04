@@ -22,6 +22,9 @@
 "mask_dilate": [193, 229, 0],
     How much to dilate the input mask after cropping the input images to the tight bounding box of the mask. If an integer, then all dimensions are symmetrically expanded by that amount (1/2 before, 1/2 after). If a list of 3 ints, then each masked input image dimension is expanded to the size of the corresponding int. If the int is 0 or otherwise smaller than the corresponding masked input dim, then no expansion is performed in that dimension.
 
+"filter_zero": 0.05,
+    Filters out patches where labels == 0 in most of the patch. filter_zero is a float defining the minimum threshold for label pixels > 0 in the patch.
+
 "dimension_mode": "2.5D",
     The dimensionality of the netowrk. Must be "2D", "2.5D", or "3D". 2D and 3D are relatively self explanatory. 2.5D uses 3D slab for training, but much more heavily weights the center slice, and uses only the center slice for inference.
 
@@ -51,6 +54,9 @@
 
 "base_filters": 32,
     The base number of filters used in network construction. Should be divisible by 4 when using bottleneck layers.
+
+"output_filters": 1,
+    The number of output filters for the final layer of the network. For example, 2 could be used for a binary categorization task, 1 could be used for a synthetic output task.
 
 "layer_layout": [3, 4, 6],
     The layer layout parameter used during network construction. This is used differently by each network in net_builder.py

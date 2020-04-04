@@ -7,7 +7,7 @@ import subprocess
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default='/media/ecalabr/scratch/qc_complete',
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
 parser.add_argument('--ref', default='T1gad_wmtb',
                     help="Reference file prefix")
@@ -18,6 +18,7 @@ if __name__ == '__main__':
 
     # check input arguments
     args = parser.parse_args()
+    assert args.data_dir, "No data directory specified. Use --data_dir"
     assert os.path.isdir(args.data_dir), "No data directory found at {}".format(args.data_dir)
     refs = glob(args.data_dir + '/*/*' + args.ref + '.nii.gz')
     refs.sort()

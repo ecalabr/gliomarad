@@ -6,7 +6,7 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--csv', default='/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_gbm_9-20-15--8-31-19.csv',
+parser.add_argument('--csv', default=None,
                     help="Path to UCSF500 csv")
 parser.add_argument('--col', default='21',
                     help="Column of UCSF500 text")
@@ -17,6 +17,7 @@ if __name__ == '__main__':
 
     # parse arguments and make sure csv exists
     args = parser.parse_args()
+    assert csv, "Must specify CSV using --csv"
     assert os.path.isfile(args.csv), "No csv found at {}".format(args.data_dir)
 
     # generate output name

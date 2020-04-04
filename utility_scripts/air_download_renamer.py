@@ -1,4 +1,4 @@
-"""Moves data downloaded from UCSF air into new unique directories named after the accession number"""
+"""Moves data downloaded from UCSF air into new unique directories named after the accession number using csv """
 
 import pydicom as dicom
 import os
@@ -8,9 +8,9 @@ import argparse
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default="/media/ecalabr/data1/lgg_data/access",
+parser.add_argument('--data_dir', default=None,
                     help="Path to data directory")
-parser.add_argument('--pt_csv', default="/home/ecalabr/Dropbox/idh1_gbm_project/gbm_spreadsheets/master_preop_glioma_9-20-15--8-31-19.csv",
+parser.add_argument('--id_csv', default=None,
                     help="Path to csv with accession data")
 parser.add_argument('--mrn_col', default=1,
                     help="Index of MRN column in patient CSV file")
@@ -21,14 +21,16 @@ if __name__ == '__main__':
     # get arguments and check them
     args = parser.parse_args()
     data_dir = args.data_dir
+    assert data_dir, "No data directory specified. Use --data_dir="
     assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
-    patient_csv = args.pt_csv
-    assert os.path.isfile(patient_csv), "Patient CSV not found at {}".format(patient_csv)
+    id_csv = args.id_csv
+    assert id_csv, "No patient CSV specified. Use --id_csv="
+    assert os.path.isfile(id_csv), "ID CSV not found at {}".format(id_csv)
 
     # get patient list
     mrn_list = []
     access_list = []
-    with open(patient_csv, "rb") as csvfile:
+    with open(id_csv, "rb") as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         patient_list = list(reader)
     for line in patient_list[1:]:

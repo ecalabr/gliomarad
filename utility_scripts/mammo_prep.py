@@ -36,9 +36,9 @@ def read_dicom_dir(dcm_dir, rep=False):
 
 # parse input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--dcm_dir', default="/media/ecalabr/data2/breast_work/",
+parser.add_argument('--dcm_dir', default=None,
                     help="Path to dicom data directory")
-parser.add_argument('--support_dir', default="/media/ecalabr/data1/mammo_data/support_files",
+parser.add_argument('--support_dir', default=None,
                     help="Path to support file directory containing bvecs and atlas data")
 parser.add_argument('--start', default=0,
                     help="Index of directories to start processing at")
@@ -52,8 +52,10 @@ if __name__ == '__main__':
     # get arguments and check them
     args = parser.parse_args()
     dcm_data_dir = args.dcm_dir
+    assert dcm_data_dir, "Must specify data directory using --dcm_dir="
     assert os.path.isdir(dcm_data_dir), "Data directory not found at {}".format(dcm_data_dir)
     support_dir = args.support_dir
+    assert support_dir, "Must specify support directory using --support_dir="
     assert os.path.isdir(support_dir), "Support directory not found at {}".format(support_dir)
     start = args.start
     end = args.end

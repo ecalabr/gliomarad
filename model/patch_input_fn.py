@@ -34,7 +34,7 @@ def _load_single_study(study_dir, file_prefixes, data_format, slice_trim=None, p
     if data_format not in ['channels_last', 'channels_first']: raise ValueError("data_format invalid")
     if slice_trim is not None and not isinstance(slice_trim, (list, tuple)): raise ValueError(
         "slice_trim must be list/tuple")
-    images = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in file_prefixes]
+    images = [glob(study_dir + '/*' + contrast + '.nii.gz')[0] for contrast in file_prefixes]
     if not images: raise ValueError("No matching image files found for file prefixes: " + str(images))
 
     # load images and concatenate into a 4d numpy array
@@ -90,8 +90,10 @@ def _expand_region(input_dims, region_bbox, delta):
     :return: (list or tuple of ints) the expanded bounding box
     """
 
-    # if delta is actually a list, then refer to _expand_region_dims
+    # if delta is actually a list, then refer to _expand_region_dims, make sure its same length as input_dims
     if isinstance(delta, (list, tuple, np.ndarray)):
+        if not len(delta) == len(input_dims):
+            raise ValueError("Parameter mask_dilate must have one entry for each dimension in mask image (can be 0)")
         return _expand_region_dims(input_dims, region_bbox, delta)
 
     # determine how much to add on each side of the bounding box
@@ -125,6 +127,7 @@ def _expand_region_dims(input_dims, region_bbox, out_dims):
 
     # determine region dimensions
     region_dims = [region_bbox[1] - region_bbox[0], region_bbox[3] - region_bbox[2], region_bbox[5] - region_bbox[4]]
+    # region_dims = [region_bbox[x] - region_bbox[x - 1] for x in range(len(region_bbox))[1::2]]
 
     # determine the delta in each dimension - exclude negatives
     deltas = [x - y for x, y in zip(out_dims, region_dims)]
@@ -243,12 +246,15 @@ def _normalize(input_img, mode='zero_mean'):
     if not isinstance(input_img, np.ndarray):
         raise TypeError("Input image should be np.ndarray but is: " + str(type(input_img)))
 
+    # define epsilon for divide by zero errors
+    epsilon = 1e-10
+
     # handle zero mean mode
     if mode == 'zero_mean':
         # perform normalization to zero mean unit variance
         nzi = np.nonzero(input_img)
         mean = np.mean(input_img[nzi], None)
-        std = np.std(input_img[nzi], None)
+        std = np.std(input_img[nzi], None) + epsilon
         input_img = np.where(input_img != 0., ((input_img - mean) / std), 0.)  # add 10 to prevent negatives
 
     # handle ten mean mode
@@ -256,7 +262,7 @@ def _normalize(input_img, mode='zero_mean'):
         # perform normalization to zero mean unit variance
         nzi = np.nonzero(input_img)
         mean = np.mean(input_img[nzi], None)
-        std = np.std(input_img[nzi], None)
+        std = np.std(input_img[nzi], None) + epsilon
         input_img = np.where(input_img != 0., ((input_img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
 
     # handle unit mode
@@ -409,6 +415,10 @@ def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane, norm
     data, nzi = _load_single_study(study_dir, feature_prefx, data_format=data_fmt, slice_trim=[0, None], plane=plane,
                                    norm=norm, norm_mode=norm_mode)
 
+    # transpose slices to batch dimension format such that format is [z, x, y, c] or [z, c, x, y]
+    axes = (3, 0, 1, 2) if data_fmt=='channels_first' else (2, 0, 1, 3)
+    data = np.transpose(data, axes=axes)
+
     return data
 
 
@@ -422,7 +432,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     :param study_dir: (str) The path to the study directory to get data from.
     :param feature_prefx: (iterable of str) The prefixes for the image files containing the data (features).
     :param label_prefx: (str) The prefixe for the image files containing the labels.
-    :param mask_prefx: (str) The prefixe for the image files containing the data mask.
+    :param mask_prefx: (str) The prefixe for the image files containing the data mask. None uses no masking.
     :param dilate: (int) The amount to dilate the region by in all dimensions
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
@@ -441,14 +451,20 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
         raise ValueError("Did not understand specified data_fmt: " + str(plane))
 
     # define full paths
-    data_files = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in feature_prefx]
-    labels_file = glob(study_dir + '/*' + label_prefx[0] + '*.nii.gz')[0]
-    mask_file = glob(study_dir + '/*' + mask_prefx[0] + '*.nii.gz')[0]
+    data_files = [glob(study_dir + '/*' + contrast + '.nii.gz')[0] for contrast in feature_prefx]
+    labels_file = glob(study_dir + '/*' + label_prefx[0] + '.nii.gz')[0]
+    if mask_prefx:
+        mask_file = glob(study_dir + '/*' + mask_prefx[0] + '.nii.gz')[0]
+    else:
+        mask_file = data_files[0]
     if not all([os.path.isfile(img) for img in data_files + [labels_file] + [mask_file]]):
         raise ValueError("One or more of the input data/labels/mask files does not exist")
 
-    # load the mask and get the full data dims
-    mask = nib.load(mask_file).get_fdata()
+    # load the mask and get the full data dims - handle None mask argument
+    if mask_prefx:
+        mask = nib.load(mask_file).get_fdata()
+    else:
+        mask = np.ones_like(nib.load(mask_file).get_fdata(), dtype=float)
     data_dims = mask.shape
 
     # load data
@@ -467,9 +483,9 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
 
     # center the tumor in the image usine affine, with optional rotation for data augmentation
     if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
-        theta = 0.  # np.random.random() * (np.pi / 2.)  # rotation in yz plane
-        phi = 0.  # np.random.random() * (np.pi / 2.)  # rotation in xz plane
-        psi = np.random.random() * (np.pi / 2.)  # rotation in xy plane
+        theta = np.random.random() * (np.pi / 2.) if plane == 'cor' else 0.  # rotation in yz plane
+        phi = np.random.random() * (np.pi / 2.) if plane == 'sag' else 0.  # rotation in xz plane
+        psi = np.random.random() * (np.pi / 2.) if plane == 'ax' else 0.  # rotation in xy plane
     elif aug == 'no':  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
         theta = 0.
         phi = 0.
@@ -537,7 +553,7 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     :param feature_prefx: (iterable of str) The prefixes for the image files containing the data (features).
     :param label_prefx: (str) The prefix for the image files containing the labels.
     :param dilate: (int) The amount to dilate the region by in all dimensions
-    :param mask_prefx: (str) The prefixe for the image files containing the data mask.
+    :param mask_prefx: (str) The prefixe for the image files containing the data mask. None uses no masking.
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param aug: (str) Either yes or no - Whether or not to perform data augmentation with random 3D affine rotation.
@@ -555,14 +571,20 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
         raise ValueError("Did not understand specified data_fmt: " + str(plane))
 
     # define full paths
-    data_files = [glob(study_dir + '/*' + contrast + '*.nii.gz')[0] for contrast in feature_prefx]
-    labels_file = glob(study_dir + '/*' + label_prefx[0] + '*.nii.gz')[0]
-    mask_file = glob(study_dir + '/*' + mask_prefx[0] + '*.nii.gz')[0]
+    data_files = [glob(study_dir + '/*' + contrast + '.nii.gz')[0] for contrast in feature_prefx]
+    labels_file = glob(study_dir + '/*' + label_prefx[0] + '.nii.gz')[0]
+    if mask_prefx:
+        mask_file = glob(study_dir + '/*' + mask_prefx[0] + '.nii.gz')[0]
+    else:
+        mask_file = data_files[0]
     if not all([os.path.isfile(img) for img in data_files + [labels_file] + [mask_file]]):
         raise ValueError("One or more of the input data/labels/mask files does not exist")
 
-    # load the mask and get the full data dims
-    mask = nib.load(mask_file).get_fdata()
+    # load the mask and get the full data dims - handle None mask argument
+    if mask_prefx:
+        mask = nib.load(mask_file).get_fdata()
+    else:
+        mask = np.ones_like(nib.load(mask_file).get_fdata(), dtype=float)
     data_dims = mask.shape
 
     # load data and normalize
@@ -581,9 +603,9 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
 
     # center the ROI in the image usine affine, with optional rotation for data augmentation
     if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
-        theta = 0.  # np.random.random() * (np.pi / 2.)  # rotation in yz plane
-        phi = 0.  # np.random.random() * (np.pi / 2.)  # rotation in xz plane
-        psi = np.random.random() * (np.pi / 2.)  # rotation in xy plane
+        theta = np.random.random() * (np.pi / 2.) if plane == 'cor' else 0.  # rotation in yz plane
+        phi = np.random.random() * (np.pi / 2.) if plane == 'sag' else 0.  # rotation in xz plane
+        psi = np.random.random() * (np.pi / 2.) if plane == 'ax' else 0.  # rotation in xy plane
     elif aug == 'no':  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
         theta = 0.
         phi = 0.
@@ -895,20 +917,23 @@ def _tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
     return data
 
 
-def _filter_zero_patches(data, data_format, mode, thresh=0.1):
+def _filter_zero_patches(data, data_format, mode, thresh=0.05):
     """
     Filters out patches that contain mostly zeros in the label data. Works for 3D and 2D patches.
     :param data: (list of tensors) must have {'labels'} key containing labels data
     :param data_format: (str) either 'channels_first' or 'channels_last' - the tensorflow data format
     :param mode: (str) either '2D' '2.5D' or '3D' - the mode for training
-    :param thresh: (float) the threshold percentage for keeping patches. Default is 10%.
+    :param thresh: (float) the threshold percentage for keeping patches. Default is 5%.
     :return: Returns tf.bool False if less than threshold, else returns tf.bool True
     """
+    if thresh == 0.:
+        return tf.constant(True, dtype=tf.bool)
 
     if data_format == 'channels_last':
-        # handle channels last - if 2.5D get middle slice of labels, use entire slice if 2D, use entire slab if 3D
+        # handle channels last - use entire slice if 2D, use entire slab if 3D or 2.5D
         if mode == '2.5D': # [x, y, z, c]
-            mid_sl = data['labels'][:, :, data['labels'].get_shape()[2]/2 + 1, 0]
+            # mid_sl = data['labels'][:, :, data['labels'].get_shape()[2]/2 + 1, 0]
+            mid_sl = data['labels'][:, :, :, 0]
         elif mode == '2D': # [x, y, c]
             mid_sl = data['labels'][:, :, 0]
         elif mode == '3D':
@@ -916,9 +941,10 @@ def _filter_zero_patches(data, data_format, mode, thresh=0.1):
         else:
             raise ValueError("Mode must be 2D, 2.5D, or 3D but is: " + str(mode))
     else:
-        # handle channels first - if 2.5D get middle slice of labels, use entire slice if 2D, use entire slab if 3D
+        # handle channels first - use entire slice if 2D, use entire slab if 3D or 2.5D
         if mode == '2.5D':  # [c, x, y, z]
-            mid_sl = data['labels'][0, :, :, data['labels'].get_shape()[2] / 2 + 1]
+            # mid_sl = data['labels'][0, :, :, data['labels'].get_shape()[2] / 2 + 1]
+            mid_sl = data['labels'][0, :, :, :]
         elif mode == '2D':  # [c, x, y]
             mid_sl = data['labels'][0, :, :]
         elif mode == '3D':
@@ -926,7 +952,7 @@ def _filter_zero_patches(data, data_format, mode, thresh=0.1):
         else:
             raise ValueError("Labels shape must be 2D or 3D but is: " + str((data['labels'].get_shape())))
 
-    # eliminate if label slice is 90% empty
+    # eliminate if label slice is 95% empty
     thr = tf.constant(thresh, dtype=tf.float32)
 
     return tf.less(thr, tf.count_nonzero(mid_sl, dtype=tf.float32) / tf.size(mid_sl, out_type=tf.float32))
@@ -989,7 +1015,8 @@ def patch_input_fn(mode, params):
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         # filter out zero patches
-        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format, params.dimension_mode))
+        dataset = dataset.filter(lambda x: _filter_zero_patches(
+            x, params.data_format, params.dimension_mode, params.filter_zero))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -1050,7 +1077,7 @@ def patch_input_fn(mode, params):
 
 def infer_input_fn(params, infer_dir):
     """
-    Input function for UCSF GBM dataset
+    Input function for inferring 2d patches
     :param params: (class) the params class generated from a JSON file
     :param infer_dir: (str) the directory for inference
     :return: outputs, a dict containing the features, labels, and initializer operation
@@ -1061,21 +1088,24 @@ def infer_input_fn(params, infer_dir):
 
     # prepare pyfunc
     data_dims = list(params.infer_dims)
+    chan_size = len(params.data_prefix)
     py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data, params.norm_mode]
 
-    # generate tensorflow dataset object from infer directories
+    # generate tensorflow dataset object from infer directory
     dataset = tf.data.Dataset.from_tensor_slices([infer_dir])
-    # map infer dirs to data using custom python function
+    # map infer directory to data using a custom python function
     dataset = dataset.map(
         lambda x: tf.py_func(_load_multicon_preserve_size,
                              [x] + py_func_params,
                              tf.float32), num_parallel_calls=params.num_threads)
-    # flatten dataset to individual slices
+    # extract 3D patches from the infer data using same overlap
+    dataset = dataset.map(
+        lambda x: _tf_patches_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
+        num_parallel_calls=params.num_threads)
+    # flatten patches to individual examples
     dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
-    # pad each slice to the desired infer dimensions
-    padded_shapes = ([data_dims[0], data_dims[1], len(params.data_prefix)])
-    # batch to specified batch size
-    dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=0.)
+    # batch data to batch size 1 (forced above at beginning of function)
+    dataset = dataset.batch(batch_size)
 
     # make iterator and query the output of the iterator for input to the model
     iterator = dataset.make_initializable_iterator()
@@ -1083,7 +1113,10 @@ def infer_input_fn(params, infer_dir):
     init_op = iterator.initializer
 
     # manually set shapes for inputs
-    get_next_features.set_shape([batch_size, data_dims[0], data_dims[1], len(params.data_prefix)])
+    if params.data_format == 'channels_last':
+        get_next_features.set_shape([batch_size] + data_dims + [chan_size])
+    else:
+        get_next_features.set_shape([batch_size] + [chan_size] + data_dims)
 
     # Build and return a dictionary containing the nodes / ops
     inputs = {'features': get_next_features, 'iterator_init_op': init_op}
@@ -1150,7 +1183,8 @@ def patch_input_fn_3d(mode, params):
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         # filter out zero patches
-        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format, params.dimension_mode))
+        dataset = dataset.filter(lambda x: _filter_zero_patches(
+            x, params.data_format, params.dimension_mode, params.filter_zero))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -1182,7 +1216,8 @@ def patch_input_fn_3d(mode, params):
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices({"features": x, "labels": y}))
         # filter out zero patches because they wont contribute much to evaluation metrics
-        dataset = dataset.filter(lambda x: _filter_zero_patches(x, params.data_format, params.dimension_mode))
+        dataset = dataset.filter(lambda x: _filter_zero_patches(
+            x, params.data_format, params.dimension_mode, params.filter_zero))
         # generate batch data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
 
@@ -1284,7 +1319,7 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
     data_format = params.data_format
     data_plane = params.data_plane
 
-    # for sliding window 2d patcjes - must be same as in _tf_patches_infer above
+    # for sliding window 2d patches - must be same as in _tf_patches_infer above
     ksizes = [1] + patch_size + [1]
     strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], 1]
     rates = [1, 1, 1, 1]
@@ -1303,13 +1338,22 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
 
     # load original data but convert to only one channel to match output [batch, x, y, z, channel]
     data = _load_multicon_preserve_size(infer_dir, data_prefix, data_format, data_plane)
-    data = data[:, :, :, [1]] if params.data_format == 'channels_last' else data[:, [1], :, :]
+    #data = data[:, :, :, [1]] if params.data_format == 'channels_last' else data[:, [1], :, :]
 
     # get shape of patches as they would have been generated during inference
-    dummy_patches = extract_patches(data)
+    dummy_shape = tf.shape(extract_patches(data))
+
+    # convert channels dimension to actual output_filters
+    if params.data_format == 'channels_last':
+        dummy_shape = dummy_shape[:-1] + [params.output_filters]
+    else:
+        dummy_shape = [dummy_shape[0], params.output_filters] + dummy_shape[2:]
 
     # reshape predictions to original patch shape
-    predictions = tf.reshape(predictions, tf.shape(dummy_patches))
+    predictions = tf.reshape(predictions, dummy_shape)
+
+    # handle argmax
+    predictions = tf.argmax(tf.nn.softmax(predictions, axis=-1), axis=-1)
 
     # reconstruct
     reconstructed = extract_patches_inverse(data, predictions)
