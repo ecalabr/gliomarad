@@ -7,13 +7,7 @@ import numpy as np
 from glob import glob
 import argparse
 
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default=None,
-                    help="Path to data directory")
-parser.add_argument('--first', action="store_true", default=False,
-                    help="Forces b0 as first volume in each file")
-
+########################## define functions ##########################
 # define function to combine a split 55 direction DTI file if necessary
 def combine_multi_dti(directory, b0first=False):
     # define file names
@@ -32,10 +26,10 @@ def combine_multi_dti(directory, b0first=False):
     # check if files exist
     bvals_present = True
     if not dtis:
-        print("- no DTI files found in data directory: " + data_dir)
+        print("- no DTI files found in data directory: " + directory)
         return
     if not bvals or not bvecs:
-        print("- bvecs and bvals do not exist in data directory: " + data_dir)
+        print("- bvecs and bvals do not exist in data directory: " + directory)
         bvals_present = False
         if b0first:
             print('- flag --first was passed, assuming first volume is B0 and rest are DWIs')
@@ -118,17 +112,27 @@ def combine_multi_dti(directory, b0first=False):
         with open(vecs_out, 'w+') as f:
             writer = csv.writer(f, delimiter = ' ', quoting=csv.QUOTE_MINIMAL)
             writer.writerows(bvecs_out)
-    return
 
+    return [outfile, bvals_out, bvecs_out]
+
+########################## executed  as script ##########################
 if __name__ == '__main__':
 
-    # run
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', default=None,
+                        help="Path to data directory")
+    parser.add_argument('--first', action="store_true", default=False,
+                        help="Forces b0 as first volume in each file")
+
+    # parse args
     args = parser.parse_args()
-    data_dir = args.data_dir
-    b0_first = args.first
+
     # sanity check
-    assert data_dir, "No data directory specified. Use --data_dir="
-    if not os.path.isdir(data_dir):
-        print("- no data dir found at " + data_dir)
+    assert args.data_dir, "No data directory specified. Use --data_dir"
+
+    # do work if not already done
+    if not os.path.isdir(args.data_dir):
+        print("- no data dir found at " + args.data_dir)
     else:
-        combine_multi_dti(data_dir, b0_first)
+        combine_multi_dti(args.data_dir, args.first)

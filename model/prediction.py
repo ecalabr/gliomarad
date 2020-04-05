@@ -50,6 +50,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
         best_last: (str) in ['best_weights', 'last_weights'] - whether to use best or last model weights for inference
         out_dir: (str) the path to the specified output directory (optional)
                 Must define: num_epochs, train_size, batch_size, eval_size, save_summary_steps
+    :return name of output nii
     """
 
     # determine output directory and make sure we are not overwriting something important
@@ -149,3 +150,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
     img = nib.Nifti1Image(predictions, affine)
     logging.info("Saving predictions to: " + nii_out)
     nib.save(img, nii_out)
+    if not os.path.isfile(nii_out):
+        raise ValueError("Output nii could not be created at {}".format(nii_out))
+
+    return nii_out

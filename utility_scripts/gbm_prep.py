@@ -2,17 +2,23 @@ import time
 from gbm_prep_func import *
 import argparse
 
+########################## define functions ##########################
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
-def read_dicom_dir(dcm_dir, rep=False):
+def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,dti_bval, rep=False):
     """
     This function takes a directory containing UCSF air formatted dicom folders
     and converts all relevant files to nifti format. It also processes DTI, makes brain masks, registers the different
     series to the same space, and finally creates a 4D nifti to review all of the data.
-    It will also perform 3 compartment tumor segmentation, though this is a work in progress at the moment
+    It will also optionally perform 3 compartment tumor segmentation, though this is a work in progress at the moment
     :param dcm_dir: the full path to the dicom containing folder as a string
+    :param param_file: the full path to parameter json file
+    :param reg_atlas: the full path to a registration atlas
+    :param dti_index: the full path to a default dti_index file for FSL eddy
+    :param dti_acqp: the full path to a default dti_acqp file for FSL eddy
+    :param dti_bvec: the full path to a default dti_bvec file for FSL eddy
+    :param dti_bval: the full path to a default dti_bval file for FSL eddy
     :param rep: boolean, repeat work or not
     :return: returns the path to a metadata file dict (as *.npy file) that contains lots of relevant info
-    Currently this does not force any specific image orientation. To change this, edit the filter_series function
     """
 
     # Pipeline step by step
@@ -32,27 +38,22 @@ def read_dicom_dir(dcm_dir, rep=False):
 
     return series_dict
 
-#######################
-#######################
-#######################
-#######################
-#######################
-
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default=None,
-                    help="Path to dicom data directory")
-parser.add_argument('--support_dir', default="support_files",
-                    help="Name of support file directory relative to script path containing bvecs and atlas data")
-parser.add_argument('--start', default=0,
-                    help="Index of directories to start processing at")
-parser.add_argument('--end', default=None,
-                    help="Index of directories to end processing at")
-parser.add_argument('--list', action="store_true", default=False)
-parser.add_argument('--direc', default=None,
-                    help="Optionally name a specific directory to edit")
-
+########################## executed  as script ##########################
 if __name__ == '__main__':
+
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', default=None,
+                        help="Path to dicom data directory")
+    parser.add_argument('--support_dir', default="support_files",
+                        help="Name of support file directory relative to script path containing bvecs and atlas data")
+    parser.add_argument('--start', default=0,
+                        help="Index of directories to start processing at")
+    parser.add_argument('--end', default=None,
+                        help="Index of directories to end processing at")
+    parser.add_argument('--list', action="store_true", default=False)
+    parser.add_argument('--direc', default=None,
+                        help="Optionally name a specific directory to edit")
 
     # get arguments and check them
     args = parser.parse_args()
@@ -69,13 +70,13 @@ if __name__ == '__main__':
     end = args.end
 
     # check that all required files are in support directory
-    param_file = os.path.join(support_dir, "param_files/gbm_regex.json")
-    reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz")
-    dti_index = os.path.join(support_dir, "DTI_files/GE_hardi_55_index.txt")
-    dti_acqp = os.path.join(support_dir, "DTI_files/GE_hardi_55_acqp.txt")
-    dti_bvec = os.path.join(support_dir, "DTI_files/GE_hardi_55.bvec")
-    dti_bval = os.path.join(support_dir, "DTI_files/GE_hardi_55.bval")
-    for file_path in [param_file, reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval]:
+    my_param_file = os.path.join(support_dir, "param_files/gbm_regex.json")
+    my_reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz")
+    my_dti_index = os.path.join(support_dir, "DTI_files/GE_hardi_55_index.txt")
+    my_dti_acqp = os.path.join(support_dir, "DTI_files/GE_hardi_55_acqp.txt")
+    my_dti_bvec = os.path.join(support_dir, "DTI_files/GE_hardi_55.bvec")
+    my_dti_bval = os.path.join(support_dir, "DTI_files/GE_hardi_55.bval")
+    for file_path in [my_param_file, my_reg_atlas, my_dti_index, my_dti_acqp, my_dti_bvec, my_dti_bval]:
         assert os.path.isfile(file_path), "Required support file not found at {}".format(file_path)
 
     # handle specific directory
@@ -89,7 +90,7 @@ if __name__ == '__main__':
     # handle list flag
     if args.list:
         for i, item in enumerate(dcms, 0):
-            print(str(i) + ': ' + item.rsplit('/', 1)[0]) # removes dicom dir and only gives parent dir
+            print(str(i) + ': ' + item.rsplit('/', 1)[0])  # removes dicom dir and only gives parent dir
         exit()
 
     # iterate through all dicom folders or just a subset/specific diectories only using options below
@@ -100,9 +101,10 @@ if __name__ == '__main__':
     if not isinstance(dcms, list):
         dcms = [dcms]
 
-    # process directories, parralelisation could be added here
+    # do work
     for i, dcm in enumerate(dcms, 1):
         start_t = time.time()
-        serdict = read_dicom_dir(dcm)
+        serdict = dcm_dir_proc(dcm, my_param_file, my_reg_atlas, my_dti_index, my_dti_acqp, my_dti_bvec, my_dti_bval)
         elapsed_t = time.time() - start_t
-        print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")
+        print("\nCOMPLETED # " + str(i) + " of " + str(len(dcms)) + " in " + str(
+            round(elapsed_t / 60, 2)) + " minute(s)\n")

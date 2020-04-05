@@ -7,48 +7,9 @@ from model.patch_input_fn import infer_input_fn, infer_input_fn_3d
 from model.model_fn import model_fn
 from glob import glob
 
-
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--param_file', default=None,
-                    help="Path to params.json")
-parser.add_argument('--infer_dir', default=None,
-                    help="Path to directory to generate inference from")
-parser.add_argument('--best_last', default='last_weights',
-                    help="Either 'best_weights' or 'last_weights' - whether to use best or last weights for inference")
-parser.add_argument('--out_dir', default=None,
-                    help="Optionally specify output directory")
-
-if __name__ == '__main__':
-
-    # handle param argument
-    args = parser.parse_args()
-    assert args.param_file, "Must specify param file using --param_file"
-    assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
-    params = Params(args.param_file)
-
-    # handle best_last argument
-    best_last = args.best_last
-    if best_last not in ['best_weights', 'last_weights']:
-        raise ValueError("Did not understand best_last value: " + str(best_last))
-
-    # handle out_dir argument
-    out_dir = args.out_dir
-    if out_dir:
-        assert os.path.isdir(out_dir), "Specified output directory does not exist: {}".format(out_dir)
-
-    # handler inference directory argument
-    infer_dir = args.infer_dir
-    assert infer_dir, "No infer directory specified. Use --infer_dir="
-    assert os.path.isdir(infer_dir), "No inference directory found at {}".format(infer_dir)
-    if not glob(infer_dir + '/*' + params.data_prefix[0] + '.nii.gz'):
-        raise ValueError("No image data found in inference directory: {}".format(infer_dir))
-
-    # determine model dir
-    if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
-        params.model_dir = os.path.dirname(args.param_file)
-    if not os.path.isdir(params.model_dir):
-        raise ValueError("Specified model directory does not exist")
+########################## define functions ##########################
+# define funiction to predict one inference directory
+def predict_one(params, infer_dir, best_last, out_dir):
 
     # Set the logger, delete old log file if overwrite param is set to yes
     log_path = os.path.join(params.model_dir, 'predict.log')
@@ -74,4 +35,49 @@ if __name__ == '__main__':
     logging.info("- done.")
 
     # predict using the model
-    predict(infer_model_spec, params.model_dir, params, infer_dir, best_last, out_dir)
+    nii_out = predict(infer_model_spec, params.model_dir, params, infer_dir, best_last, out_dir)
+
+    return nii_out
+
+########################## executed  as script ##########################
+if __name__ == '__main__':
+
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--param_file', default=None,
+                        help="Path to params.json")
+    parser.add_argument('--infer_dir', default=None,
+                        help="Path to directory to generate inference from")
+    parser.add_argument('--best_last', default='last_weights',
+                        help="Either 'best_weights' or 'last_weights' - whether to use best or last weights for inference")
+    parser.add_argument('--out_dir', default=None,
+                        help="Optionally specify output directory")
+
+    # handle param argument
+    args = parser.parse_args()
+    assert args.param_file, "Must specify param file using --param_file"
+    assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
+    my_params = Params(args.param_file)
+
+    # handle best_last argument
+    if args.best_last not in ['best_weights', 'last_weights']:
+        raise ValueError("Did not understand best_last value: " + str(args.best_last))
+
+    # handle out_dir argument
+    if args.out_dir:
+        assert os.path.isdir(args.out_dir), "Specified output directory does not exist: {}".format(args.out_dir)
+
+    # handler inference directory argument
+    assert args.infer_dir, "No infer directory specified. Use --infer_dir="
+    assert os.path.isdir(args.infer_dir), "No inference directory found at {}".format(args.infer_dir)
+    if not glob(args.infer_dir + '/*' + my_params.data_prefix[0] + '.nii.gz'):
+        raise ValueError("No image data found in inference directory: {}".format(args.infer_dir))
+
+    # determine model dir
+    if my_params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
+        my_params.model_dir = os.path.dirname(args.param_file)
+    if not os.path.isdir(my_params.model_dir):
+        raise ValueError("Specified model directory does not exist")
+
+    # do work
+    nii_output = predict_one(my_params, args.infer_dir, args.best_last, args.out_dir)

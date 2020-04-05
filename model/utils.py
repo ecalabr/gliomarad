@@ -1,4 +1,4 @@
-"""General utility functions"""
+""" General utility functions """
 
 import json
 import logging
@@ -289,20 +289,6 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS
         )
 
-    # weighted DICE loss - not working as expected atm - likely need to flatten
-    elif loss_method == 'weighted_dice':
-        axis = -1 if data_format == 'channels_last' else 1
-        smooth=0.00001
-        y = tf.cast(labels, tf.float32)
-        if data_format == 'channels_last':
-            y_pred = tf.nn.softmax(predictions, axis=axis)[..., 1, np.newaxis]
-        else:
-            y_pred = tf.nn.softmax(predictions, axis=axis)[:, 1, np.newaxis, ...]
-        intersection = tf.reduce_sum(y * y_pred, axis=axis)
-        union = tf.reduce_sum(y, axis=axis) + tf.reduce_sum(y_pred, axis=axis)
-        weighted_dice =  tf.reduce_mean(2. * (intersection + smooth / 2) / (union + smooth))
-        loss_function = - weighted_dice
-
     # generalized DICE loss for 2D and 2.5D networks
     elif loss_method == 'gen_dice':
 
@@ -310,7 +296,7 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
         y = tf.cast(labels, tf.float32)
         y_pred = tf.nn.softmax(predictions, axis=-1 if data_format == 'channels_last' else 1)
 
-        # handle 2.5D by making a triangle weight kernel weighting center slice the most and sum=1
+        # handle 2.5D by making a triangle weight kernel weighting center slice the most and sum == 1
         if len(y_pred.shape) == 5 and data_format == 'channels_last':
             # for channels last [b, x, y, z, c]
             kerlen = y_pred.get_shape().as_list()[3]
@@ -340,7 +326,7 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
         int_1 = tf.reduce_sum(y_true_f_1 * y_pred_f_1)
         gen_dice = 2. * (w_0 * int_0 + w_1 * int_1) / ((w_0 * (tf.reduce_sum(y_true_f_0) + tf.reduce_sum(y_pred_f_0))) +
                                                        (w_1 * (tf.reduce_sum(y_true_f_1) + tf.reduce_sum(y_pred_f_1))))
-        loss_function = - gen_dice
+        loss_function = 1. - gen_dice
 
     # not implemented loss
     else:

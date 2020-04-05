@@ -10,23 +10,15 @@ from model.patch_input_fn import patch_input_fn
 from model.patch_input_fn import patch_input_fn_3d
 from model.model_fn import model_fn
 
+########################## define functions ##########################
+def train_one(param_file):
 
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
-                    help="Path to params.json")
-
-
-if __name__ == '__main__':
-
-    # Load the parameters from the experiment params.json file in model_dir
-    args = parser.parse_args()
-    assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
-    params = Params(args.param_file)
+    # get params
+    params = Params(param_file)
 
     # determine model dir
     if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
-        params.model_dir = os.path.dirname(args.param_file)
+        params.model_dir = os.path.dirname(param_file)
     if not os.path.isdir(params.model_dir):
         raise ValueError("Specified model directory does not exist")
 
@@ -63,3 +55,17 @@ if __name__ == '__main__':
     logging.info("Starting training for {} epoch(s)".format(params.num_epochs))
     restore_dir = os.path.join(params.model_dir, params.restore_dir)  # get full path to restore directory
     train_and_evaluate(train_model_spec, eval_model_spec, params.model_dir, params, restore_dir)
+
+########################## executed  as script ##########################
+if __name__ == '__main__':
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
+                        help="Path to params.json")
+
+    # Load the parameters from the experiment params.json file in model_dir
+    args = parser.parse_args()
+    assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
+
+    # do work
+    train_one(args.param_file)

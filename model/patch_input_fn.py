@@ -93,7 +93,7 @@ def _expand_region(input_dims, region_bbox, delta):
     # if delta is actually a list, then refer to _expand_region_dims, make sure its same length as input_dims
     if isinstance(delta, (list, tuple, np.ndarray)):
         if not len(delta) == len(input_dims):
-            raise ValueError("Parameter mask_dilate must have one entry for each dimension in mask image (can be 0)")
+            raise ValueError("When a list is passed, parameter mask_dilate must have one val for each dim in mask")
         return _expand_region_dims(input_dims, region_bbox, delta)
 
     # determine how much to add on each side of the bounding box
@@ -462,7 +462,7 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
 
     # load the mask and get the full data dims - handle None mask argument
     if mask_prefx:
-        mask = nib.load(mask_file).get_fdata()
+        mask = (nib.load(mask_file).get_fdata() > 0.).astype(float)
     else:
         mask = np.ones_like(nib.load(mask_file).get_fdata(), dtype=float)
     data_dims = mask.shape
@@ -582,7 +582,7 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
 
     # load the mask and get the full data dims - handle None mask argument
     if mask_prefx:
-        mask = nib.load(mask_file).get_fdata()
+        mask = (nib.load(mask_file).get_fdata() > 0.).astype(float)
     else:
         mask = np.ones_like(nib.load(mask_file).get_fdata(), dtype=float)
     data_dims = mask.shape

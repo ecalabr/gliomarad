@@ -8,12 +8,13 @@ from model.utils import save_dict_to_json
 from model.evaluation import evaluate_sess
 
 
-def train_sess(sess, model_spec, writer, params):
+def train_sess(sess, model_spec, writer, params, current_epoch):
     """Train the model on `num_steps` batches
     Args:
         sess: (tf.Session) current session
         model_spec: (dict) contains the graph operations or nodes needed for training
         writer: (tf.summary.FileWriter) writer for summaries
+        current_epoch: (int) current epoch
         params: (Params) hyperparameters
     """
 
@@ -40,10 +41,10 @@ def train_sess(sess, model_spec, writer, params):
                                                                   summary_op, global_step])
                 # Write summaries for tensorboard
                 writer.add_summary(summ, global_step_val)
-                logging.info("Global step = " + str(global_step_val))
+                logging.info("Global step = " + str(global_step_val + 1))
             else:
                 _, _, loss_val = sess.run([train_op, update_metrics, loss])
-                logging.info("Batch = " + str(n).zfill(6) + " Loss = " + "%.10e" % loss_val)
+                logging.info("Epoch = %03d" % current_epoch + " Batch = %06d" % n + " Loss = %.5e" % loss_val)
             n=n+1
         except tf.errors.OutOfRangeError:
             break
@@ -65,8 +66,8 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
         restore_from: (string) directory or file containing weights to restore the graph
     """
     # Initialize tf.Saver instances to save weights during training
-    last_saver = tf.train.Saver()  # will keep last 5 epochs
-    best_saver = tf.train.Saver(max_to_keep=1)  # only keep 1 best checkpoint (best on eval)
+    last_saver = tf.train.Saver(save_relative_paths=True, max_to_keep=5)  # will keep last 5 epochs
+    best_saver = tf.train.Saver(save_relative_paths=True, max_to_keep=1)  # only keep 1 best checkpoint (best on eval)
     begin_at_epoch = 0
 
     with tf.Session() as sess:
@@ -91,8 +92,9 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
         # run through each epoch of training with evaluation in between epochs
         for epoch in range(begin_at_epoch, begin_at_epoch + params.num_epochs):
             # Train for one epoch
-            logging.info("Epoch {}/{}".format(epoch + 1, begin_at_epoch + params.num_epochs))
-            train_sess(sess, train_model_spec, train_writer, params)
+            current_epoch = epoch + 1
+            logging.info("Epoch {}/{}".format(current_epoch, begin_at_epoch + params.num_epochs))
+            train_sess(sess, train_model_spec, train_writer, params, current_epoch)
 
             # Save weights
             last_save_path = os.path.join(model_dir, 'last_weights', 'after-epoch')

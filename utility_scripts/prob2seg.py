@@ -1,4 +1,4 @@
-""" converts one or more 4D probabilty image(s) into a binary mask using softmax argmax"""
+""" converts one or more 4D probabilty image(s) into a binary mask using softmax argmax """
 
 import nibabel as nib
 import os
@@ -7,20 +7,7 @@ import numpy as np
 import scipy.ndimage
 from glob import glob
 
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--data', default=None,
-                    help="Path to data image(s). Can be an image or a directory.")
-parser.add_argument('--name', default='',
-                    help="Name of data image(s). Any string within the data filename. " +
-                         "Leave blank for all images, which will be averaged.")
-parser.add_argument('--outname', default='binary_mask.nii.gz',
-                    help="Name of output image")
-parser.add_argument('--outpath', default=None,
-                    help="Output path")
-parser.add_argument('--clean', action="store_true", default=False,
-                    help="Delete inputs after conversion")
-
+########################## define functions ##########################
 def softmax(X, theta=1.0, axis=None):
     # make X at least 2d
     y = np.atleast_2d(X)
@@ -56,7 +43,65 @@ def get_largest_component(img):
         out_img = component
     return out_img
 
+def convert_prob(files, nii_out_path, clean):
+
+    # announce files
+    print("Found the following file" + (":" if len(files) == 1 else "s, which will be averaged:"))
+    for f in files:
+        print(f)
+
+    # load data
+    data = []
+    nii = []
+
+    # loop through files
+    if isinstance(files, str):
+        files = [files]
+    for f in files:
+        nii = nib.load(f)
+        data.append(nii.get_data())
+
+    # softmax
+    data = [softmax(arr, axis=-1) for arr in data]
+
+    # average
+    data = np.mean(data, axis=0)
+
+    # argmax
+    data = np.argmax(data, axis=-1)
+
+    # binary morph ops
+    struct = scipy.ndimage.generate_binary_structure(3, 2)
+    data = scipy.ndimage.morphology.binary_closing(data, structure=struct)
+    data = get_largest_component(data)
+
+    # make output nii
+    nii_out = nib.Nifti1Image(data.astype(np.uint8), nii.affine, nii.header)
+    nib.save(nii_out, nii_out_path)
+
+    # if output is created, and cleanup is true, then clean
+    if os.path.isfile(nii_out_path) and clean:
+        for f in files:
+            os.remove(f)
+
+    return nii_out_path
+
+########################## executed  as script ##########################
 if __name__ == '__main__':
+
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data', default=None,
+                        help="Path to data image(s). Can be an image or a directory.")
+    parser.add_argument('--name', default='',
+                        help="Name of data image(s). Any string within the data filename. " +
+                             "Leave blank for all images, which will be averaged.")
+    parser.add_argument('--outname', default='binary_mask.nii.gz',
+                        help="Name of output image")
+    parser.add_argument('--outpath', default=None,
+                        help="Output path")
+    parser.add_argument('--clean', action="store_true", default=False,
+                        help="Delete inputs after conversion")
 
     # check input arguments
     args = parser.parse_args()
@@ -65,16 +110,15 @@ if __name__ == '__main__':
     namestr = args.name
     outname = args.outname
     outpath = args.outpath
-    clean = args.clean
     if not '.nii.gz' in outname:
         outname = outname.split('.')[0] + '.nii.gz'
-    files = []
+    my_files = []
     data_root = []
     if os.path.isfile(data_in_path):
-        files = [data_in_path]
+        my_files = [data_in_path]
         data_root = os.path.dirname(data_in_path)
     elif os.path.isdir(data_in_path):
-        files = glob(data_in_path + '/*' + namestr + '*.nii*')
+        my_files = glob(data_in_path + '/*' + namestr + '*.nii*')
         data_root = data_in_path
     else:
         raise ValueError("No data found at {}".format(data_in_path))
@@ -82,39 +126,13 @@ if __name__ == '__main__':
     # handle outpath creation and make sure output file is not an input
     if outpath and os.path.isdir(outpath):
         data_root = outpath
-    nii_out_path = os.path.join(data_root, outname)
-    if nii_out_path in files:
-        files.remove(nii_out_path)
+    my_nii_out_path = os.path.join(data_root, outname)
+    if my_nii_out_path in my_files:
+        my_files.remove(my_nii_out_path)
 
     # announce
-    if files:
-        print("Found the following file" + (":" if len(files)==1 else "s, which will be averaged:"))
-        for f in files:
-            print(f)
-    else:
+    if not my_files:
         raise ValueError("No data found at {}".format(data_in_path))
 
-    # load data
-    data = []
-    nii = []
-    for f in files:
-        nii = nib.load(f)
-        data.append(nii.get_data())
-    data = np.mean(data, axis=0)
-
-    # softmax argmax
-    out_data = np.argmax(softmax(data, axis=-1), axis=-1)
-
-    # binary ops
-    struct = scipy.ndimage.generate_binary_structure(3, 2)
-    out_data = scipy.ndimage.morphology.binary_closing(out_data, structure=struct)
-    out_data = get_largest_component(out_data)
-
-    # make output nii
-    nii_out = nib.Nifti1Image(out_data.astype(np.uint8), nii.affine, nii.header)
-    nib.save(nii_out, nii_out_path)
-
-    # if output is created, and cleanup is true, then clean
-    if os.path.isfile(nii_out_path) and clean:
-        for f in files:
-            os.remove(f)
+    # do work
+    final_nii_out = convert_prob(my_files, my_nii_out_path, args.clean)

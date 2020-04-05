@@ -2,14 +2,17 @@ import time
 from gbm_prep_func import *
 import argparse
 
+########################## define functions ##########################
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
-def read_dicom_dir(dcm_dir, rep=False):
+def proc_mammo_dcm_dir(dcm_dir, param_file, reg_atlas, rep=False):
     """
     This function takes a directory containing UCSF air formatted dicom folders
     and converts all relevant files to nifti format. It also processes DTI, makes brain masks, registers the different
     series to the same space, and finally creates a 4D nifti to review all of the data.
     It will also perform 3 compartment tumor segmentation, though this is a work in progress at the moment
     :param dcm_dir: the full path to the dicom containing folder as a string
+    :param param_file: the full path to parameter json file
+    :param reg_atlas: the full path to a registration atlas
     :param rep: boolean, repeat work or not
     :return: returns the path to a metadata file dict (as *.npy file) that contains lots of relevant info
     Currently this does not force any specific image orientation. To change this, edit the filter_series function
@@ -28,26 +31,21 @@ def read_dicom_dir(dcm_dir, rep=False):
 
     return series_dict
 
-#######################
-#######################
-#######################
-#######################
-#######################
-
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--dcm_dir', default=None,
-                    help="Path to dicom data directory")
-parser.add_argument('--support_dir', default=None,
-                    help="Path to support file directory containing bvecs and atlas data")
-parser.add_argument('--start', default=0,
-                    help="Index of directories to start processing at")
-parser.add_argument('--end', default=None,
-                    help="Index of directories to end processing at")
-parser.add_argument('--redo', default=False,
-                    help="Repeat work boolean")
-
+########################## executed  as script ##########################
 if __name__ == '__main__':
+
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dcm_dir', default=None,
+                        help="Path to dicom data directory")
+    parser.add_argument('--support_dir', default=None,
+                        help="Path to support file directory containing bvecs and atlas data")
+    parser.add_argument('--start', default=0,
+                        help="Index of directories to start processing at")
+    parser.add_argument('--end', default=None,
+                        help="Index of directories to end processing at")
+    parser.add_argument('--redo', default=False,
+                        help="Repeat work boolean")
 
     # get arguments and check them
     args = parser.parse_args()
@@ -62,9 +60,9 @@ if __name__ == '__main__':
     redo = args.redo
 
     # check that all required files are in support directory
-    param_file = os.path.join(support_dir, "param_files/mammo.json")
-    reg_atlas = os.path.join(support_dir, "atlases/breast_test_atlas.nii.gz")
-    for file_path in [param_file, reg_atlas]:
+    my_param_file = os.path.join(support_dir, "param_files/mammo.json")
+    my_reg_atlas = os.path.join(support_dir, "atlases/breast_test_atlas.nii.gz")
+    for file_path in [my_param_file, my_reg_atlas]:
         assert os.path.isfile(file_path), "Required support file not found at {}".format(file_path)
 
     # get a list of zip files from a dicom zip folder
@@ -81,6 +79,7 @@ if __name__ == '__main__':
         dcms = [dcms]
     for i, dcm in enumerate(dcms, 1):
         start_t = time.time()
-        serdict = read_dicom_dir(dcm, rep=redo)
+        serdict = proc_mammo_dcm_dir(dcm, my_param_file, my_reg_atlas, rep=redo)
         elapsed_t = time.time() - start_t
-        print("\nCOMPLETED # "+str(i)+" of "+str(len(dcms))+" in "+str(round(elapsed_t/60, 2))+" minute(s)\n")
+        print("\nCOMPLETED # " + str(i) + " of " + str(len(dcms)) + " in " + str(
+            round(elapsed_t / 60, 2)) + " minute(s)\n")

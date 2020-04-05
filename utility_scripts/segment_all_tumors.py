@@ -5,16 +5,18 @@ from glob import glob
 import os
 import argparse
 
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default=None,
-                    help="Path to data directory")
-parser.add_argument('--skip', default=0,
-                    help="Index of directories to start processing at")
-parser.add_argument('--spec_dir', default=None,
-                    help="Specific directory to segment tumor from")
-
+########################## executed  as script ##########################
 if __name__ == '__main__':
+
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', default=None,
+                        help="Path to data directory")
+    parser.add_argument('--skip', default=0,
+                        help="Index of directories to start processing at")
+    parser.add_argument('--spec_dir', default=None,
+                        help="Specific directory to segment tumor from")
+
     # get arguments and check them
     args = parser.parse_args()
     data_dir = args.data_dir
@@ -29,6 +31,8 @@ if __name__ == '__main__':
     # define dir_list
     dir_list = glob(data_dir + "/*/")
     dir_list = dir_list[start:]
+    if isinstance(dir_list, str):
+        dir_list = [dir_list]
 
     # handle specific directory argument
     if spec_dir:

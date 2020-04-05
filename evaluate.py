@@ -1,4 +1,4 @@
-"""Evaluate the model"""
+""" Evaluate the model """
 
 import argparse
 import logging
@@ -9,23 +9,14 @@ from model.input_fn import input_fn
 from model.model_fn import model_fn
 from model.evaluation import evaluate
 
-
-# parse input arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
-                    help="Path to params.json")
-
-
-if __name__ == '__main__':
-
-    # Load the parameters from the experiment params.json file in model_dir
-    args = parser.parse_args()
-    assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
-    params = Params(args.param_file)
+########################## define functions ##########################
+def evaluate_one(param_file):
+    # get params
+    params = Params(param_file)
 
     # determine model dir
     if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
-        params.model_dir = os.path.dirname(args.param_file)
+        params.model_dir = os.path.dirname(param_file)
     if not os.path.isdir(params.model_dir):
         raise ValueError("Specified model directory does not exist")
 
@@ -49,3 +40,17 @@ if __name__ == '__main__':
     # Evaluate the model
     logging.info("Starting evaluation.")
     evaluate(eval_model_spec, params.model_dir, params.restore_dir)
+
+########################## executed  as script ##########################
+if __name__ == '__main__':
+    # parse input arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
+                        help="Path to params.json")
+
+    # Load the parameters from the experiment params.json file in model_dir
+    args = parser.parse_args()
+    assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
+
+    # do work
+    evaluate_one(args.param_file)
