@@ -36,16 +36,17 @@ def batch_mask(infer_direcs, param_files, best_last, out_dir):
         # convert probs to mask with cleanup
         idno = os.path.basename(direc.rsplit('/', 1)[0] if direc.endswith('/') else direc)
         nii_out_path = os.path.join(direc, idno + "_combined_brain_mask.nii.gz")
-        nii_out = convert_prob(probs, nii_out_path, clean=True)
+        if probs:
+            nii_out_path = convert_prob(probs, nii_out_path, clean=True)
 
         # report
-        if os.path.isfile(nii_out):
-            print("Created mask file at: {}".format(nii_out))
+        if os.path.isfile(nii_out_path):
+            print("Created mask file at: {}".format(nii_out_path))
         else:
             raise ValueError("No mask output file found at: {}".format(direc))
 
         # add to outname list
-        outnames.append(nii_out)
+        outnames.append(nii_out_path)
 
     return outnames
 
@@ -99,5 +100,13 @@ if __name__ == '__main__':
     else:
         raise ValueError("No image data found in inference directory: {}".format(args.infer_dir))
 
+    # make sure all input directories have the required input images
+    my_params = Params(my_param_files[0])
+    data_prefixes = [str(item) for item in my_params.data_prefix]
+    compl_infer_dirs = []
+    for inf_dir in infer_dirs:
+        if all([glob(inf_dir + '/*' + prefix + '.nii.gz') for prefix in data_prefixes]):
+            compl_infer_dirs.append(inf_dir)
+
     # do work
-    output_names = batch_mask(infer_dirs, my_param_files, args.best_last, args.out_dir)
+    output_names = batch_mask(compl_infer_dirs, my_param_files, args.best_last, args.out_dir)

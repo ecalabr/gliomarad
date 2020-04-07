@@ -126,7 +126,7 @@ if __name__ == '__main__':
         assert os.path.isdir(args.data_dir), "Data directory not found at {}".format(args.data_dir)
     assert os.path.isdir(args.ij_dir), "ImageJ directory not found at {}".format(args.ij_dir)
     my_ij_java = os.path.join(args.ij_dir, "jre/bin/java")
-    assert os.path.isdir(my_ij_java), "ImageJ java directory not found at {}".format(my_ij_java)
+    assert os.path.isfile(my_ij_java), "ImageJ java not found at {}".format(my_ij_java)
     my_ij_jar = os.path.join(args.ij_dir, "ij.jar")
     assert os.path.isfile(my_ij_jar), "ImageJ jar not found at {}".format(my_ij_jar)
     start = args.start

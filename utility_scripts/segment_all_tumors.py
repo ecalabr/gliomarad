@@ -17,26 +17,24 @@ if __name__ == '__main__':
     parser.add_argument('--spec_dir', default=None,
                         help="Specific directory to segment tumor from")
 
-    # get arguments and check them
+    # handle skip argument
     args = parser.parse_args()
-    data_dir = args.data_dir
-    assert data_dir, "Must specify data directory using --data_dir"
-    assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
     start = int(args.skip)
+
+    # get input directory arguments and check them
     spec_dir = args.spec_dir
+    data_dir = args.data_dir
     if spec_dir:
         spec_path = os.path.join(data_dir, spec_dir)
-        assert(os.path.isdir(spec_path)), "Specific directory not found at {}".format(spec_path)
-
-    # define dir_list
-    dir_list = glob(data_dir + "/*/")
-    dir_list = dir_list[start:]
-    if isinstance(dir_list, str):
-        dir_list = [dir_list]
-
-    # handle specific directory argument
-    if spec_dir:
+        assert (os.path.isdir(spec_path)), "Specific directory not found at {}".format(spec_path)
         dir_list = [spec_dir + '/']  # required trailing slash for directories?
+    else:
+        assert data_dir, "Must specify data directory using --data_dir"
+        assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
+        dir_list = glob(data_dir + "/*/")
+        dir_list = dir_list[start:]
+        if isinstance(dir_list, str):
+            dir_list = [dir_list]
 
     # run seg
-    test_ecalabr2.test(dir_list)
+    test_ecalabr2.test(dir_list) # currently using non-bias corrected images, change in test_ecalabr2.py

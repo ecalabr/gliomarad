@@ -16,21 +16,21 @@ def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix):
     # run ITK-snap on each one
     for ind, direc in enumerate(direcs, 1):
         anatomy = glob(direc + "/*" + anat_suffix)
-        assert os.path.isfile(anatomy[0]), "File not found: {}".format(anatomy[0])
         mask = glob(direc + "/*" + mask_suffix)
-        assert os.path.isfile(mask[0]), "File not found: {}".format(mask[0])
-        if anatomy and mask:
+        if anatomy and mask and all([os.path.isfile(f) for f in [anatomy[0], mask[0]]]):
             anatomy = anatomy[0]
             mask = mask[0]
             cmd = "itksnap --geometry 1920x1080 -g " + anatomy + " -s " + mask
             if addl_suffix:
                 addl = glob(direc + "/*" + addl_suffix)[0]
-                assert os.path.isfile(addl[0]), "File not found: {}".format(addl[0])
+                assert os.path.isfile(addl), "File not found: {}".format(addl)
                 cmd = cmd + " -o " + addl
             #print(cmd)
             os.system(cmd)
             print("Done with study " + os.path.basename(direc) + ": " + str(ind) + " of " + str(n_total))
             cmds.append(cmd)
+        else:
+            print("Skipping study " + os.path.basename(direc) + ", which is missing data.")
 
     return cmds
 
