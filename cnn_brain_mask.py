@@ -36,17 +36,20 @@ def batch_mask(infer_direcs, param_files, best_last, out_dir):
         # convert probs to mask with cleanup
         idno = os.path.basename(direc.rsplit('/', 1)[0] if direc.endswith('/') else direc)
         nii_out_path = os.path.join(direc, idno + "_combined_brain_mask.nii.gz")
-        if probs:
-            nii_out_path = convert_prob(probs, nii_out_path, clean=True)
-
-        # report
         if os.path.isfile(nii_out_path):
-            print("Created mask file at: {}".format(nii_out_path))
+            print("Mask file already exists at {}".format(nii_out_path))
         else:
-            raise ValueError("No mask output file found at: {}".format(direc))
+            if probs:
+                nii_out_path = convert_prob(probs, nii_out_path, clean=True)
 
-        # add to outname list
-        outnames.append(nii_out_path)
+                # report
+                if os.path.isfile(nii_out_path):
+                    print("Created mask file at: {}".format(nii_out_path))
+                else:
+                    raise ValueError("No mask output file found at: {}".format(direc))
+
+                # add to outname list
+                outnames.append(nii_out_path)
 
     return outnames
 
@@ -64,6 +67,11 @@ if __name__ == '__main__':
                         help="Either 'best_weights' or 'last_weights' - whether to use best or last model weights for inference")
     parser.add_argument('--out_dir', default=None,
                         help="Optionally specify temporary directory. Default is model directory.")
+    parser.add_argument('--start', default=0,
+                        help="Index of directories to start processing at")
+    parser.add_argument('--end', default=None,
+                        help="Index of directories to end processing at")
+    parser.add_argument('--list', action="store_true", default=False)
 
     # handle model_dir argument
     args = parser.parse_args()
@@ -100,6 +108,18 @@ if __name__ == '__main__':
     else:
         raise ValueError("No image data found in inference directory: {}".format(args.infer_dir))
 
+    # handle list argument
+    if args.list:
+        for i, item in enumerate(infer_dirs, 0):
+            print(str(i) + ': ' + item)
+        exit()
+
+    # handle start and end arguments
+    if args.end:
+        infer_dirs = infer_dirs[int(args.start):int(args.end)+1]
+    else:
+        infer_dirs = infer_dirs[int(args.start):]
+
     # make sure all input directories have the required input images
     my_params = Params(my_param_files[0])
     data_prefixes = [str(item) for item in my_params.data_prefix]
@@ -107,6 +127,8 @@ if __name__ == '__main__':
     for inf_dir in infer_dirs:
         if all([glob(inf_dir + '/*' + prefix + '.nii.gz') for prefix in data_prefixes]):
             compl_infer_dirs.append(inf_dir)
+        else:
+            print("Skipping {} which does not have all the required images.".format(inf_dir))
 
     # do work
     output_names = batch_mask(compl_infer_dirs, my_param_files, args.best_last, args.out_dir)

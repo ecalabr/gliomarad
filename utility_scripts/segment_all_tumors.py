@@ -12,17 +12,24 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', default=None,
                         help="Path to data directory")
-    parser.add_argument('--skip', default=0,
-                        help="Index of directories to start processing at")
-    parser.add_argument('--spec_dir', default=None,
+    parser.add_argument('--direc', default=None,
                         help="Specific directory to segment tumor from")
+    parser.add_argument('--start', default=0,
+                        help="Index of directories to start processing at")
+    parser.add_argument('--end', default=None,
+                        help="Index of directories to end processing at")
+    parser.add_argument('--list', action="store_true", default=False,
+                        help="List the directories to be processed in order")
+    parser.add_argument('--bias', action="store_true", default=False,
+                        help="Use bias corrected images for segmentation")
 
-    # handle skip argument
+    # parse args
     args = parser.parse_args()
-    start = int(args.skip)
+    start = int(args.start)
+    end = args.end
 
     # get input directory arguments and check them
-    spec_dir = args.spec_dir
+    spec_dir = args.direc
     data_dir = args.data_dir
     if spec_dir:
         spec_path = os.path.join(data_dir, spec_dir)
@@ -31,10 +38,21 @@ if __name__ == '__main__':
     else:
         assert data_dir, "Must specify data directory using --data_dir"
         assert os.path.isdir(data_dir), "Data directory not found at {}".format(data_dir)
-        dir_list = glob(data_dir + "/*/")
-        dir_list = dir_list[start:]
+        dir_list = sorted(glob(data_dir + "/*/"))
+
+        # handle list argument
+        if args.list:
+            for i, item in enumerate(dir_list, 0):
+                print(str(i) + ': ' + item)
+            exit()
+
+        # handle start and end arguments
+        if end:
+            dir_list = dir_list[int(start):int(end)+1]
+        else:
+            dir_list = dir_list[int(start):]
         if isinstance(dir_list, str):
             dir_list = [dir_list]
 
     # run seg
-    test_ecalabr2.test(dir_list) # currently using non-bias corrected images, change in test_ecalabr2.py
+    test_ecalabr2.test(dir_list, args.bias) # currently using non-bias corrected images, change in test_ecalabr2.py

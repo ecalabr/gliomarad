@@ -39,6 +39,12 @@ def image_qc(direcs, data_dir, macro_file, ij_java, ij_jar, ij_dir, missing):
         # T2FS = {'T2FS': glob(direc + "/*T2FS_w.nii.gz")}
         # T1 = {'T1': glob(direc + "/*T1_w.nii.gz")}
         # img_list = [dwi, t1fs, T1gad, T2FS, T1]
+        # alternative for meningioma project
+        #flair = {'FLAIR': glob(direc + "/*FLAIR_w.nii.gz")}
+        #t1 = {'T1': glob(direc + "/*T1_w.nii.gz")}
+        #t1gad = {'T1gad': glob(direc + "/*T1gad_w.nii.gz")}
+        #t2 = {'T2': glob(direc + "/*T2_w.nii.gz")}
+        #img_list = [t1, t1gad, t2, flair]
 
         # check if all data present
         compl = False
@@ -135,6 +141,7 @@ if __name__ == '__main__':
     # handle specific directory
     if spec_direc:
         my_direcs = [spec_direc]
+        args.data_dir = os.path.dirname(spec_direc) # to save qc log in the parent directory
     else:
         # list all subdirs with the processed data
         my_direcs = [it for it in glob(args.data_dir + "/*") if os.path.isdir(it)]

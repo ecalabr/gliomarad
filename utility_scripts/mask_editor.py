@@ -6,6 +6,12 @@ import argparse
 
 ########################## define functions ##########################
 def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix):
+
+    # handle suffixes without extension
+    anat_suffix = anat_suffix + '.nii.gz' if not anat_suffix.endswith('.nii.gz') else anat_suffix
+    mask_suffix = mask_suffix + '.nii.gz' if not mask_suffix.endswith('.nii.gz') else mask_suffix
+    addl_suffix = addl_suffix + '.nii.gz' if not addl_suffix.endswith('.nii.gz') else addl_suffix
+
     # define outputs
     cmds = []
 

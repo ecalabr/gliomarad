@@ -27,10 +27,10 @@ def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,d
     series_dict = make_serdict(reg_atlas, dcm_dir, param_file)
     series_dict = filter_series(dicoms1, hdrs1, series1, dirs1, series_dict)
     series_dict = dcm_list_2_niis(series_dict, dcm_dir, rep)
-    series_dict = dti_proc(series_dict, dti_index, dti_acqp, dti_bvec, dti_bval)
+    #series_dict = dti_proc(series_dict, dti_index, dti_acqp, dti_bvec, dti_bval)
     series_dict = reg_series(series_dict)
-    series_dict = brain_mask(series_dict)
-    series_dict = bias_correct(series_dict)
+    #series_dict = brain_mask(series_dict)
+    #series_dict = bias_correct(series_dict)
     #series_dict = norm_niis(series_dict)
     #series_dict = make_nii4d(series_dict)
     #series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     end = args.end
 
     # check that all required files are in support directory
-    my_param_file = os.path.join(support_dir, "param_files/gbm_regex.json")
+    my_param_file = os.path.join(support_dir, "param_files/mening.json")
     my_reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz")
     my_dti_index = os.path.join(support_dir, "DTI_files/GE_hardi_55_index.txt")
     my_dti_acqp = os.path.join(support_dir, "DTI_files/GE_hardi_55_acqp.txt")
@@ -81,8 +81,10 @@ if __name__ == '__main__':
 
     # handle specific directory
     if spec_direc:
+        print("Using specific directory mode")
         dcms = [item for item in glob(spec_direc + "/*") if os.path.isdir(item)]
     else:
+        print("Using parent data directory mode")
         # get a list of dicom data directories
         dcms = [item for item in glob(dcm_data_dir + "/*/*") if os.path.isdir(item)]
         # sorts on accession no

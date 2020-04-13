@@ -9,15 +9,15 @@ def ucsf500_csv(csv_path, outfile):
     # define genes
     genes = {'EGFR': ['EGFR'], 'PTEN': ['PTEN'], 'TERT': ['TERT'],
              'ATRX': ['ATRX'], 'IDH': ['IDH1', 'IDH2'], 'TP53': ['TP53'], 'CDKN2': ['CDKN2'],
-             '7/10 Somy': ['Trisomy', 'Monosomy', 'Polysomy']}
+             '7/10 Aneuploidy': ['Trisomy', 'Monosomy', 'Polysomy'], '1p/19q': ['1p', '19q']}
 
     # load csv with ucsf 500s
     with open(csv_path) as f:
         reader = csv.reader(f, delimiter=',', quotechar='"')
         ucsf500 = list(reader)
 
-    # loop through genes, combining results when appropriate
-    newsheet = [[item for item in genes.keys()]]
+    # loop through genes in alphabeticle order, combining results when appropriate
+    newsheet = [[item for item in sorted(genes.keys())]]
     for line in ucsf500:
         if not line:
             newline = [""] * len(genes)

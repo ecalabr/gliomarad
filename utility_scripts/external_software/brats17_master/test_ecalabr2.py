@@ -27,7 +27,7 @@ from external_software.brats17_master.train import NetFactory
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 # takes full path to all dirs containing images to be segmented
-def test(dir_list):
+def test(dir_list, bias=True):
     if not isinstance(dir_list, list):
         dir_list = [dir_list]
     # get data root dir with handling of possible trailing slash
@@ -39,7 +39,10 @@ def test(dir_list):
     data_nm = []
     idno = []
     completed = 0 # number of tumors with existing segmentations
-    modality = ["FLAIR_wm", "T1_wm", "T1gad_wm", "T2_wm"]
+    if bias:
+        modality = ["FLAIR_wmtb", "T1_wmtb", "T1gad_wmtb", "T2_wmtb"]
+    else:
+        modality = ["FLAIR_wm", "T1_wm", "T1gad_wm", "T2_wm"]
     for i, direc in enumerate(dir_list):
         if direc[-1] == "/":
             direc = direc[:-1]
@@ -55,7 +58,7 @@ def test(dir_list):
                 completed = completed + 1
     print("Segmenting tumors for the following directories >> out file:")
     for i, path in enumerate(data_nm):
-        print(os.path.join(data_rt, path) + " >> " + os.path.join(save_dr[i], idno[i] + "_tumor_seg.nii.gz"))
+        print(str(i) + ': ' + os.path.join(data_rt, path) + " >> " + os.path.join(save_dr[i], idno[i] + "_tumor_seg.nii.gz"))
     print("This will process " + str(len(data_nm)) + " of " + str(len(dir_list)) + " total directories.")
     num_incmpl = len(dir_list) - (len(data_nm) + completed) # number of studies without all required images
     print(str(completed)+" already have existing segmentations and "+str(num_incmpl)+" lack required images.")

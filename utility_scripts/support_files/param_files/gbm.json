@@ -63,7 +63,6 @@
 "ASL": 	{
 	"or": [["asl", "perfusion"]],
 	"not": ["cerebral"],
-	"reg": false,
 	"split": {"ASL": 0, "ASL_anat": -1},
 	"split_func": "split_asl",
 	"reg": "diffeo",

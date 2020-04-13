@@ -60,11 +60,13 @@ def train_one(param_file):
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
+    parser.add_argument('--param_file', default=None,
                         help="Path to params.json")
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
+    if not args.param_file:
+        print("Must specify a parameter file using --param_file")
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
 
     # do work

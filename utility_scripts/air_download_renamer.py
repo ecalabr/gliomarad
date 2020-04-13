@@ -28,11 +28,11 @@ def patient_match(mr_list, ac_list, medrecn, accession):
         return False
     if not ac_ind[0] == mr_ind[0]:
         print(" Accession and MRN indices don't match!")
-        return False
+        return True
     return True
 
 # match and move each folder into a new folder named by accession number
-def rename_dcm_dir(folders):
+def rename_dcm_dir(folders, acc_list, mr_list):
     outdirs = []
     for i in folders:
         fullpath = os.path.join(data_dir, i)
@@ -41,7 +41,7 @@ def rename_dcm_dir(folders):
         access = int(hdr.AccessionNumber)
         mrn = int(hdr.PatientID)
         # if MRN/accession don't match add a _ to directory beginning
-        if patient_match(mrn_list, access_list, mrn, access):
+        if patient_match(mr_list, acc_list, mrn, access):
             outdir = os.path.join(data_dir, str(access).zfill(8))
         else:
             outdir = os.path.join(data_dir, "_" + str(access).zfill(8))
@@ -49,10 +49,10 @@ def rename_dcm_dir(folders):
         if not os.path.isdir(outdir):
             os.mkdir(outdir)
         cmd = "mv " + fullpath + " " + outdir + "/."
-        print(cmd)
+        #print(cmd)
         subprocess.call(cmd, shell=True)
         outdirs.append(outdir)
-        return outdirs
+    return outdirs
 
 ########################## executed  as script ##########################
 if __name__ == '__main__':
@@ -84,11 +84,17 @@ if __name__ == '__main__':
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         patient_list = list(reader)
     for line in patient_list[1:]:
-        mrn_list.append(int(line[args.mrn_col]))
-        access_list.append(int(line[args.acc_col]))
+        try:
+            mrn_list.append(int(line[int(args.mrn_col)]))
+        except:
+            pass
+        try:
+            access_list.append(int(line[int(args.acc_col)]))
+        except:
+            pass
 
     # walk through each directory and find the matching patient
     dirs = [direc for direc in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, direc))]
 
     # do work
-    output_directories = rename_dcm_dir(dirs)
+    output_directories = rename_dcm_dir(dirs, access_list, mrn_list)

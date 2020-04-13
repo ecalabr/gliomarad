@@ -9,15 +9,15 @@
 
 "T1":	{
 	"or": [["(?i)(t1|bravo|spgr)"]],
-	"not": ["(?i)post", "(?i)flair", "\\+", "(?i) pg ", "(?i)(c|t|l)-sp", "(?i)spine", "(?i)^gad", "(?i)(ref|rfmt)", "(?i)rho"],
+	"not": ["(?i)postcon", "(?i)flair", "(?i)perf", "\\+", "(?i) pg ", "(?i)(c|t|l)-sp", "(?i)spine", "(?i)^gad", "(?i)(ref|rfmt)", "(?i)rho"],
 	"reg": "affine",
 	"reg_target": "FLAIR",
 	"bias": true
 	},
 
 "T1gad":{
-	"or": [["(?i)(t1|bravo|spgr)", "(?i)(gad|post| pg |\\+c)"], ["(?i)rssg", "(?i)sp", "(?i)steo"]],
-	"not": ["(?i)pre", "(?i)without", "(?i)w/o", "(?i)(ref|rfmt)", "(?i)(c|t|l)-sp", "(?i)spine", "(?i)(track|tract|left|right|arcuate|optic|ifof|slf|radiation|motor|roi)"],
+	"or": [["(?i)(t1)", "(?i)(postcon)"], ["(?i)rssg", "(?i)steo", "(?i)postcon"], ["(?i)spgr", "(?i)postcon"], ["(?i)bravo", "(?i)postcon"]],
+	"not": ["(?i)without", "(?i)w/o", "(?i)(ref|rfmt)", "(?i)(c|t|l)-sp", "(?i)spine", "(?i)(track|tract|left|right|arcuate|optic|ifof|slf|radiation|motor|roi)"],
 	"reg": "affine",
 	"reg_target": "FLAIR",
 	"bias": true
@@ -25,7 +25,7 @@
 
 "T2": 	{
 	"or": [["(?i)t2"], ["(?i)fse"]],
-	"not": ["(?i)flair",  "(?i)t1", "(?i)(ref|rfmt)", "(?i)(track|tract|left|right|arcuate|optic|ifof|slf|radiation|motor|roi)"],
+	"not": ["(?i)flair", "(?i)trace", "(?i)quant", "(?i)t1", "(?i)t2\\*", "(?i)perf", "(?i)(ref|rfmt)", "(?i)(track|tract|left|right|arcuate|optic|ifof|slf|radiation|motor|roi)"],
 	"reg": "affine",
 	"reg_target": "FLAIR",
 	"bias": true
@@ -33,7 +33,7 @@
 
 "SWI": 	{
 	"or": [["(?i)isi"], ["(?i)swan"]],
-	"not": ["(?i)(ref|rf)", "(?i)filt", "(?i)pha", "(?i)mip", "(?i)min"],
+	"not": ["(?i)(ref|rfmt)", "(?i)filt", "(?i)pha", "(?i)mip", "(?i)min"],
 	"reg": "affine",
 	"reg_target": "FLAIR",
 	"bias": true
@@ -64,7 +64,6 @@
 "ASL": 	{
 	"or": [["(?i)asl"]],
 	"not": ["(?i)cerebral", "(?i)aslant"],
-	"reg": false,
 	"split": {"ASL": 0, "ASL_anat": -1},
 	"split_func": "split_asl",
 	"reg": "diffeo",

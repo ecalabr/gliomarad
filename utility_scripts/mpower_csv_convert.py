@@ -31,6 +31,9 @@ def mpower_csv_convert(mpower_csv, air_csv):
     with open(air_csv, 'rb') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         patient_list = list(reader)
+        # if the first row is text header then just zero it out
+        if isinstance(patient_list[0][0], str):
+            patient_list[0] = [0] * len(patient_list[0])
     for item in acces:
         for line in patient_list:
             if item == int(line[4]):
@@ -41,8 +44,8 @@ def mpower_csv_convert(mpower_csv, air_csv):
 
     # make new csv
     lines = [['Patient MRN', 'Accession', 'First Name', 'Last Name', 'Sex', 'DOB', 'Scan Date/Time', 'Images', 'Path',
-              'Path 2ndary', 'IDH-1', 'IDH-2', '1p/19q', 'ATRX', 'p53', 'Ki-67/MIB-1', 'pTEN Del', 'EGFR Amp', 'MGMT',
-              'MGMT index', 'UCSF 500', 'ASL', 'QC issues', 'Additional images']]
+              'Path 2ndary', 'Ki-67/MIB-1', 'MGMT', 'MGMT index', '1p/19q', 'IDH', 'ATRX', 'TP53',  'PTEN', 'EGFR',
+              '7/10 Aneuploidy', 'CDKN2', 'TERT', 'UCSF 500', 'ASL', 'QC issues', 'Status']]
     for i in range(len(mrn)):
         line = [mrn[i], acces[i], first[i], last[i], sex[i], dob[i], scantime[i], nimage[i]]
         lines.append(line)
@@ -71,3 +74,6 @@ if __name__ == '__main__':
 
     # do work
     out_csv = mpower_csv_convert(args.mpower_csv, args.air_csv)
+
+    # print
+    print("Combined CSV created at : {}".format(out_csv))

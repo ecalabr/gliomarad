@@ -99,7 +99,7 @@ def unzip_file(dicom_zip):
     dicomdir = glob(tmp_dir + "/*/")
     dicomdir = dicomdir[0].rsplit("/", 1)[0]  # must remove trailing slash so that os.path.dirname returns one dir up
     # print some stating info
-    logger.info("- working directory = " + os.path.dirname(dicomdir))
+    logger.info("- Working directory = " + os.path.dirname(dicomdir))
     return dicomdir
 
 # function to get complete series list from dicom directory
@@ -127,7 +127,8 @@ def get_series(dicom_dir, repeat=False):
         # only if contrast agent is specified and is not empty
         con_str = ' '
         if hasattr(hdrs[ind], 'ContrastBolusAgent'):
-            if not str(hdrs[ind].ContrastBolusAgent) == '':
+            # occasionally the ContrastBolusAgent field will have "No" or "None" written in
+            if not str(hdrs[ind].ContrastBolusAgent).lower().replace(' ', '') in ['', 'no', 'none', 'off']:
                 con_str = ' postcon '
         # add extra text to description of reformatted series indicating reformat
         if hasattr(hdrs[ind], 'ImageType'):
@@ -158,7 +159,7 @@ def get_series(dicom_dir, repeat=False):
             # Acquisition matrix
             fileout.write("%s" % "\tacqmtx=")
             try:
-                fileout.write("%s" % str(hdrs[ind].AcquisitionMatrix))
+                fileout.write("%s" % str(hdrs[ind].AcquisitionMatrix[:4])) # no more than four entries
             except Exception:
                 fileout.write("%s" % "None\t")
             # rows x columns
@@ -212,7 +213,7 @@ def substr_list(strings, substrs, substrnot):
                         match = True
         # report matches
         if match:
-            logger.info("- matched series: " + string + " (" + str(number) + ")")
+            logger.info("- Matched series: " + string + " (" + str(number) + ")")
             number = number + 1 # step the number of matching series
     return inds
 
@@ -258,13 +259,13 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                                             number = n
                                     except:
                                         pass
-                                # and description contains "repeat" or "redo", keep it instead
+                                # or if the description contains "repeat" or "redo", keep it instead
                                 if any(example in series[i] for example in ["repeat", "redo"]):
                                     keeper = i
                                     number = n
                 # Report keeper series
                 inds = keeper # replace inds with just the keeper index
-                logger.info("- keeping series: " + series[inds] + " (" + str(number) + ")")
+                logger.info("- Keeping series: " + series[inds] + " (" + str(number) + ")")
                 new_dicoms.append(dicoms[inds])
                 srs_dict[srs].update({"dicoms": dicoms[inds]})
                 new_hdrs.append(hdrs[inds])
@@ -274,7 +275,7 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                 new_dirs.append(dirs[inds])
                 srs_dict[srs].update({"dirs": dirs[inds]})
             else:
-                logger.info("- no matching series found!")
+                logger.info("- No matching series found!")
                 new_dicoms.append([])
                 srs_dict[srs].update({"dicoms": []})
                 new_hdrs.append([])
@@ -337,7 +338,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                                 ", renaming " + os.path.basename(outfilepath))
                     os.rename(converted, outfilepath)
                 # identify any extra files generated during conversion
-                more_extras = glob(outfilepath.rsplit('.nii', 1)[0] + '*.nii.gz').remove(outfilepath)
+                more_extras = glob(outfilepath.rsplit('.nii.gz', 1)[0] + '*.nii.gz').remove(outfilepath)
                 if more_extras:
                     extras = list(set(extras + more_extras))
             else:
@@ -413,7 +414,7 @@ def split_multiphase(nii_in, options, series, repeat=False):
     basepath = nii_in.rsplit('_', 1)[1]
     # first check if all desired outputs already exist, if so, don't do any work
     if not repeat and all([os.path.isfile(os.path.join(basepath, ser + '.nii.gz')) for ser in options.keys()]):
-        logger.info("- split option was specified for " + series + " but split outputs already exist")
+        logger.info("- Split option was specified for " + series + " but split outputs already exist")
         for k in options.keys():
             outnames.update({k: os.path.join(basepath, k + '.nii.gz')})
         return outnames
@@ -423,7 +424,7 @@ def split_multiphase(nii_in, options, series, repeat=False):
         data = nii.get_data()
         # if data is not 4D, then return
         if len(data.shape) < 4 or data.shape[3] < 2:
-            logger.info("- split option was specified for " + series +
+            logger.info("- Split option was specified for " + series +
                         ", and split outputs do not exist, but data is not 4D")
             return outnames
         # loop through splitting options - THIS WILL OVERWRITE OTHER SERIES
@@ -748,8 +749,15 @@ def reg_series(ser_dict, repeat=False):
     logger.info("REGISTERING IMAGES:")
     # dcm_dir prep
     dcm_dir = ser_dict["info"]["dcmdir"]
+    # sort serdict keys so that the atlas reg comes up first - this makes sure atlas registration is first
+    sorted_keys = []
+    for key in sorted(ser_dict.keys()):
+        if "reg_target" in ser_dict[key] and ser_dict[key]["reg_target"] == "atlas":
+            sorted_keys.insert(0, key)
+        else:
+            sorted_keys.append(key)
     # if reg is false, or if there is no input file found, then just make the reg filename same as unreg filename
-    for ser in ser_dict:
+    for ser in sorted_keys:
         # first, if there is no filename, set to None
         if not "filename" in ser_dict[ser].keys():
             ser_dict[ser].update({"filename": "None"})
@@ -759,7 +767,7 @@ def reg_series(ser_dict, repeat=False):
             ser_dict[ser].update({"reg": False})
         # if reg True, then do the registration using translation, affine, nonlin, or just applying existing transform
     # handle translation registration
-    for ser in ser_dict:
+    for ser in sorted_keys:
         if ser_dict[ser]["reg"] == "trans":
             if os.path.isfile(ser_dict[ser]["reg_target"]):
                 template = ser_dict[ser]["reg_target"]
@@ -782,7 +790,7 @@ def reg_series(ser_dict, repeat=False):
             ser_dict[ser].update({"filename_reg": niiout})
             ser_dict[ser].update({"transform": transforms})
     # handle affine registration
-    for ser in ser_dict:
+    for ser in sorted_keys:
         if ser_dict[ser]["reg"] == "affine":
             if os.path.isfile(ser_dict[ser]["reg_target"]):
                 template = ser_dict[ser]["reg_target"]
@@ -806,7 +814,7 @@ def reg_series(ser_dict, repeat=False):
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle faster affine registration
-    for ser in ser_dict:
+    for ser in sorted_keys:
         if ser_dict[ser]["reg"] == "fast_affine":
             if os.path.isfile(ser_dict[ser]["reg_target"]):
                 template = ser_dict[ser]["reg_target"]
@@ -830,7 +838,7 @@ def reg_series(ser_dict, repeat=False):
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle diffeo registration
-    for ser in ser_dict:
+    for ser in sorted_keys:
         if ser_dict[ser]["reg"] == "diffeo":
             if os.path.isfile(ser_dict[ser]["reg_target"]):
                 template = ser_dict[ser]["reg_target"]
@@ -854,7 +862,7 @@ def reg_series(ser_dict, repeat=False):
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle faster diffeo registration
-    for ser in ser_dict:
+    for ser in sorted_keys:
         if ser_dict[ser]["reg"] == "fast_diffeo":
             if os.path.isfile(ser_dict[ser]["reg_target"]):
                 template = ser_dict[ser]["reg_target"]
@@ -878,7 +886,7 @@ def reg_series(ser_dict, repeat=False):
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle applying an existing transform (assumes reg entry is the key for another series' transform)
-    for ser in ser_dict:
+    for ser in sorted_keys:
         try:
             if os.path.isfile(ser_dict[ser_dict[ser]["reg"]]["transform"]):
                 transforms = ser_dict[ser_dict[ser]["reg"]]["transform"]
@@ -895,7 +903,7 @@ def reg_series(ser_dict, repeat=False):
 def split_asl(ser_dict):
     # logging
     logger = logging.getLogger("my_logger")
-    logger.info("- splitting ASL using split_asl function")
+    logger.info("- Splitting ASL using split_asl function")
     # define files
     aslperf = ser_dict["ASL"]["filename"]
     aslperfa = aslperf.rsplit(".nii", 1)[0] + "a.nii.gz"
@@ -940,7 +948,7 @@ def split_dwi(ser_dict):
     dwi_bvecs = dwi.rsplit(".nii", 1)[0] + ".bvec"
     # first check if bvals is present, if so, then average all non B0
     if os.path.isfile(dwi_bvals):
-        logger.info("- creating DWI from multidirection data")
+        logger.info("- Creating DWI from multidirection data")
         with open(dwi_bvals, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
             rows = [item for item in reader]
@@ -954,7 +962,7 @@ def split_dwi(ser_dict):
             nib.save(dwi_nii, dwi)
     # if bvals is not present, then check if dwi is multidimensional, if so, just take first item
     else:
-        logger.info("- splitting first volume from multidirection DWI image")
+        logger.info("- Splitting first volume from multidirection DWI image")
         dwi_nii = nib.load(dwi)
         if len(dwi_nii.shape) > 3:
             dwi_d = dwi_nii.get_data()
@@ -988,7 +996,7 @@ def combine_dti55(ser_dict):
     if len(rows[0]) == 56:
         return ser_dict
     # handle case where directions > 56
-    logger.info("- averaging multiple B0s in DTI data")
+    logger.info("- Averaging multiple B0s in DTI data")
     if len(rows[0]) > 56:
         # assume multiple b0s and average them
         num_b0 = len(rows[0]) - 55
@@ -1022,7 +1030,7 @@ def combine_dti55(ser_dict):
     # first make sure bvals files are present
     if not os.path.isfile(dtia_bvals):
         return ser_dict
-    logger.info("- combining split DTI file using combine_dti55 function")
+    logger.info("- Combining split DTI file using combine_dti55 function")
     dti_f = nib.load(dti)
     dti_d = dti_f.get_data()
     dtia_f = nib.load(dtia)
@@ -1079,14 +1087,18 @@ def bvec_convert(bvals, bvecs):
     # if all the diseried outputs already exist, then return their paths
     if all([os.path.isfile(f) for f in [bvals, bvecs, acqp, index]]):
         return [bvals, bvecs, acqp, index]
-    # here bvals and bvecs exist but other files are missing, do conversion
+    # here bvals and bvecs exist but other files are missing, so we do conversion
     # bvecs first - read from file as tab delimited (dcm2nii output format), write as space delimited (FSL format)
-    logger.info("- generating param files for FSL eddy using bval and bvec files from dicom conversion")
+    logger.info("- Generating param files for FSL eddy using bval and bvec files from dicom conversion")
     with open(bvecs, 'r') as f:
         reader = csv.reader(f, delimiter='\t')
         bvecs_rows = [row for row in reader]
-    # check if bvecs was actually space delimited, if so don't rewrite
+    # check if bvecs was actually space delimited, if so don't do anything. If not, then overwrite as space delimited.
     if len(bvecs_rows[0])>1:
+        # check for mutliple B0 entries here - not sure if this is a real issue.
+
+
+
         with open(bvecs, 'w+') as f:
             writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
             writer.writerows(bvecs_rows)
@@ -1100,10 +1112,11 @@ def bvec_convert(bvals, bvecs):
             writer.writerows(bvals_rows)
     # make acqp and index files
     # acqp is hard coded for 4th param
+    # https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/eddy/Faq#How_do_I_know_what_to_put_into_my_--acqp_file
     # he fourth element in each row is the time (in seconds) between reading the center of the first echo and reading
     # the center of the last echo. It is the "dwell time" multiplied by "number of PE steps - 1" and it is also the
     # reciprocal of the PE bandwidth/pixel.
-    acqp_list = [[0, 1, 0, 0.0655]]
+    acqp_list = [[0, 1, 0, 0.0655]] # hard-coded for now.
     with open(acqp, 'w+') as f:
         writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
         writer.writerows(acqp_list)
@@ -1134,11 +1147,11 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
         fslroi = ExtractROI(in_file=dti_in, roi_file=b0, t_min=0, t_size=1)
         fslroi.terminal_output = "none"
         if not os.path.isfile(b0):
-            logger.info("- separating b0 image from DTI")
+            logger.info("- Separating b0 image from DTI")
             logger.debug(fslroi.cmdline)
             fslroi.run()
         else:
-            logger.info("- b0 image already exists at " + b0)
+            logger.info("- B0 image already exists at " + b0)
             logger.debug(fslroi.cmdline)
         # add b0 to list for affine registration
         ser_dict.update({"DTI_b0": {"filename": b0, "reg": "diffeo", "reg_target": "FLAIR", "no_norm": True}})
@@ -1189,13 +1202,16 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
         eddy.inputs.use_cuda = True
         eddy.inputs.repol = True
         eddy.terminal_output = "none"
+        stderr = 'None'
         if not os.path.isfile(dti_outfile) or repeat:
             logger.info("- Eddy correcting DWIs")
             try:
                 logger.debug(eddy.cmdline)
-                _ = eddy.run()
+                result = eddy.run()
+                stderr = result.runtime.stderr
             except Exception:
-                logger.info("- DTI eddy correction failed")
+                logger.info("- DTI eddy correction failed. Standard error sent to debug logger.")
+                logger.debug(stderr)
         else:
             logger.info("- Eddy corrected DWIs already exist at " + dti_outfile)
             logger.debug(eddy.cmdline)
@@ -1224,7 +1240,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
                         _ = dti.run()
                 except Exception:
                     if not os.path.isfile(fa_out):
-                        logger.info("- could not process DTI")
+                        logger.info("- Could not process DTI")
                     else:
                         logger.info("- DTI processing completed")
             else:
@@ -1239,7 +1255,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
                 ser_dict.update({"DTI_L2": {"filename": dti_out + "_L2.nii.gz", "reg": "DTI_b0", "no_norm": True}})
                 ser_dict.update({"DTI_L3": {"filename": dti_out + "_L3.nii.gz", "reg": "DTI_b0", "no_norm": True}})
         else:
-            logger.info("- skipping DTI processing since eddy corrected DTI does not exist")
+            logger.info("- Skipping DTI processing since eddy corrected DTI does not exist")
     return ser_dict
 
 # make mask based on t1gad and flair and apply to all other images
@@ -1269,7 +1285,7 @@ def brain_mask(ser_dict, repeat=False):
                 bet.inputs.frac = 0.5
                 bet.terminal_output = "none"
                 if not os.path.isfile(maskfile):
-                    logger.info("- making brain mask based on " + contrast)
+                    logger.info("- Making brain mask based on " + contrast)
                     logger.debug(bet.cmdline)
                     _ = bet.run()
                     if os.path.isfile(maskfile):
@@ -1279,19 +1295,19 @@ def brain_mask(ser_dict, repeat=False):
                     logger.debug(bet.cmdline)
                     masks.append(maskfile)
             else:
-                logger.info("- could not find registered " + contrast + ", skipping brain masking for this contrast")
+                logger.info("- Could not find registered " + contrast + ", skipping brain masking for this contrast")
         else:
-            logger.info("- no registered filename exists for " + contrast + ", skipping brain mask for this contrast")
+            logger.info("- No registered filename exists for " + contrast + ", skipping brain mask for this contrast")
 
     # combine brain masks using majority voting
     combined_mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
     majority_cmd = "ImageMath 3 " + combined_mask + " MajorityVoting " + " ".join(masks)
     if not os.path.isfile(combined_mask) and masks:  # if combined mask file does not exist, and indivudual masks exist
-        logger.info("- making combined brain mask at " + combined_mask)
+        logger.info("- Making combined brain mask at " + combined_mask)
         logger.debug(majority_cmd)
         _ = subprocess.call(majority_cmd, shell=True)
     else:
-        logger.info("- combined brain mask already exists at " + combined_mask)
+        logger.info("- Combined brain mask already exists at " + combined_mask)
         logger.debug(majority_cmd)
 
     # now apply to all other images if mask exists
@@ -1304,7 +1320,7 @@ def brain_mask(ser_dict, repeat=False):
                 if repeat or (not os.path.isfile(ser_masked) and os.path.isfile(ser_dict[sers]["filename_reg"])):
                     # apply mask using fsl maths
                     if not ser_dict[sers]["filename_reg"] == ser_dict[sers]["filename"]:
-                        logger.info("- masking " + ser_dict[sers]["filename_reg"])
+                        logger.info("- Masking " + ser_dict[sers]["filename_reg"])
                         # prep command line regardless of whether or not work will be done
                         mask_cmd = ApplyMask()
                         mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
@@ -1315,7 +1331,7 @@ def brain_mask(ser_dict, repeat=False):
                         _ = mask_cmd.run()
                         ser_dict[sers].update({"filename_masked": ser_masked})
                 elif os.path.isfile(ser_masked):
-                    logger.info("- masked file already exists for " + sers + " at " + ser_masked)
+                    logger.info("- Masked file already exists for " + sers + " at " + ser_masked)
                     # prep command line regardless of whether or not work will be done
                     mask_cmd = ApplyMask()
                     mask_cmd.inputs.in_file = ser_dict[sers]["filename_reg"]
@@ -1327,11 +1343,11 @@ def brain_mask(ser_dict, repeat=False):
                 elif sers == "info":
                     pass
                 else:
-                    logger.info("- skipping masking for " + sers + " as file does not exist")
+                    logger.info("- Skipping masking for " + sers + " as file does not exist")
             else:
-                logger.info("- no filename_reg entry exists for series " + sers)
+                logger.info("- No filename_reg entry exists for series " + sers)
     else:
-        logger.info("- combined mask file not found, expected location is: " + combined_mask)
+        logger.info("- Combined mask file not found, expected location is: " + combined_mask)
     return ser_dict
 
 # bias correction
@@ -1351,9 +1367,9 @@ def bias_correct(ser_dict, repeat=False):
             f = os.path.join(os.path.dirname(dcm_dir), idno + "_" + srs + "_wm.nii.gz")
             mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
             if not os.path.isfile(f):
-                logger.info("- skipping bias correction for " + srs + " as masked file does not exist.")
+                logger.info("- Skipping bias correction for " + srs + " as masked file does not exist.")
             elif not os.path.isfile(mask):
-                logger.info("- skipping bias correction for " + srs + " as mask image does not exist.")
+                logger.info("- Skipping bias correction for " + srs + " as mask image does not exist.")
             else:
                 # generate output filenames for corrected image and bias field
                 biasfile = f.rsplit(".nii", 1)[0] + "_biasmap.nii.gz"
@@ -1361,7 +1377,7 @@ def bias_correct(ser_dict, repeat=False):
                 biasimg = truncated_img.rsplit(".nii", 1)[0] + "b.nii.gz"
                 # first truncate image intensities, this also removes any negative values
                 if not os.path.isfile(truncated_img) or repeat:
-                    logger.info("- truncating image intensities for " + f)
+                    logger.info("- Truncating image intensities for " + f)
                     thresh = [0.001, 0.999]  # define thresholds
                     mask_img = nib.load(mask)  # load data
                     mask_img = mask_img.get_data()
@@ -1377,7 +1393,7 @@ def bias_correct(ser_dict, repeat=False):
                     nii = nib.Nifti1Image(img_trunc, affine)  # make nii and save
                     nib.save(nii, str(truncated_img))
                 else:
-                    logger.info("- truncated image already exists at " + truncated_img)
+                    logger.info("- Truncated image already exists at " + truncated_img)
                 # run bias correction on truncated image
                 # apply N4 bias correction
                 n4_cmd = N4BiasFieldCorrection()
@@ -1397,12 +1413,12 @@ def bias_correct(ser_dict, repeat=False):
                 n4_cmd.inputs.shrink_factor=3
                 #n4_cmd.inputs.weight_image=
                 if not os.path.isfile(biasimg) or repeat:
-                    logger.info("- bias correcting " + truncated_img)
+                    logger.info("- Bias correcting " + truncated_img)
                     logger.debug(n4_cmd.cmdline)
                     _ = n4_cmd.run()
                     ser_dict[srs].update({"filename_bias": biasimg})
                 else:
-                    logger.info("- bias corrected image already exists at " + biasimg)
+                    logger.info("- Bias corrected image already exists at " + biasimg)
                     logger.debug(n4_cmd.cmdline)
                     ser_dict[srs].update({"filename_bias": biasimg})
     return ser_dict
@@ -1421,7 +1437,7 @@ def norm_niis(ser_dict, repeat=False):
             normname = os.path.join(os.path.dirname(fn), os.path.basename(fn).split(".")[0] + "n.nii.gz")
             # if normalized file doesn't exist, make it
             if not os.path.isfile(normname) or repeat:
-                logger.info("- normalizing " + srs + " at " + fn)
+                logger.info("- Normalizing " + srs + " at " + fn)
                 # load image into memory
                 nii = nib.load(fn)
                 affine = nii.get_affine()
@@ -1434,7 +1450,7 @@ def norm_niis(ser_dict, repeat=False):
                 nib.save(nii, normname)
                 ser_dict[srs].update({"filename_norm": normname})
             else:
-                logger.info("- normalized " + srs + " already exists at " + normname)
+                logger.info("- Normalized " + srs + " already exists at " + normname)
                 ser_dict[srs].update({"filename_norm": normname})
     return ser_dict
 
@@ -1452,7 +1468,7 @@ def make_nii4d(ser_dict, repeat=False):
     for srs in ser_dict:
         if "filename_norm" in ser_dict[srs]: # normalized files only, others ignored
             files.append(ser_dict[srs]["filename_norm"])
-            logger.info("- adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
+            logger.info("- Adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
     if files and len(files)>1: # only attempt work if normalized files exist and there is more than 1
         # get dirname from first normalized image, make nii4d name from this
         bdir = os.path.dirname(files[0])
@@ -1466,14 +1482,14 @@ def make_nii4d(ser_dict, repeat=False):
         merger.inputs.merged_file = nii4d
         merger.terminal_output = "none"
         if not os.path.isfile(nii4d) or repeat:
-            logger.info("- creating 4D nii at " + nii4d)
+            logger.info("- Creating 4D nii at " + nii4d)
             logger.debug(merger.cmdline)
             merger.run()
         else:
             logger.info("- 4D Nii already exists at " + nii4d)
             logger.debug(merger.cmdline)
     else:
-        logger.info("- not enough files to make 4D Nii")
+        logger.info("- Not enough files to make 4D Nii")
     return ser_dict
 
 # create tumor segmentation
@@ -1489,13 +1505,13 @@ def tumor_seg(ser_dict):
     files = ["FLAIR", "T1", "T1gad", "T2"]
     for item in files:
         if not os.path.isfile(ser_dict[item]["filename"]) or not os.path.isfile(ser_dict[item]["filename_masked"]):
-            print("- missing file for segmentation")
+            print("- Missing file for segmentation")
             return ser_dict
     if not os.path.isfile(seg_file):
-        logger.info("- segmenting tumor")
+        logger.info("- Segmenting tumor")
         test_ecalabr.test(os.path.dirname(dcm_dir))
         # copy header information from warped masked flair to tumor seg
-        logger.info("- correcting nii header for segmentation file")
+        logger.info("- Correcting nii header for segmentation file")
         hdrfix = CopyGeom()
         hdrfix.inputs.dest_file = seg_file
         hdrfix.inputs.in_file = ser_dict["FLAIR"]["filename_masked"]
@@ -1503,7 +1519,7 @@ def tumor_seg(ser_dict):
         logger.debug(hdrfix.cmdline)
         _ = hdrfix.run()
     else:
-        logger.info("- tumor segmentation file aready exists at " + seg_file)
+        logger.info("- Tumor segmentation file aready exists at " + seg_file)
     return ser_dict
 
 # print and save series dict
