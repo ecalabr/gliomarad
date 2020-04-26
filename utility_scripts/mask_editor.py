@@ -5,12 +5,13 @@ from glob import glob
 import argparse
 
 ########################## define functions ##########################
-def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix):
+def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix=None, addl_suffix2=None):
 
     # handle suffixes without extension
     anat_suffix = anat_suffix + '.nii.gz' if not anat_suffix.endswith('.nii.gz') else anat_suffix
     mask_suffix = mask_suffix + '.nii.gz' if not mask_suffix.endswith('.nii.gz') else mask_suffix
     addl_suffix = addl_suffix + '.nii.gz' if not addl_suffix.endswith('.nii.gz') else addl_suffix
+    addl_suffix2 = addl_suffix2 + '.nii.gz' if not addl_suffix2.endswith('.nii.gz') else addl_suffix2
 
     # define outputs
     cmds = []
@@ -27,10 +28,21 @@ def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix):
             anatomy = anatomy[0]
             mask = mask[0]
             cmd = "itksnap --geometry 1920x1080 -g " + anatomy + " -s " + mask
+            addl = None
             if addl_suffix:
-                addl = glob(direc + "/*" + addl_suffix)[0]
-                assert os.path.isfile(addl), "File not found: {}".format(addl)
-                cmd = cmd + " -o " + addl
+                addl = glob(direc + "/*" + addl_suffix)
+                if not addl:
+                    print("No image found with suffix {}".format(addl_suffix))
+                else:
+                    cmd = cmd + " -o " + addl[0]
+            if addl_suffix2:
+                addl2 = glob(direc + "/*" + addl_suffix2)
+                if not addl2:
+                    print("No image found with suffix {}".format(addl_suffix2))
+                else:
+                    if not addl:
+                        cmd = cmd + " -o"
+                    cmd = cmd + " " + addl2[0]
             #print(cmd)
             os.system(cmd)
             print("Done with study " + os.path.basename(direc) + ": " + str(ind) + " of " + str(n_total))
@@ -60,6 +72,8 @@ if __name__ == '__main__':
                         help="Suffix of the anatomy image to use for editing")
     parser.add_argument('--addl', default="FLAIR_w.nii.gz",
                         help="Suffix of additional anatomy image to use for editing")
+    parser.add_argument('--addl2', default=None,
+                        help="Suffix of second additional anatomy image to use for editing")
     parser.add_argument('--direc', default=None,
                         help="Optionally name a specific directory to edit")
 
@@ -99,4 +113,4 @@ if __name__ == '__main__':
         exit()
 
     # do work
-    commands = seg_edit(my_direcs, args.anat, args.mask, args.addl)
+    commands = seg_edit(my_direcs, args.anat, args.mask, addl_suffix=args.addl, addl_suffix2=args.addl2)

@@ -11,7 +11,7 @@ import tensorflow as tf
 ########################## define functions ##########################
 # define function to make a batch of brain masks from a list of directories
 
-def batch_mask(infer_direcs, param_files, best_last, out_dir):
+def batch_mask(infer_direcs, param_files, best_last, out_dir, overwrite=False):
     # initiate outputs
     outnames = []
     # run inference and post-processing for each infer_dir
@@ -36,7 +36,7 @@ def batch_mask(infer_direcs, param_files, best_last, out_dir):
         # convert probs to mask with cleanup
         idno = os.path.basename(direc.rsplit('/', 1)[0] if direc.endswith('/') else direc)
         nii_out_path = os.path.join(direc, idno + "_combined_brain_mask.nii.gz")
-        if os.path.isfile(nii_out_path):
+        if os.path.isfile(nii_out_path) and not overwrite:
             print("Mask file already exists at {}".format(nii_out_path))
         else:
             if probs:
@@ -71,7 +71,10 @@ if __name__ == '__main__':
                         help="Index of directories to start processing at")
     parser.add_argument('--end', default=None,
                         help="Index of directories to end processing at")
-    parser.add_argument('--list', action="store_true", default=False)
+    parser.add_argument('--list', action="store_true", default=False,
+                        help="List the directories to be processed in order then exit")
+    parser.add_argument('--overwrite', action="store_true", default=False,
+                        help="Overwrite existing brain mask")
 
     # handle model_dir argument
     args = parser.parse_args()
@@ -131,4 +134,4 @@ if __name__ == '__main__':
             print("Skipping {} which does not have all the required images.".format(inf_dir))
 
     # do work
-    output_names = batch_mask(compl_infer_dirs, my_param_files, args.best_last, args.out_dir)
+    output_names = batch_mask(compl_infer_dirs, my_param_files, args.best_last, args.out_dir, overwrite=args.overwrite)

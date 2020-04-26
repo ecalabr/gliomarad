@@ -71,12 +71,16 @@ def convert_prob(files, nii_out_path, clean):
     data = np.argmax(data, axis=-1)
 
     # binary morph ops
-    struct = scipy.ndimage.generate_binary_structure(3, 2)
-    data = scipy.ndimage.morphology.binary_closing(data, structure=struct)
-    data = get_largest_component(data)
+    struct = scipy.ndimage.generate_binary_structure(3, 2) # rank 3, connectivity 2
+    struct = scipy.ndimage.iterate_structure(struct, 2) # iterate structure to 5x5x5
+    data = scipy.ndimage.morphology.binary_erosion(data, structure=struct) # erosion
+    data = get_largest_component(data) # largest connected component
+    data = scipy.ndimage.morphology.binary_dilation(data, structure=struct)  # dilation
+    data = scipy.ndimage.morphology.binary_fill_holes(data) # fill holes
+    data = scipy.ndimage.morphology.binary_closing(data, structure=struct) # final closing
 
     # make output nii
-    nii_out = nib.Nifti1Image(data.astype(np.uint8), nii.affine, nii.header)
+    nii_out = nib.Nifti1Image(data.astype(float), nii.affine, nii.header)
     nib.save(nii_out, nii_out_path)
 
     # if output is created, and cleanup is true, then clean

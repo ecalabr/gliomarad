@@ -11,8 +11,17 @@ import argparse
 def dicom_search(directory):
     for root, dirnames, filenames in os.walk(directory):
         for filename in filenames:
-            if filename.endswith(".dcm"):
-                return os.path.join(root, filename)
+            # if extension is dcm or there is no extension then test if it is a dicom
+            if filename.endswith('.dcm') or len(filename.split('.')) == 1:
+                try:
+                    hdr = dicom.read_file(os.path.join(root, filename))
+                    _ = hdr.AccessionNumber
+                    _ = hdr.PatientID
+                    return os.path.join(root, filename)
+                except:
+                    pass
+    print("No dicom file found in directory {}".format(directory))
+    return None
 
 # match an accession number and MRN from lists
 def patient_match(mr_list, ac_list, medrecn, accession):
@@ -37,20 +46,23 @@ def rename_dcm_dir(folders, acc_list, mr_list):
     for i in folders:
         fullpath = os.path.join(data_dir, i)
         dcm = dicom_search(fullpath)
-        hdr=dicom.read_file(dcm)
+        hdr = dicom.read_file(dcm)
         access = int(hdr.AccessionNumber)
         mrn = int(hdr.PatientID)
+        print("Accession is {}".format(access))
+        print("MRN is {}".format(mrn))
         # if MRN/accession don't match add a _ to directory beginning
         if patient_match(mr_list, acc_list, mrn, access):
             outdir = os.path.join(data_dir, str(access).zfill(8))
         else:
             outdir = os.path.join(data_dir, "_" + str(access).zfill(8))
-        print("mkdir " + outdir)
         if not os.path.isdir(outdir):
+            print("mkdir " + outdir)
             os.mkdir(outdir)
-        cmd = "mv " + fullpath + " " + outdir + "/."
-        #print(cmd)
-        subprocess.call(cmd, shell=True)
+        if not outdir == fullpath:
+            cmd = "mv " + fullpath + " " + outdir + "/."
+            #print(cmd)
+            subprocess.call(cmd, shell=True)
         outdirs.append(outdir)
     return outdirs
 

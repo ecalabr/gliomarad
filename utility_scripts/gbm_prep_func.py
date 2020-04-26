@@ -102,6 +102,23 @@ def unzip_file(dicom_zip):
     logger.info("- Working directory = " + os.path.dirname(dicomdir))
     return dicomdir
 
+# get all dicoms within a directory tree
+def dcm_find(parent_dir):
+    dcm_list = []
+    for root, dirnames, filenames in os.walk(parent_dir):
+        for filename in filenames:
+            # if extension is dcm or there is no extension then test if it is a dicom
+            if filename.endswith('.dcm'):
+                dcm_list.append(os.path.join(root, filename))
+            # if there is no file extension check if it is a dicom
+            elif len(filename.split('.')) == 1 and not filename.lower() == 'dicomdir':
+                try:
+                    _ = dicom.read_file(os.path.join(root, filename))
+                    dcm_list.append(os.path.join(root, filename))
+                except:
+                    pass
+    return dcm_list
+
 # function to get complete series list from dicom directory
 def get_series(dicom_dir, repeat=False):
     # logging
@@ -115,13 +132,15 @@ def get_series(dicom_dir, repeat=False):
     hdrs = []
     series = []
 
+    # find all dicom files in dicom directory
+    dcm_list = dcm_find(dicom_dir)
+
     # list directories
-    dirs = [os.path.join(dicom_dir, o) for o in os.listdir(dicom_dir)
-            if os.path.isdir(os.path.join(dicom_dir, o))]
+    dirs = sorted(list(set([os.path.dirname(it) for it in dcm_list])))
 
     # get lists of all dicom series
     for ind, direc in enumerate(dirs):
-        dicoms.append(glob(direc + "/*.dcm"))
+        dicoms.append([it for it in dcm_list if it.startswith(direc)])
         hdrs.append(dicom.read_file(dicoms[ind][0]))
         # add extra text to decription of postcontrast series indicating contrast was given
         # only if contrast agent is specified and is not empty
@@ -165,7 +184,10 @@ def get_series(dicom_dir, repeat=False):
             # rows x columns
             fileout.write("%s" % "\trowcol=")
             try:
-                fileout.write("%s" % str(hdrs[ind].Rows) + "x" + str(hdrs[ind].Columns))
+                if len(str(hdrs[ind].Rows) + "x" + str(hdrs[ind].Columns)) <= 7:
+                    fileout.write("%s" % str(hdrs[ind].Rows) + "x" + str(hdrs[ind].Columns))
+                else:
+                    fileout.write("%s" % ">1Kx1K")
             except Exception:
                 fileout.write("%s" % "None")
             # slices
@@ -309,6 +331,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
 
     # convert all subdirectories from dicom to nii
     for series in strs_dict:
+        convert_flag = False
         if "dicoms" in strs_dict[series].keys():
             converter.inputs.source_names = strs_dict[series]["dicoms"]
             # series_string = strs_dict[series]["series"]
@@ -317,11 +340,12 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
             converter.inputs.out_filename = outfilename
             outfilepath = os.path.join(os.path.dirname(dicom_dir), outfilename + ".nii.gz")
 
-            # handle case where output file does not exist yet and pre-reqs are presebt
+            # handle case where output file does not exist yet and pre-reqs are present
             if not os.path.isfile(outfilepath) and not strs_dict[series]["series"] == "None":
                 logger.info("- Converting " + outfilename)
                 logger.debug(converter.cmdline)
                 result = converter.run()
+                convert_flag = True
                 # make sure that file wasnt named something else during conversion
                 if isinstance(result.outputs.converted_files, list):
                     converted = result.outputs.converted_files[0]
@@ -330,7 +354,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                         extras = []
                 else:
                     converted = result.outputs.converted_files
-                # handle case where converted files is undefined
+                # handle case where converted file is undefined
                 if not converted:
                     converted = outfilepath
                 if not converted == outfilepath:
@@ -348,6 +372,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                     logger.info("- Converting " + outfilename)
                     logger.debug(converter.cmdline)
                     result = converter.run()
+                    convert_flag = True
                     # make sure that file wasnt named something else during conversion, if so, rename to expected name
                     if isinstance(result.outputs.converted_files, list):
                         converted = result.outputs.converted_files[0]
@@ -360,7 +385,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                         logger.info("- " + series + " converted file is " + converted + ", renaming to " + outfilepath)
                         os.rename(converted, outfilepath)
                     # identify any extra files generated during conversion
-                    more_extras = glob(outfilepath.rsplit('.', 1)[0] + '*.nii.gz')
+                    more_extras = glob(outfilepath.rsplit('.nii.gz', 1)[0] + '*.nii.gz')
                     extras = list(set(extras + more_extras))
 
                 # handle case where outfile aready exists and repeat is false, or where prerequisites don't exist
@@ -374,8 +399,8 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                 # if output file exists, regardless of whether created or not append name to outfile list
                 output_ser.append(outfilepath)
                 strs_dict[series].update({"filename": outfilepath})
-                # handle options for post-coversion nifti processing here (only if output file exists)
-                if any([item in strs_dict[series].keys() for item in ['split', 'split_func']]):
+                # handle options for post-coversion nifti processing here (only if output file is newly created)
+                if convert_flag and any([item in strs_dict[series].keys() for item in ['split', 'split_func']]):
                     # handle use of a custom split function for splitting data
                     # this is where split_asl and combine_dti55 functions are used via finding it in the globals
                     if 'split_func' in strs_dict[series].keys():
@@ -457,9 +482,9 @@ def affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
     antsreg.inputs.moving_image=moving_nii
     antsreg.inputs.output_transform_prefix=outprefix
     antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]] * 2
-    antsreg.inputs.sigma_units=['vox'] * 2
-    antsreg.inputs.transforms=['Rigid', 'Affine']  # ['Rigid', 'Affine', 'SyN']
+    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0], [6, 4, 1, 0]]
+    antsreg.inputs.sigma_units=['mm', 'mm']
+    antsreg.inputs.transforms=['Rigid', 'Affine']
     antsreg.terminal_output='none'
     antsreg.inputs.use_histogram_matching=True
     antsreg.inputs.write_composite_transform=True
@@ -469,16 +494,16 @@ def affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
     antsreg.inputs.winsorize_lower_quantile=0.005
     antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.metric=['Mattes', 'Mattes']  # ['MI', 'MI', 'CC']
-    antsreg.inputs.metric_weight=[1.0] * 2
-    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000, 1000]] * 2  # [100, 70, 50, 20]
+    antsreg.inputs.metric=['Mattes', 'Mattes']
+    antsreg.inputs.metric_weight=[1.0, 1.0]
+    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000, 1000], [1000, 1000, 1000, 1000]]
     antsreg.inputs.convergence_threshold=[1e-07, 1e-07]
     antsreg.inputs.convergence_window_size=[10, 10]
-    antsreg.inputs.radius_or_number_of_bins=[32, 32]  # 4
-    antsreg.inputs.sampling_strategy=['Regular', 'Regular']  # 'None'
+    antsreg.inputs.radius_or_number_of_bins=[32, 32]
+    antsreg.inputs.sampling_strategy=['Regular', 'Regular']
     antsreg.inputs.sampling_percentage=[0.25, 0.25]  # 1
-    antsreg.inputs.shrink_factors=[[4, 3, 2, 1]] * 2  # *3
-    antsreg.inputs.transform_parameters=[(0.1,), (0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
+    antsreg.inputs.shrink_factors=[[4, 3, 2, 1], [4, 3, 2, 1]]
+    antsreg.inputs.transform_parameters=[(0.1,), (0.1,)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -509,9 +534,9 @@ def fast_affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=Fals
     antsreg.inputs.moving_image=moving_nii
     antsreg.inputs.output_transform_prefix=outprefix
     antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.inputs.smoothing_sigmas=[[6, 4, 1]] * 2
-    antsreg.inputs.sigma_units=['mm'] * 2
-    antsreg.inputs.transforms=['Rigid', 'Affine']  # ['Rigid', 'Affine', 'SyN']
+    antsreg.inputs.smoothing_sigmas=[[6, 4, 1], [6, 4, 1]]
+    antsreg.inputs.sigma_units=['mm', 'mm']
+    antsreg.inputs.transforms=['Rigid', 'Affine']
     antsreg.terminal_output='none'
     antsreg.inputs.use_histogram_matching=True
     antsreg.inputs.write_composite_transform=True
@@ -521,16 +546,16 @@ def fast_affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=Fals
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
     antsreg.inputs.winsorize_lower_quantile=0.005
     antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.metric=['Mattes', 'Mattes']  # ['MI', 'MI', 'CC']
-    antsreg.inputs.metric_weight=[1.0] * 2
-    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000]] * 2  # [100, 70, 50, 20]
+    antsreg.inputs.metric=['Mattes', 'Mattes']
+    antsreg.inputs.metric_weight=[1.0, 1.0]
+    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000], [1000, 1000, 1000]]
     antsreg.inputs.convergence_threshold=[1e-04, 1e-04]
     antsreg.inputs.convergence_window_size=[5, 5]
-    antsreg.inputs.radius_or_number_of_bins=[32, 32]  # 4
-    antsreg.inputs.sampling_strategy=['Regular', 'Regular']  # 'None'
-    antsreg.inputs.sampling_percentage=[0.25, 0.25]  # 1
-    antsreg.inputs.shrink_factors=[[6, 4, 2]] * 2  # *3
-    antsreg.inputs.transform_parameters=[(0.1,), (0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
+    antsreg.inputs.radius_or_number_of_bins=[32, 32]
+    antsreg.inputs.sampling_strategy=['Regular', 'Regular']
+    antsreg.inputs.sampling_percentage=[0.25, 0.25]
+    antsreg.inputs.shrink_factors=[[6, 4, 2], [6, 4, 2]] * 2
+    antsreg.inputs.transform_parameters=[(0.1,), (0.1,)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -568,21 +593,21 @@ def diffeo_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
     antsreg.inputs.winsorize_lower_quantile=0.005
     antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.shrink_factors=[[8, 4, 2, 1], [4, 2, 1]]
-    antsreg.inputs.smoothing_sigmas=[[4, 2, 1, 0], [2, 1, 0]]
-    antsreg.inputs.sigma_units=['vox', 'mm']
-    antsreg.inputs.transforms=['Affine', 'SyN']
-    antsreg.inputs.use_histogram_matching=[True, True]
+    antsreg.inputs.shrink_factors=[[4, 3, 2, 1], [8, 4, 2, 1], [4, 2, 1]]
+    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0], [4, 2, 1, 0], [2, 1, 0]]
+    antsreg.inputs.sigma_units=['mm', 'mm', 'mm']
+    antsreg.inputs.transforms=['Rigid', 'Affine', 'SyN']
+    antsreg.inputs.use_histogram_matching=[True, True, True]
     antsreg.inputs.write_composite_transform=True
-    antsreg.inputs.metric=['MI', 'Mattes']
-    antsreg.inputs.metric_weight=[1.0, 1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 500, 250, 50], [50, 50, 25]]
-    antsreg.inputs.convergence_threshold=[1e-07, 1e-07]
-    antsreg.inputs.convergence_window_size=[5, 5]
-    antsreg.inputs.radius_or_number_of_bins=[32, 32]
-    antsreg.inputs.sampling_strategy=['Regular', 'None']  # 'None'
-    antsreg.inputs.sampling_percentage=[0.25, 1]
-    antsreg.inputs.transform_parameters=[(0.1,), (0.1, 3.0, 0.0)]
+    antsreg.inputs.metric=['Mattes', 'Mattes', 'Mattes']
+    antsreg.inputs.metric_weight=[1.0, 1.0, 1.0]
+    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000, 1000], [1000, 1000, 1000, 1000], [250, 100, 50]]
+    antsreg.inputs.convergence_threshold=[1e-07, 1e-07, 1e-07]
+    antsreg.inputs.convergence_window_size=[5, 5, 5]
+    antsreg.inputs.radius_or_number_of_bins=[32, 32, 32]
+    antsreg.inputs.sampling_strategy=['Regular', 'Regular', 'None']  # 'None'
+    antsreg.inputs.sampling_percentage=[0.25, 0.25, 1]
+    antsreg.inputs.transform_parameters=[(0.1,), (0.1,), (0.1, 3.0, 0.0)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -698,6 +723,59 @@ def trans_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
         logger.debug(antsreg.cmdline)
     return trnsfm
 
+
+# ANTS translation
+# takes moving and template niis and a work dir
+# performs fast translation only registration and returns a list of transforms
+def rigid_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
+    # logging
+    logger = logging.getLogger("my_logger")
+    # get basenames
+    moving_name = os.path.basename(moving_nii).split(".")[0]
+    template_name = os.path.basename(template_nii).split(".")[0]
+    outprefix = os.path.join(work_dir, moving_name + "_2_" + template_name + "_")
+
+    # registration setup
+    antsreg = Registration()
+    antsreg.inputs.args='--float'
+    antsreg.inputs.fixed_image=template_nii
+    antsreg.inputs.moving_image=moving_nii
+    antsreg.inputs.output_transform_prefix=outprefix
+    antsreg.inputs.num_threads=multiprocessing.cpu_count()
+    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]]
+    antsreg.inputs.sigma_units=['vox']
+    antsreg.inputs.transforms=['Rigid']  # ['Rigid', 'Affine', 'SyN']
+    antsreg.terminal_output='none'
+    antsreg.inputs.use_histogram_matching=True
+    antsreg.inputs.write_composite_transform=True
+    if isinstance(option, dict) and "reg_com" in option.keys():
+        antsreg.inputs.initial_moving_transform_com = option["reg_com"]
+    else:
+        antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
+    antsreg.inputs.winsorize_lower_quantile=0.005
+    antsreg.inputs.winsorize_upper_quantile=0.995
+    antsreg.inputs.metric=['Mattes']  # ['MI', 'MI', 'CC']
+    antsreg.inputs.metric_weight=[1.0]
+    antsreg.inputs.number_of_iterations=[[1000, 500, 250, 50]]  # [100, 70, 50, 20]
+    antsreg.inputs.convergence_threshold=[1e-07]
+    antsreg.inputs.convergence_window_size=[10]
+    antsreg.inputs.radius_or_number_of_bins=[32]  # 4
+    antsreg.inputs.sampling_strategy=['Regular']  # 'None'
+    antsreg.inputs.sampling_percentage=[0.25]  # 1
+    antsreg.inputs.shrink_factors=[[4, 3, 2, 1]]  # *3
+    antsreg.inputs.transform_parameters=[(0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
+
+    trnsfm = outprefix + "Composite.h5"
+    if not os.path.isfile(trnsfm) or repeat:
+        logger.info("- Registering image " + moving_nii + " to " + template_nii)
+        logger.debug(antsreg.cmdline)
+        antsreg.run()
+    else:
+        logger.info("- Warp file already exists at " + trnsfm)
+        logger.debug(antsreg.cmdline)
+    return trnsfm
+
+
 # Ants apply transforms to list
 # takes moving and reference niis, an output filename, plus a transform list
 # applys transform and saves output as output_nii
@@ -786,7 +864,40 @@ def reg_series(ser_dict, repeat=False):
             else:
                 option = None
             transforms = trans_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
-            niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+            # handle interp option
+            if "interp" in ser_dict[ser].keys():
+                interp = ser_dict[ser]["interp"]
+            else:
+                interp = 'Linear'
+            niiout = ants_apply(movinga, template, interp, transforms, os.path.dirname(dcm_dir), repeat)
+            ser_dict[ser].update({"filename_reg": niiout})
+            ser_dict[ser].update({"transform": transforms})
+    # handle rigid registration
+    for ser in sorted_keys:
+        if ser_dict[ser]["reg"] == "rigid":
+            if os.path.isfile(ser_dict[ser]["reg_target"]):
+                template = ser_dict[ser]["reg_target"]
+            else:
+                template = ser_dict[ser_dict[ser]["reg_target"]]["filename_reg"]
+            # handle surrogate moving image
+            if "reg_moving" in ser_dict[ser]:
+                movingr = ser_dict[ser]["reg_moving"]
+                movinga = ser_dict[ser]["filename"]
+            else:
+                movingr = ser_dict[ser]["filename"]
+                movinga = ser_dict[ser]["filename"]
+            # handle registration options here
+            if "reg_option" in ser_dict[ser].keys():
+                option = ser_dict[ser]["reg_option"]
+            else:
+                option = None
+            transforms = rigid_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
+            # handle interp option
+            if "interp" in ser_dict[ser].keys():
+                interp = ser_dict[ser]["interp"]
+            else:
+                interp = 'Linear'
+            niiout = ants_apply(movinga, template, interp, transforms, os.path.dirname(dcm_dir), repeat)
             ser_dict[ser].update({"filename_reg": niiout})
             ser_dict[ser].update({"transform": transforms})
     # handle affine registration
@@ -810,7 +921,12 @@ def reg_series(ser_dict, repeat=False):
                 else:
                     option = None
                 transforms = affine_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
-                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                # handle interp option
+                if "interp" in ser_dict[ser].keys():
+                    interp = ser_dict[ser]["interp"]
+                else:
+                    interp = 'Linear'
+                niiout = ants_apply(movinga, template, interp, transforms, os.path.dirname(dcm_dir), repeat)
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle faster affine registration
@@ -834,7 +950,12 @@ def reg_series(ser_dict, repeat=False):
                 else:
                     option = None
                 transforms = fast_affine_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
-                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                # handle interp option
+                if "interp" in ser_dict[ser].keys():
+                    interp = ser_dict[ser]["interp"]
+                else:
+                    interp = 'Linear'
+                niiout = ants_apply(movinga, template, interp, transforms, os.path.dirname(dcm_dir), repeat)
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle diffeo registration
@@ -858,7 +979,12 @@ def reg_series(ser_dict, repeat=False):
                 else:
                     option = None
                 transforms = diffeo_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
-                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                # handle interp option
+                if "interp" in ser_dict[ser].keys():
+                    interp = ser_dict[ser]["interp"]
+                else:
+                    interp = 'Linear'
+                niiout = ants_apply(movinga, template, interp, transforms, os.path.dirname(dcm_dir), repeat)
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle faster diffeo registration
@@ -882,21 +1008,31 @@ def reg_series(ser_dict, repeat=False):
                 else:
                     option = None
                 transforms = fast_diffeo_reg(movingr, template, os.path.dirname(dcm_dir), option, repeat)
-                niiout = ants_apply(movinga, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                # handle interp option
+                if "interp" in ser_dict[ser].keys():
+                    interp = ser_dict[ser]["interp"]
+                else:
+                    interp = 'Linear'
+                niiout = ants_apply(movinga, template, interp, transforms, os.path.dirname(dcm_dir), repeat)
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
     # handle applying an existing transform (assumes reg entry is the key for another series' transform)
     for ser in sorted_keys:
-        try:
-            if os.path.isfile(ser_dict[ser_dict[ser]["reg"]]["transform"]):
+        if ser_dict[ser]["reg"] in sorted_keys:
+            try:
                 transforms = ser_dict[ser_dict[ser]["reg"]]["transform"]
                 template = ser_dict[ser_dict[ser]["reg"]]["filename_reg"]
                 moving = ser_dict[ser]["filename"]
-                niiout = ants_apply(moving, template, 'Linear', transforms, os.path.dirname(dcm_dir), repeat)
+                # handle interp option
+                if "interp" in ser_dict[ser].keys():
+                    interp = ser_dict[ser]["interp"]
+                else:
+                    interp = 'Linear'
+                niiout = ants_apply(moving, template, interp, transforms, os.path.dirname(dcm_dir), repeat)
                 ser_dict[ser].update({"filename_reg": niiout})
                 ser_dict[ser].update({"transform": transforms})
-        except Exception:
-            pass
+            except Exception:
+                logger.info("- Error attempting to apply existing transform to seies {}".format(ser))
     return ser_dict
 
 # split asl and anatomic image (if necessary)
@@ -1270,7 +1406,7 @@ def brain_mask(ser_dict, repeat=False):
     logger.info("BRAIN MASKING:")
 
     # for loop for masking different contrasts
-    to_mask = ["FLAIR", "T1gad", "DWI"]  # list of contrasts to mask
+    to_mask = [c for c in ["FLAIR", "T1gad", "DWI"] if c in ser_dict.keys()] # list of contrasts to mask
     masks = []  # list of completed masks
     for contrast in to_mask:
         # if original and registered files exist for this contrast
@@ -1301,8 +1437,13 @@ def brain_mask(ser_dict, repeat=False):
 
     # combine brain masks using majority voting
     combined_mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
-    majority_cmd = "ImageMath 3 " + combined_mask + " MajorityVoting " + " ".join(masks)
-    if not os.path.isfile(combined_mask) and masks:  # if combined mask file does not exist, and indivudual masks exist
+    if len(masks) == 0:
+        majority_cmd = None
+    elif len(masks) == 1:
+        majority_cmd = "cp " + masks[0] + " " + combined_mask
+    else:
+        majority_cmd = "ImageMath 3 " + combined_mask + " MajorityVoting " + " ".join(masks)
+    if not os.path.isfile(combined_mask) and majority_cmd:  # if combined mask file does not exist, and indivudual masks exist
         logger.info("- Making combined brain mask at " + combined_mask)
         logger.debug(majority_cmd)
         _ = subprocess.call(majority_cmd, shell=True)

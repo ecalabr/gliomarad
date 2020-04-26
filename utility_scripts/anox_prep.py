@@ -30,7 +30,7 @@ def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,d
     #series_dict = dti_proc(series_dict, dti_index, dti_acqp, dti_bvec, dti_bval)
     series_dict = reg_series(series_dict)
     series_dict = brain_mask(series_dict)
-    series_dict = bias_correct(series_dict)
+    #series_dict = bias_correct(series_dict)
     #series_dict = norm_niis(series_dict)
     #series_dict = make_nii4d(series_dict)
     #series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
@@ -70,8 +70,8 @@ if __name__ == '__main__':
     end = args.end
 
     # check that all required files are in support directory
-    my_param_file = os.path.join(support_dir, "param_files/mening.json")
-    my_reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_asym_09c.nii.gz")
+    my_param_file = os.path.join(support_dir, "param_files/anox.json")
+    my_reg_atlas = os.path.join(support_dir, "atlases/mni_icbm152_t1_tal_nlin_sym_09c_masked.nii.gz")
     my_dti_index = os.path.join(support_dir, "DTI_files/GE_hardi_55_index.txt")
     my_dti_acqp = os.path.join(support_dir, "DTI_files/GE_hardi_55_acqp.txt")
     my_dti_bvec = os.path.join(support_dir, "DTI_files/GE_hardi_55.bvec")

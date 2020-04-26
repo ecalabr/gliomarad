@@ -482,7 +482,11 @@ def test(dir_list, bias=True):
             else:
                 pred1_lc = ndimage.morphology.binary_closing(pred1, structure=struct)
                 pred1_lc = get_largest_two_component(pred1_lc, False, wt_threshold)
-                bbox1 = get_ND_bounding_box(pred1_lc, margin)
+                if pred1_lc.sum() == 0:
+                    print('net1 output is null', temp_name)
+                    bbox1 = get_ND_bounding_box(temp_imgs[0] > 0, margin)
+                else:
+                    bbox1 = get_ND_bounding_box(pred1_lc, margin)
             sub_imgs = [crop_ND_volume_with_bounding_box(one_img, bbox1[0], bbox1[1]) for one_img in temp_imgs]
             sub_weight = crop_ND_volume_with_bounding_box(temp_weight, bbox1[0], bbox1[1])
 

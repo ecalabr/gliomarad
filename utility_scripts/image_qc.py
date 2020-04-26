@@ -40,11 +40,11 @@ def image_qc(direcs, data_dir, macro_file, ij_java, ij_jar, ij_dir, missing):
         # T1 = {'T1': glob(direc + "/*T1_w.nii.gz")}
         # img_list = [dwi, t1fs, T1gad, T2FS, T1]
         # alternative for meningioma project
-        #flair = {'FLAIR': glob(direc + "/*FLAIR_w.nii.gz")}
-        #t1 = {'T1': glob(direc + "/*T1_w.nii.gz")}
-        #t1gad = {'T1gad': glob(direc + "/*T1gad_w.nii.gz")}
-        #t2 = {'T2': glob(direc + "/*T2_w.nii.gz")}
-        #img_list = [t1, t1gad, t2, flair]
+        flair = {'FLAIR': glob(direc + "/*FLAIR_w.nii.gz")}
+        t1 = {'T1': glob(direc + "/*T1_w.nii.gz")}
+        t1gad = {'T1gad': glob(direc + "/*T1gad_w.nii.gz")}
+        t2 = {'T2': glob(direc + "/*T2_w.nii.gz")}
+        img_list = [t1, t1gad, t2, flair]
 
         # check if all data present
         compl = False
