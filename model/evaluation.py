@@ -27,8 +27,8 @@ def evaluate_sess(sess, model_spec, writer=None):
         try:
             sess.run(update_metrics)
             metrics_val = sess.run({k: v[0] for k, v in eval_metrics.items()})
-            metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
-            logging.info("Batch = " + str(n).zfill(6) + " " + metrics_string)
+            metrics_string = " ; ".join("{} = {:0.5e}".format(k, v) for k, v in metrics_val.items())
+            logging.info("Batch = %06d " % n + metrics_string)
             n = n+1
         except tf.errors.OutOfRangeError:
             break

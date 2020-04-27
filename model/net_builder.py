@@ -235,7 +235,7 @@ def custom_resid_unet(features, params, is_training, reuse=False):
     # unet decoder limb with residual bottleneck blocks
     for n, n_layers in enumerate(unet_layout):
         # upsample block
-        filt = filt / 2  # half filters before upsampling
+        filt = int(round(filt / 2))  # half filters before upsampling
         layer_name = 'dec_conv_upsample' + str(n)
         tensor = deconv2d_layer(tensor, filt, ksize, [2, 2], dfmt, layer_name, reuse)
         tensor = batch_norm(tensor, is_training, dfmt, 'dec_conv_upsample_bn_' + str(n), reuse)

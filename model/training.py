@@ -52,7 +52,7 @@ def train_sess(sess, model_spec, writer, params, current_epoch):
     metrics_values = {k: v[0] for k, v in metrics.items()}
     metrics_val = sess.run(metrics_values)
     metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
-    logging.info("- Train metrics: " + metrics_string)
+    logging.info("Train metrics: " + metrics_string)
 
 
 def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, restore_from=None):
@@ -104,7 +104,7 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
             metrics = evaluate_sess(sess, eval_model_spec, eval_writer)
 
             # If best_eval, best_save_path
-            eval_error = np.mean(metrics.values())  # eval performance using 1/mean error metric
+            eval_error = np.mean(list(metrics.values()))  # eval performance using 1/mean error metric
             if eval_error <= best_eval_error:
                 # Store new best accuracy
                 best_eval_error = eval_error

@@ -9,7 +9,11 @@ from model.training import train_and_evaluate
 from model.patch_input_fn import patch_input_fn
 from model.patch_input_fn import patch_input_fn_3d
 from model.model_fn import model_fn
-
+import tensorflow as tf
+import tensorflow.python.util.deprecation as deprecation
+# handle tensorflow compatibility issues
+deprecation._PRINT_DEPRECATION_WARNINGS = False  # suppresses depreciation warnings
+tf.compat.v1.disable_eager_execution()  # turns off eager execution which does not work with iterators
 
 # define functions
 def train_one(param_file):

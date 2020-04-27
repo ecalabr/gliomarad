@@ -149,8 +149,8 @@ def _expand_region_dims(input_dims, region_bbox, out_dims):
             if item < 0:
                 item = 0
         else:  # for odd indices, make sure they do not exceed original dims
-            if item > input_dims[(i-1)/2]:
-                item = input_dims[(i-1)/2]
+            if item > input_dims[int(round((i-1)/2))]:
+                item = input_dims[int(round((i-1)/2))]
         new_bbox.append(item)
 
     return new_bbox
@@ -349,6 +349,15 @@ def _zero_pad_image(input_data, out_dims, axes):
 ##############################################
 
 
+def byte_convert(byte_data):
+    if isinstance(byte_data, bytes):  return byte_data.decode()
+    if isinstance(byte_data, dict):   return dict(map(byte_convert, byte_data.items()))
+    if isinstance(byte_data, tuple):  return map(byte_convert, byte_data)
+    if isinstance(byte_data, (np.ndarray, list)):   return list(map(byte_convert, byte_data))
+
+    return byte_data
+
+
 def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, plane='ax', norm=True,
                               norm_lab=True, norm_mode='zero_mean'):
     """
@@ -364,6 +373,14 @@ def _load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, o
     :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
+
+    # convert bytes to strings
+    study_dir = byte_convert(study_dir)
+    feature_prefx = byte_convert(feature_prefx)
+    label_prefx = byte_convert(label_prefx)
+    plane = byte_convert(plane)
+    data_fmt = byte_convert(data_fmt)
+    norm_mode = byte_convert(norm_mode)
 
     # sanity checks
     if not os.path.isdir(study_dir):
@@ -454,11 +471,21 @@ def _load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pr
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
 
+    # convert bytes to strings
+    study_dir = byte_convert(study_dir)
+    feature_prefx = byte_convert(feature_prefx)
+    label_prefx = byte_convert(label_prefx)
+    mask_prefx = byte_convert(mask_prefx)
+    plane = byte_convert(plane)
+    data_fmt = byte_convert(data_fmt)
+    norm_mode = byte_convert(norm_mode)
+    aug = byte_convert(aug)
+
     # sanity checks
     if plane not in ['ax', 'cor', 'sag']:
         raise ValueError("Did not understand specified plane: " + str(plane))
     if data_fmt not in ['channels_last', 'channels_first']:
-        raise ValueError("Did not understand specified data_fmt: " + str(plane))
+        raise ValueError("Did not understand specified data_fmt: " + str(data_fmt))
 
     # define full paths
     data_files = [glob(study_dir + '/*' + contrast + '.nii.gz')[0] for contrast in feature_prefx]
