@@ -10,7 +10,7 @@
 #
 from __future__ import absolute_import, print_function
 import tensorflow as tf
-from utility_scripts.external_software.brats17_master.util.data_process import *
+from external_software.brats17_master.util.data_process import *
 
 
 def volume_probability_prediction(temp_imgs, data_shape, label_shape, data_channel,

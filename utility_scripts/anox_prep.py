@@ -1,5 +1,5 @@
 import time
-from utility_scripts.gbm_prep_func import *
+from gbm_prep_func import *
 import argparse
 
 
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     # do work
     for i, dcm in enumerate(dcms, 1):
         start_t = time.time()
-        serdict = dcm_dir_proc(dcm, my_param_file, my_reg_atlas, my_dti_index, my_dti_acqp, my_dti_bvec, my_dti_bval)
+        serdict = dcm_dir_proc(dcm, my_param_file, my_reg_atlas)
         elapsed_t = time.time() - start_t
         print("\nCOMPLETED # " + str(i) + " of " + str(len(dcms)) + " in " + str(
             round(elapsed_t / 60, 2)) + " minute(s)\n")

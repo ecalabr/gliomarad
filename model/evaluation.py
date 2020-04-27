@@ -37,7 +37,7 @@ def evaluate_sess(sess, model_spec, writer=None):
     metrics_values = {k: v[0] for k, v in eval_metrics.items()}
     metrics_val = sess.run(metrics_values)
     metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
-    logging.info("- Eval metrics: " + metrics_string)
+    logging.info("Eval metrics: " + metrics_string)
 
     # Add summaries manually to writer at global_step_val
     if writer is not None:

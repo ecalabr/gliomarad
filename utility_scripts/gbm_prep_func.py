@@ -15,10 +15,8 @@ from nipype.interfaces.fsl.maths import ApplyMask
 from nipype.interfaces.fsl import Eddy
 from nipype.interfaces.fsl import DTIFit
 from nipype.interfaces.fsl import ExtractROI
-from nipype.interfaces.fsl.utils import CopyGeom
 from nipype.interfaces.fsl import Merge
 from nipype.interfaces.ants import N4BiasFieldCorrection
-import utility_scripts.external_software.brats17_master.test_ecalabr as test_ecalabr
 import json
 import re
 import csv
@@ -1646,37 +1644,6 @@ def make_nii4d(ser_dict, repeat=False):
             logger.debug(merger.cmdline)
     else:
         logger.info("- Not enough files to make 4D Nii")
-    return ser_dict
-
-
-# create tumor segmentation
-def tumor_seg(ser_dict):
-    # logging
-    logger = logging.getLogger("my_logger")
-    # id setup
-    idno = ser_dict["info"]["id"]
-    # dcm_dir prep
-    dcm_dir = ser_dict["info"]["dcmdir"]
-    logger.info("SEGMENTING TUMOR VOLUMES:")
-    seg_file = os.path.join(os.path.dirname(dcm_dir), idno + "_tumor_seg.nii.gz")
-    files = ["FLAIR", "T1", "T1gad", "T2"]
-    for item in files:
-        if not os.path.isfile(ser_dict[item]["filename"]) or not os.path.isfile(ser_dict[item]["filename_masked"]):
-            print("- Missing file for segmentation")
-            return ser_dict
-    if not os.path.isfile(seg_file):
-        logger.info("- Segmenting tumor")
-        test_ecalabr.test(os.path.dirname(dcm_dir))
-        # copy header information from warped masked flair to tumor seg
-        logger.info("- Correcting nii header for segmentation file")
-        hdrfix = CopyGeom()
-        hdrfix.inputs.dest_file = seg_file
-        hdrfix.inputs.in_file = ser_dict["FLAIR"]["filename_masked"]
-        hdrfix.terminal_output = "none"
-        logger.debug(hdrfix.cmdline)
-        _ = hdrfix.run()
-    else:
-        logger.info("- Tumor segmentation file aready exists at " + seg_file)
     return ser_dict
 
 

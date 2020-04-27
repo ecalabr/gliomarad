@@ -51,7 +51,7 @@ def train_sess(sess, model_spec, writer, params, current_epoch):
 
     metrics_values = {k: v[0] for k, v in metrics.items()}
     metrics_val = sess.run(metrics_values)
-    metrics_string = " ; ".join("{}: {:05.3f}".format(k, v) for k, v in metrics_val.items())
+    metrics_string = " ; ".join("{}: {:0.5e}".format(k, v) for k, v in metrics_val.items())
     logging.info("Train metrics: " + metrics_string)
 
 
@@ -111,7 +111,7 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
                 # Save weights
                 best_save_path = os.path.join(model_dir, 'best_weights', 'after-epoch')
                 best_save_path = best_saver.save(sess, best_save_path, global_step=epoch + 1)
-                logging.info("- Found new best accuracy, saving in {}".format(best_save_path))
+                logging.info("Found new best accuracy, saving in {}".format(best_save_path))
                 # Save best eval metrics in a json file in the model directory
                 best_json_path = os.path.join(model_dir, "metrics_eval_best_weights.json")
                 save_dict_to_json(metrics, best_json_path)

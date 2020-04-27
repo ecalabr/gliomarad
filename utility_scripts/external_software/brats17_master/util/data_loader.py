@@ -9,7 +9,7 @@
 # This software is not certified for clinical use.
 #
 from __future__ import absolute_import, print_function
-from utility_scripts.external_software.brats17_master.util.data_process import *
+from external_software.brats17_master.util.data_process import *
 
 
 class DataLoader():

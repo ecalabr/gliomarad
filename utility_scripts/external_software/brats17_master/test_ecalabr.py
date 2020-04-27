@@ -12,10 +12,10 @@
 from __future__ import absolute_import, print_function
 import time
 import sys
-from utility_scripts.external_software.brats17_master.util.data_loader import *
-from utility_scripts.external_software.brats17_master.util.data_process import *
-from utility_scripts.external_software.brats17_master.util.train_test_func import *
-from utility_scripts.external_software.brats17_master.train import NetFactory
+from external_software.brats17_master.util.data_loader import *
+from external_software.brats17_master.util.data_process import *
+from external_software.brats17_master.util.train_test_func import *
+from external_software.brats17_master.train import NetFactory
 
 # set debug level to error
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
