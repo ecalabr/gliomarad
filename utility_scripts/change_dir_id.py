@@ -4,7 +4,8 @@ import os
 import csv
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 # walk through directories and change names
 def change_dir_id(data_dir, folders, current_id_list, desired_id_list):
 
@@ -20,7 +21,7 @@ def change_dir_id(data_dir, folders, current_id_list, desired_id_list):
         if len(id_ind) > 1:
             raise ValueError("More than one ID match in ID list for current ID " + current_id)
         else:
-            try: # if no index is found this will error
+            try:  # if no index is found this will error
                 id_ind = id_ind[0]
             except:
                 pass
@@ -42,7 +43,8 @@ def change_dir_id(data_dir, folders, current_id_list, desired_id_list):
                     os.rename(f, newname)
                     out_files.append(newname)
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments
@@ -87,4 +89,3 @@ if __name__ == '__main__':
 
     # do work
     output_files = change_dir_id(args.data_dir, dirs, cur_id_list, des_id_list)
-

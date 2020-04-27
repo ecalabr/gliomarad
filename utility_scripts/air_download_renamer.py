@@ -6,7 +6,8 @@ import subprocess
 import csv
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 # function to find any dicom in a directory
 def dicom_search(directory):
     for root, dirnames, filenames in os.walk(directory):
@@ -23,15 +24,16 @@ def dicom_search(directory):
     print("No dicom file found in directory {}".format(directory))
     return None
 
+
 # match an accession number and MRN from lists
 def patient_match(mr_list, ac_list, medrecn, accession):
     def find(lst, itm):
         return [ind for ind, x in enumerate(lst) if itm == x]
-    mr_ind = find(mr_list,medrecn)
+    mr_ind = find(mr_list, medrecn)
     if len(mr_ind) != 1:
         print("Found " + str(len(mr_ind)) + " matching MRNs for " + str(medrecn) + " accession: " + str(accession))
         return False
-    ac_ind = find(ac_list,accession)
+    ac_ind = find(ac_list, accession)
     if len(ac_ind) != 1:
         print("Found " + str(len(ac_ind)) + " matching accessions for " + str(accession) + " MRN: " + str(medrecn))
         return False
@@ -39,6 +41,7 @@ def patient_match(mr_list, ac_list, medrecn, accession):
         print(" Accession and MRN indices don't match!")
         return True
     return True
+
 
 # match and move each folder into a new folder named by accession number
 def rename_dcm_dir(folders, acc_list, mr_list):
@@ -61,12 +64,13 @@ def rename_dcm_dir(folders, acc_list, mr_list):
             os.mkdir(outdir)
         if not outdir == fullpath:
             cmd = "mv " + fullpath + " " + outdir + "/."
-            #print(cmd)
+            # print(cmd)
             subprocess.call(cmd, shell=True)
         outdirs.append(outdir)
     return outdirs
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

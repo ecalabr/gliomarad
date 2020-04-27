@@ -10,7 +10,8 @@ from model.patch_input_fn import patch_input_fn
 from model.patch_input_fn import patch_input_fn_3d
 from model.model_fn import model_fn
 
-########################## define functions ##########################
+
+# define functions
 def train_one(param_file):
 
     # get params
@@ -56,7 +57,8 @@ def train_one(param_file):
     restore_dir = os.path.join(params.model_dir, params.restore_dir)  # get full path to restore directory
     train_and_evaluate(train_model_spec, eval_model_spec, params.model_dir, params, restore_dir)
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
@@ -65,8 +67,7 @@ if __name__ == '__main__':
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
-    if not args.param_file:
-        print("Must specify a parameter file using --param_file")
+    assert args.param_file, "Must specify a parameter file using --param_file"
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
 
     # do work

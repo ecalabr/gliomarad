@@ -1,4 +1,4 @@
-Help file for constructing param files for gbm_prep
+Help file for constructing param files for gliomarad
 
 "T1":	{ (start the dict with the name of the series to be converted. Each series that you wish to convert should have an entry.
 Note that the next two sections "or" and "not" allow use of regex strings for searching. e.g. "(?i)(this|that)"

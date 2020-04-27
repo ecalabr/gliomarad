@@ -7,8 +7,8 @@ import nibabel as nib
 import logging
 import time
 from glob import glob
-from patch_input_fn import reconstruct_infer_patches_3d
-from patch_input_fn import reconstruct_infer_patches
+from model.patch_input_fn import reconstruct_infer_patches_3d
+from model.patch_input_fn import reconstruct_infer_patches
 
 
 def predict_sess(sess, model_spec):
@@ -23,7 +23,7 @@ def predict_sess(sess, model_spec):
 
     # compute predictions over the dataset
     predictions = []
-    n=0
+    n = 0
     while True:
         try:
             start = time.time()
@@ -67,10 +67,10 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
             raise ValueError("Overwrite param is not 'yes' but there are files in the predictions directory!")
 
     # Initialize tf.Saver
-    saver = tf.train.Saver()
+    saver = tf.compat.v1.train.Saver()
 
     # load model and run predictions
-    with tf.Session() as sess:
+    with tf.compat.v1.Session() as sess:
         # Initialize the lookup table
         sess.run(model_spec['variable_init_op'])
 
@@ -85,7 +85,8 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
         predictions = predict_sess(sess, model_spec)
 
     # load one of the original images to restore original shape and to use for masking
-    if infer_dir[-1] == '/': infer_dir = infer_dir[0:-1]  # remove possible trailing slash
+    if infer_dir[-1] == '/':
+        infer_dir = infer_dir[0:-1]  # remove possible trailing slash
     nii = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
     affine = nii.affine
     shape = np.array(nii.shape)
@@ -117,7 +118,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
 
         # convert back to axial leaving channels in final position
         if params.data_plane == 'ax':
-            pass # already in axial
+            pass  # already in axial
         elif params.data_plane == 'cor':
             predictions = np.transpose(predictions, axes=(0, 2, 1, 3))
         elif params.data_plane == 'sag':
@@ -132,7 +133,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
                       int(np.floor(pads[0]/2.)):pred_shape[0]-int(np.ceil(pads[0]/2.)),
                       int(np.floor(pads[1]/2.)):pred_shape[1]-int(np.ceil(pads[1]/2.)),
                       int(np.floor(pads[2]/2.)):pred_shape[2]-int(np.ceil(pads[2]/2.)),
-                      :] # do not pad channels dim
+                      :]  # do not pad channels dim
 
     # handle 3D inference
     elif params.dimension_mode == '3D':
@@ -141,8 +142,8 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
         raise ValueError("Dimension mode must be in [2D, 2.5D, 3D] but is: " + str(params.dimension_mode))
 
     # mask predictions based on original input data
-    #mask = nii.get_data() > 0
-    #predictions = predictions * mask
+    # mask = nii.get_data() > 0
+    # predictions = predictions * mask
 
     # convert to nifti format and save
     model_name = os.path.basename(model_dir)

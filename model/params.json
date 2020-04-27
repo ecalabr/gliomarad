@@ -22,7 +22,7 @@
   "norm_labels": true,
   "norm_mode": "ten_mean",
 
-  "model_name": "unet_25D_bneck",
+  "model_name": "unet_25d_bneck",
   "base_filters": 40,
   "output_filters": 1,
   "layer_layout": [4, 5, 6],

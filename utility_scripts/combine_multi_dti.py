@@ -7,7 +7,8 @@ import numpy as np
 from glob import glob
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 # define function to combine a split 55 direction DTI file if necessary
 def combine_multi_dti(directory, b0first=False):
     # define file names
@@ -54,8 +55,8 @@ def combine_multi_dti(directory, b0first=False):
                 rows = [rows[0][0].split(' ')] if len(rows[0]) == 1 else rows
         # make boolean arrays for b0 and DWI volumes
         if b0first:
-            b0_bool = [True] + [False] * (dwi_nii.shape[3]-1)
-            dwi_bool = [False] + [True] * (dwi_nii.shape[3]-1)
+            b0_bool = [True] + [False] * (dwi_nii.shape[3] - 1)
+            dwi_bool = [False] + [True] * (dwi_nii.shape[3] - 1)
         else:
             b0_bool = [int(item) == 0 for item in rows[0]]
             dwi_bool = [int(item) > 0 for item in rows[0]]
@@ -65,9 +66,11 @@ def combine_multi_dti(directory, b0first=False):
                 reader = csv.reader(f, delimiter='\t')
                 vecs_rows = [item for item in reader]
                 # check for space delimited
-                vecs_rows = [vecs_rows[y][0].split(' ') for y in range(len(vecs_rows))] if len(vecs_rows[0]) == 1 else vecs_rows
+                vecs_rows = [vecs_rows[y][0].split(' ') for y in range(len(vecs_rows))] if len(
+                    vecs_rows[0]) == 1 else vecs_rows
         # report
-        print("- combining file " + dtis[x] + " with " + str(sum(b0_bool)) + " B0(s) and " + str(sum(dwi_bool)) + " DWI(s)")
+        print("- combining file " + dtis[x] + " with " + str(sum(b0_bool)) + " B0(s) and " + str(
+            sum(dwi_bool)) + " DWI(s)")
         # if first element, create arrays
         if x == 0:
             # b0
@@ -107,15 +110,16 @@ def combine_multi_dti(directory, b0first=False):
     if bvals_present:
         # write bvals and vecs
         with open(vals_out, 'w+') as f:
-            writer = csv.writer(f, delimiter = ' ', quoting=csv.QUOTE_MINIMAL)
+            writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
             writer.writerows(bvals_out)
         with open(vecs_out, 'w+') as f:
-            writer = csv.writer(f, delimiter = ' ', quoting=csv.QUOTE_MINIMAL)
+            writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
             writer.writerows(bvecs_out)
 
     return [outfile, bvals_out, bvecs_out]
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

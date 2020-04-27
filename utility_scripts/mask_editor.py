@@ -4,7 +4,8 @@ import os
 from glob import glob
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix=None, addl_suffix2=None):
 
     # handle suffixes without extension
@@ -43,7 +44,7 @@ def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix=None, addl_suffix2=No
                     if not addl:
                         cmd = cmd + " -o"
                     cmd = cmd + " " + addl2[0]
-            #print(cmd)
+            # print(cmd)
             os.system(cmd)
             print("Done with study " + os.path.basename(direc) + ": " + str(ind) + " of " + str(n_total))
             cmds.append(cmd)
@@ -53,7 +54,7 @@ def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix=None, addl_suffix2=No
     return cmds
 
 
-########################## executed  as script ##########################
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

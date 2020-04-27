@@ -1,10 +1,11 @@
 import time
-from gbm_prep_func import *
+from utility_scripts.gbm_prep_func import *
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
-def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,dti_bval, rep=False):
+def dcm_dir_proc(dcm_dir, param_file, reg_atlas, rep=False):
     """
     This function takes a directory containing UCSF air formatted dicom folders
     and converts all relevant files to nifti format. It also processes DTI, makes brain masks, registers the different
@@ -13,10 +14,6 @@ def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,d
     :param dcm_dir: the full path to the dicom containing folder as a string
     :param param_file: the full path to parameter json file
     :param reg_atlas: the full path to a registration atlas
-    :param dti_index: the full path to a default dti_index file for FSL eddy
-    :param dti_acqp: the full path to a default dti_acqp file for FSL eddy
-    :param dti_bvec: the full path to a default dti_bvec file for FSL eddy
-    :param dti_bval: the full path to a default dti_bval file for FSL eddy
     :param rep: boolean, repeat work or not
     :return: returns the path to a metadata file dict (as *.npy file) that contains lots of relevant info
     """
@@ -27,18 +24,19 @@ def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,d
     series_dict = make_serdict(reg_atlas, dcm_dir, param_file)
     series_dict = filter_series(dicoms1, hdrs1, series1, dirs1, series_dict)
     series_dict = dcm_list_2_niis(series_dict, dcm_dir, rep)
-    #series_dict = dti_proc(series_dict, dti_index, dti_acqp, dti_bvec, dti_bval)
+    # series_dict = dti_proc(series_dict, dti_index, dti_acqp, dti_bvec, dti_bval)
     series_dict = reg_series(series_dict)
     series_dict = brain_mask(series_dict)
-    #series_dict = bias_correct(series_dict)
-    #series_dict = norm_niis(series_dict)
-    #series_dict = make_nii4d(series_dict)
-    #series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
+    # series_dict = bias_correct(series_dict)
+    # series_dict = norm_niis(series_dict)
+    # series_dict = make_nii4d(series_dict)
+    # series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
     series_dict = print_series_dict(series_dict)
 
     return series_dict
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

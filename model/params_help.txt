@@ -49,7 +49,7 @@
 "label_interp": 1,
     The order of interpolation to be used when randomly rotating the label data. This only matters if augment_train_data == yes. 0 = nearest neighbor, 1 = linear, 2 = cubic, etc
 
-"model_name": "unet_25D_bneck",
+"model_name": "unet_25d_bneck",
     The name of the network that is going to be trained. This must be defined in net_builder.py
 
 "base_filters": 32,

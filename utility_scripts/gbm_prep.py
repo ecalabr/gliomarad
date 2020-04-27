@@ -1,10 +1,11 @@
 import time
-from gbm_prep_func import *
+from utility_scripts.gbm_prep_func import *
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
-def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,dti_bval, rep=False):
+def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec, dti_bval, rep=False):
     """
     This function takes a directory containing UCSF air formatted dicom folders
     and converts all relevant files to nifti format. It also processes DTI, makes brain masks, registers the different
@@ -31,14 +32,15 @@ def dcm_dir_proc(dcm_dir, param_file, reg_atlas, dti_index, dti_acqp, dti_bvec,d
     series_dict = reg_series(series_dict)
     series_dict = brain_mask(series_dict)
     series_dict = bias_correct(series_dict)
-    #series_dict = norm_niis(series_dict)
-    #series_dict = make_nii4d(series_dict)
-    #series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
+    # series_dict = norm_niis(series_dict)
+    # series_dict = make_nii4d(series_dict)
+    # series_dict = tumor_seg(series_dict) # skipping for now... currently doing segmentation as batch at end
     series_dict = print_series_dict(series_dict)
 
     return series_dict
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

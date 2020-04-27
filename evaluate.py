@@ -5,11 +5,13 @@ import logging
 import os
 from model.utils import Params
 from model.utils import set_logger
-from model.input_fn import input_fn
+from model.patch_input_fn import patch_input_fn
+from model.patch_input_fn import patch_input_fn_3d
 from model.model_fn import model_fn
 from model.evaluation import evaluate
 
-########################## define functions ##########################
+
+# define functions
 def evaluate_one(param_file):
     # get params
     params = Params(param_file)
@@ -29,7 +31,12 @@ def evaluate_one(param_file):
 
     # Create the input dataset
     logging.info("Generating dataset object...")
-    eval_inputs = input_fn(mode='eval', params=params)
+    if params.dimension_mode == '2D':  # handle 2d inputs
+        eval_inputs = patch_input_fn(mode='eval', params=params)
+    elif params.dimension_mode in ['2.5D', '3D']:  # handle 3d inputs
+        eval_inputs = patch_input_fn_3d(mode='eval', params=params)
+    else:
+        raise ValueError("Training dimensions mode not understood: " + str(params.dimension_mode))
     logging.info("- done.")
 
     # Define the model
@@ -41,15 +48,17 @@ def evaluate_one(param_file):
     logging.info("Starting evaluation.")
     evaluate(eval_model_spec, params.model_dir, params.restore_dir)
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
+    parser.add_argument('--param_file', default=None,
                         help="Path to params.json")
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
+    assert args.param_file, "Must specify param file with --param_file"
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
 
     # do work

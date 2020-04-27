@@ -7,31 +7,34 @@ import numpy as np
 import scipy.ndimage
 from glob import glob
 
-########################## define functions ##########################
-def softmax(X, theta=1.0, axis=None):
+
+# define functions
+def softmax(x, theta=1.0, axis=None):
     # make X at least 2d
-    y = np.atleast_2d(X)
+    y = np.atleast_2d(x)
     # find axis
     if axis is None:
         axis = next(j[0] for j in enumerate(y.shape) if j[1] > 1)
     # multiply y against the theta parameter,
     y = y * float(theta)
     # subtract the max for numerical stability
-    y = y - np.expand_dims(np.max(y, axis = axis), axis)
+    y = y - np.expand_dims(np.max(y, axis=axis), axis)
     # exponentiate y
     y = np.exp(y)
     # take the sum along the specified axis
-    ax_sum = np.expand_dims(np.sum(y, axis = axis), axis)
+    ax_sum = np.expand_dims(np.sum(y, axis=axis), axis)
     # finally: divide elementwise
     p = y / ax_sum
     # flatten if X was 1D
-    if len(X.shape) == 1: p = p.flatten()
+    if len(x.shape) == 1:
+        p = p.flatten()
     return p
 
+
 def get_largest_component(img):
-    s = scipy.ndimage.generate_binary_structure(3,2) # iterate structure
-    labeled_array, numpatches = scipy.ndimage.label(img,s) # labeling
-    sizes = scipy.ndimage.sum(img,labeled_array,range(1,numpatches+1))
+    s = scipy.ndimage.generate_binary_structure(3, 2)  # iterate structure
+    labeled_array, numpatches = scipy.ndimage.label(img, s)  # labeling
+    sizes = scipy.ndimage.sum(img, labeled_array, range(1, numpatches + 1))
     sizes_list = [sizes[i] for i in range(len(sizes))]
     sizes_list.sort()
     if len(sizes) == 1:
@@ -43,8 +46,8 @@ def get_largest_component(img):
         out_img = component
     return out_img
 
-def convert_prob(files, nii_out_path, clean):
 
+def convert_prob(files, nii_out_path, clean):
     # announce files
     print("Found the following file" + (":" if len(files) == 1 else "s, which will be averaged:"))
     for f in files:
@@ -71,13 +74,13 @@ def convert_prob(files, nii_out_path, clean):
     data = np.argmax(data, axis=-1)
 
     # binary morph ops
-    struct = scipy.ndimage.generate_binary_structure(3, 2) # rank 3, connectivity 2
-    struct = scipy.ndimage.iterate_structure(struct, 2) # iterate structure to 5x5x5
-    data = scipy.ndimage.morphology.binary_erosion(data, structure=struct) # erosion
-    data = get_largest_component(data) # largest connected component
+    struct = scipy.ndimage.generate_binary_structure(3, 2)  # rank 3, connectivity 2
+    struct = scipy.ndimage.iterate_structure(struct, 2)  # iterate structure to 5x5x5
+    data = scipy.ndimage.morphology.binary_erosion(data, structure=struct)  # erosion
+    data = get_largest_component(data)  # largest connected component
     data = scipy.ndimage.morphology.binary_dilation(data, structure=struct)  # dilation
-    data = scipy.ndimage.morphology.binary_fill_holes(data) # fill holes
-    data = scipy.ndimage.morphology.binary_closing(data, structure=struct) # final closing
+    data = scipy.ndimage.morphology.binary_fill_holes(data)  # fill holes
+    data = scipy.ndimage.morphology.binary_closing(data, structure=struct)  # final closing
 
     # make output nii
     nii_out = nib.Nifti1Image(data.astype(float), nii.affine, nii.header)
@@ -90,7 +93,8 @@ def convert_prob(files, nii_out_path, clean):
 
     return nii_out_path
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments
@@ -110,11 +114,11 @@ if __name__ == '__main__':
     # check input arguments
     args = parser.parse_args()
     data_in_path = args.data
-    assert  data_in_path, "Must specify input data using --data"
+    assert data_in_path, "Must specify input data using --data"
     namestr = args.name
     outname = args.outname
     outpath = args.outpath
-    if not '.nii.gz' in outname:
+    if '.nii.gz' not in outname:
         outname = outname.split('.')[0] + '.nii.gz'
     my_files = []
     data_root = []

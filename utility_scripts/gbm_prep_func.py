@@ -18,13 +18,14 @@ from nipype.interfaces.fsl import ExtractROI
 from nipype.interfaces.fsl.utils import CopyGeom
 from nipype.interfaces.fsl import Merge
 from nipype.interfaces.ants import N4BiasFieldCorrection
-import external_software.brats17_master.test_ecalabr as test_ecalabr
+import utility_scripts.external_software.brats17_master.test_ecalabr as test_ecalabr
 import json
 import re
 import csv
 import shutil
 
-### Set up logging
+
+# Set up logging
 # takes work dir
 # returns logger
 def make_log(work_dir, repeat=False):
@@ -39,7 +40,7 @@ def make_log(work_dir, repeat=False):
         open(log_file, 'a').close()
     # make logger
     logger = logging.getLogger("my_logger")
-    logger.setLevel(logging.DEBUG) # should this be DEBUG?
+    logger.setLevel(logging.DEBUG)  # should this be DEBUG?
     # set all existing handlers to null to prevent duplication
     logger.handlers = []
     # create file handler that logs debug and higher level messages
@@ -59,11 +60,11 @@ def make_log(work_dir, repeat=False):
     logger.propagate = False
     logger.info("####################### STARTING NEW LOG #######################")
 
+
 # first check for series_dict to find the appropriate image series from the dicom folder
 # matching strings format is [[strs to match AND], OR [strs to match AND]
 # for NOT strings that are in all caps, the algorithm will ensure the series does not start with that string
 def make_serdict(reg_atlas, dcm_dir, params):
-
     # load json file
     assert os.path.isfile(params), "Param file does not exist at " + params
     with open(params, 'r') as f:
@@ -77,13 +78,14 @@ def make_serdict(reg_atlas, dcm_dir, params):
                 sdict[key].update({'reg_target': reg_atlas})
 
     # add info section to series dict
-    sdict.update({"info":{
+    sdict.update({"info": {
         "filename": "None",
         "dcmdir": dcm_dir,
         "id": os.path.basename(os.path.dirname(dcm_dir)),
     }})
 
     return sdict
+
 
 # unzip dicom directory
 def unzip_file(dicom_zip):
@@ -102,6 +104,7 @@ def unzip_file(dicom_zip):
     logger.info("- Working directory = " + os.path.dirname(dicomdir))
     return dicomdir
 
+
 # get all dicoms within a directory tree
 def dcm_find(parent_dir):
     dcm_list = []
@@ -118,6 +121,7 @@ def dcm_find(parent_dir):
                 except:
                     pass
     return dcm_list
+
 
 # function to get complete series list from dicom directory
 def get_series(dicom_dir, repeat=False):
@@ -167,7 +171,7 @@ def get_series(dicom_dir, repeat=False):
         fileout = open(series_file, 'w')
         for ind, item in enumerate(series):
             fileout.write("%s" % item)
-            nspaces = 75 - len(item) # assume no series description longer than 75
+            nspaces = 75 - len(item)  # assume no series description longer than 75
             fileout.write("%s" % " " * nspaces)
             # Slice thickness, rounded to 3 decimal places
             fileout.write("%s" % "\tslthick=")
@@ -178,7 +182,7 @@ def get_series(dicom_dir, repeat=False):
             # Acquisition matrix
             fileout.write("%s" % "\tacqmtx=")
             try:
-                fileout.write("%s" % str(hdrs[ind].AcquisitionMatrix[:4])) # no more than four entries
+                fileout.write("%s" % str(hdrs[ind].AcquisitionMatrix[:4]))  # no more than four entries
             except Exception:
                 fileout.write("%s" % "None\t")
             # rows x columns
@@ -195,7 +199,7 @@ def get_series(dicom_dir, repeat=False):
             try:
                 fileout.write("%s" % str(hdrs[ind].ImagesInAcquisition))
             except Exception:
-                fileout.write("%s" % "None" )
+                fileout.write("%s" % "None")
             # acquisition time rounded to nearest int
             fileout.write("%s" % "\tacqtime=")
             try:
@@ -211,6 +215,7 @@ def get_series(dicom_dir, repeat=False):
             fileout.write("%s" % "\n")
 
     return dicoms, hdrs, series, dirs
+
 
 # function to get filter substring matches by criteria, returns a list of indices for matching series
 def substr_list(strings, substrs, substrnot):
@@ -230,14 +235,15 @@ def substr_list(strings, substrs, substrnot):
                 # then make sure none of the not strings match the target string
                 if not any([re.search(item2, string) for item2 in substrnot]):
                     # only add new unique inds to the matching ind list
-                    if not ind in inds:
+                    if ind not in inds:
                         inds.append(ind)
                         match = True
         # report matches
         if match:
             logger.info("- Matched series: " + string + " (" + str(number) + ")")
-            number = number + 1 # step the number of matching series
+            number = number + 1  # step the number of matching series
     return inds
+
 
 # get filtered series list
 def filter_series(dicoms, hdrs, series, dirs, srs_dict):
@@ -253,7 +259,7 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
         # only search if terms are provided
         if "or" in srs_dict[srs].keys() and "not" in srs_dict[srs].keys():
             logger.info("FINDING SERIES: " + srs)
-            inds = substr_list(series, srs_dict[srs]["or"], srs_dict[srs]["not"]) # calls above function
+            inds = substr_list(series, srs_dict[srs]["or"], srs_dict[srs]["not"])  # calls above function
             # if there are inds of matches, pick the first match by default and check for more slices or repeat series
             if inds or inds == 0:  # if only 1 ind is passed, then use it (set keeper to the only ind)
                 keeper = []
@@ -263,7 +269,7 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                     number = 1  # series number chosen to report in the logger info
                 else:  # if more than 1 inds, try to find the one with the most slices, otherwise just pick first one
                     for n, i in enumerate(inds, 1):
-                        if n == 1: # pick first ind by default
+                        if n == 1:  # pick first ind by default
                             keeper = i
                             number = n
                         if hasattr(hdrs[i], "ImagesInAcquisition") and hasattr(hdrs[keeper], "ImagesInAcquisition"):
@@ -286,7 +292,7 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                                     keeper = i
                                     number = n
                 # Report keeper series
-                inds = keeper # replace inds with just the keeper index
+                inds = keeper  # replace inds with just the keeper index
                 logger.info("- Keeping series: " + series[inds] + " (" + str(number) + ")")
                 new_dicoms.append(dicoms[inds])
                 srs_dict[srs].update({"dicoms": dicoms[inds]})
@@ -307,6 +313,7 @@ def filter_series(dicoms, hdrs, series, dirs, srs_dict):
                 new_dirs.append("None")
                 srs_dict[srs].update({"dirs": []})
     return srs_dict
+
 
 # define function to convert selected dicoms
 def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
@@ -334,8 +341,6 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
         convert_flag = False
         if "dicoms" in strs_dict[series].keys():
             converter.inputs.source_names = strs_dict[series]["dicoms"]
-            # series_string = strs_dict[series]["series"]
-            # outfilename = series_string.replace(" ", "_").lower().replace("(", "").replace(")", "").replace("/", "").replace(":", "").replace("\"","")
             outfilename = idno + "_" + series
             converter.inputs.out_filename = outfilename
             outfilepath = os.path.join(os.path.dirname(dicom_dir), outfilename + ".nii.gz")
@@ -362,7 +367,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                                 ", renaming " + os.path.basename(outfilepath))
                     os.rename(converted, outfilepath)
                 # identify any extra files generated during conversion
-                more_extras = glob(outfilepath.rsplit('.nii.gz', 1)[0] + '*.nii.gz').remove(outfilepath)
+                more_extras = glob(str(outfilepath.rsplit('.nii.gz', 1)[0]) + '*.nii.gz').remove(outfilepath)
                 if more_extras:
                     extras = list(set(extras + more_extras))
             else:
@@ -385,7 +390,7 @@ def dcm_list_2_niis(strs_dict, dicom_dir, repeat=False):
                         logger.info("- " + series + " converted file is " + converted + ", renaming to " + outfilepath)
                         os.rename(converted, outfilepath)
                     # identify any extra files generated during conversion
-                    more_extras = glob(outfilepath.rsplit('.nii.gz', 1)[0] + '*.nii.gz')
+                    more_extras = glob(str(outfilepath.rsplit('.nii.gz', 1)[0]) + '*.nii.gz')
                     extras = list(set(extras + more_extras))
 
                 # handle case where outfile aready exists and repeat is false, or where prerequisites don't exist
@@ -464,6 +469,7 @@ def split_multiphase(nii_in, options, series, repeat=False):
             outnames.update({k: outname})
         return outnames
 
+
 # Fast ants affine
 # takes moving and template niis and a work dir
 # performs fast affine registration and returns a list of transforms
@@ -477,33 +483,33 @@ def affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
 
     # registration setup
     antsreg = Registration()
-    antsreg.inputs.args='--float'
-    antsreg.inputs.fixed_image=template_nii
-    antsreg.inputs.moving_image=moving_nii
-    antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0], [6, 4, 1, 0]]
-    antsreg.inputs.sigma_units=['mm', 'mm']
-    antsreg.inputs.transforms=['Rigid', 'Affine']
-    antsreg.terminal_output='none'
-    antsreg.inputs.use_histogram_matching=True
-    antsreg.inputs.write_composite_transform=True
+    antsreg.inputs.args = '--float'
+    antsreg.inputs.fixed_image = template_nii
+    antsreg.inputs.moving_image = moving_nii
+    antsreg.inputs.output_transform_prefix = outprefix
+    antsreg.inputs.num_threads = multiprocessing.cpu_count()
+    antsreg.inputs.smoothing_sigmas = [[6, 4, 1, 0], [6, 4, 1, 0]]
+    antsreg.inputs.sigma_units = ['mm', 'mm']
+    antsreg.inputs.transforms = ['Rigid', 'Affine']
+    antsreg.terminal_output = 'none'
+    antsreg.inputs.use_histogram_matching = True
+    antsreg.inputs.write_composite_transform = True
     if isinstance(option, dict) and "reg_com" in option.keys():
         antsreg.inputs.initial_moving_transform_com = option["reg_com"]
     else:
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
-    antsreg.inputs.winsorize_lower_quantile=0.005
-    antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.metric=['Mattes', 'Mattes']
-    antsreg.inputs.metric_weight=[1.0, 1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000, 1000], [1000, 1000, 1000, 1000]]
-    antsreg.inputs.convergence_threshold=[1e-07, 1e-07]
-    antsreg.inputs.convergence_window_size=[10, 10]
-    antsreg.inputs.radius_or_number_of_bins=[32, 32]
-    antsreg.inputs.sampling_strategy=['Regular', 'Regular']
-    antsreg.inputs.sampling_percentage=[0.25, 0.25]  # 1
-    antsreg.inputs.shrink_factors=[[4, 3, 2, 1], [4, 3, 2, 1]]
-    antsreg.inputs.transform_parameters=[(0.1,), (0.1,)]
+    antsreg.inputs.winsorize_lower_quantile = 0.005
+    antsreg.inputs.winsorize_upper_quantile = 0.995
+    antsreg.inputs.metric = ['Mattes', 'Mattes']
+    antsreg.inputs.metric_weight = [1.0, 1.0]
+    antsreg.inputs.number_of_iterations = [[1000, 1000, 1000, 1000], [1000, 1000, 1000, 1000]]
+    antsreg.inputs.convergence_threshold = [1e-07, 1e-07]
+    antsreg.inputs.convergence_window_size = [10, 10]
+    antsreg.inputs.radius_or_number_of_bins = [32, 32]
+    antsreg.inputs.sampling_strategy = ['Regular', 'Regular']
+    antsreg.inputs.sampling_percentage = [0.25, 0.25]  # 1
+    antsreg.inputs.shrink_factors = [[4, 3, 2, 1], [4, 3, 2, 1]]
+    antsreg.inputs.transform_parameters = [(0.1,), (0.1,)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -529,33 +535,33 @@ def fast_affine_reg(moving_nii, template_nii, work_dir, option=None, repeat=Fals
 
     # registration setup
     antsreg = Registration()
-    antsreg.inputs.args='--float'
-    antsreg.inputs.fixed_image=template_nii
-    antsreg.inputs.moving_image=moving_nii
-    antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.inputs.smoothing_sigmas=[[6, 4, 1], [6, 4, 1]]
-    antsreg.inputs.sigma_units=['mm', 'mm']
-    antsreg.inputs.transforms=['Rigid', 'Affine']
-    antsreg.terminal_output='none'
-    antsreg.inputs.use_histogram_matching=True
-    antsreg.inputs.write_composite_transform=True
+    antsreg.inputs.args = '--float'
+    antsreg.inputs.fixed_image = template_nii
+    antsreg.inputs.moving_image = moving_nii
+    antsreg.inputs.output_transform_prefix = outprefix
+    antsreg.inputs.num_threads = multiprocessing.cpu_count()
+    antsreg.inputs.smoothing_sigmas = [[6, 4, 1], [6, 4, 1]]
+    antsreg.inputs.sigma_units = ['mm', 'mm']
+    antsreg.inputs.transforms = ['Rigid', 'Affine']
+    antsreg.terminal_output = 'none'
+    antsreg.inputs.use_histogram_matching = True
+    antsreg.inputs.write_composite_transform = True
     if isinstance(option, dict) and "reg_com" in option.keys():
         antsreg.inputs.initial_moving_transform_com = option["reg_com"]
     else:
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
-    antsreg.inputs.winsorize_lower_quantile=0.005
-    antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.metric=['Mattes', 'Mattes']
-    antsreg.inputs.metric_weight=[1.0, 1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000], [1000, 1000, 1000]]
-    antsreg.inputs.convergence_threshold=[1e-04, 1e-04]
-    antsreg.inputs.convergence_window_size=[5, 5]
-    antsreg.inputs.radius_or_number_of_bins=[32, 32]
-    antsreg.inputs.sampling_strategy=['Regular', 'Regular']
-    antsreg.inputs.sampling_percentage=[0.25, 0.25]
-    antsreg.inputs.shrink_factors=[[6, 4, 2], [6, 4, 2]] * 2
-    antsreg.inputs.transform_parameters=[(0.1,), (0.1,)]
+    antsreg.inputs.winsorize_lower_quantile = 0.005
+    antsreg.inputs.winsorize_upper_quantile = 0.995
+    antsreg.inputs.metric = ['Mattes', 'Mattes']
+    antsreg.inputs.metric_weight = [1.0, 1.0]
+    antsreg.inputs.number_of_iterations = [[1000, 1000, 1000], [1000, 1000, 1000]]
+    antsreg.inputs.convergence_threshold = [1e-04, 1e-04]
+    antsreg.inputs.convergence_window_size = [5, 5]
+    antsreg.inputs.radius_or_number_of_bins = [32, 32]
+    antsreg.inputs.sampling_strategy = ['Regular', 'Regular']
+    antsreg.inputs.sampling_percentage = [0.25, 0.25]
+    antsreg.inputs.shrink_factors = [[6, 4, 2], [6, 4, 2]] * 2
+    antsreg.inputs.transform_parameters = [(0.1,), (0.1,)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -581,33 +587,33 @@ def diffeo_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
 
     # registration setup
     antsreg = Registration()
-    antsreg.inputs.args='--float'
-    antsreg.inputs.fixed_image=template_nii
-    antsreg.inputs.moving_image=moving_nii
-    antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.terminal_output='none'
+    antsreg.inputs.args = '--float'
+    antsreg.inputs.fixed_image = template_nii
+    antsreg.inputs.moving_image = moving_nii
+    antsreg.inputs.output_transform_prefix = outprefix
+    antsreg.inputs.num_threads = multiprocessing.cpu_count()
+    antsreg.terminal_output = 'none'
     if isinstance(option, dict) and "reg_com" in option.keys():
         antsreg.inputs.initial_moving_transform_com = option["reg_com"]
     else:
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
-    antsreg.inputs.winsorize_lower_quantile=0.005
-    antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.shrink_factors=[[4, 3, 2, 1], [8, 4, 2, 1], [4, 2, 1]]
-    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0], [4, 2, 1, 0], [2, 1, 0]]
-    antsreg.inputs.sigma_units=['mm', 'mm', 'mm']
-    antsreg.inputs.transforms=['Rigid', 'Affine', 'SyN']
-    antsreg.inputs.use_histogram_matching=[True, True, True]
-    antsreg.inputs.write_composite_transform=True
-    antsreg.inputs.metric=['Mattes', 'Mattes', 'Mattes']
-    antsreg.inputs.metric_weight=[1.0, 1.0, 1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 1000, 1000, 1000], [1000, 1000, 1000, 1000], [250, 100, 50]]
-    antsreg.inputs.convergence_threshold=[1e-07, 1e-07, 1e-07]
-    antsreg.inputs.convergence_window_size=[5, 5, 5]
-    antsreg.inputs.radius_or_number_of_bins=[32, 32, 32]
-    antsreg.inputs.sampling_strategy=['Regular', 'Regular', 'None']  # 'None'
-    antsreg.inputs.sampling_percentage=[0.25, 0.25, 1]
-    antsreg.inputs.transform_parameters=[(0.1,), (0.1,), (0.1, 3.0, 0.0)]
+    antsreg.inputs.winsorize_lower_quantile = 0.005
+    antsreg.inputs.winsorize_upper_quantile = 0.995
+    antsreg.inputs.shrink_factors = [[4, 3, 2, 1], [8, 4, 2, 1], [4, 2, 1]]
+    antsreg.inputs.smoothing_sigmas = [[6, 4, 1, 0], [4, 2, 1, 0], [2, 1, 0]]
+    antsreg.inputs.sigma_units = ['mm', 'mm', 'mm']
+    antsreg.inputs.transforms = ['Rigid', 'Affine', 'SyN']
+    antsreg.inputs.use_histogram_matching = [True, True, True]
+    antsreg.inputs.write_composite_transform = True
+    antsreg.inputs.metric = ['Mattes', 'Mattes', 'Mattes']
+    antsreg.inputs.metric_weight = [1.0, 1.0, 1.0]
+    antsreg.inputs.number_of_iterations = [[1000, 1000, 1000, 1000], [1000, 1000, 1000, 1000], [250, 100, 50]]
+    antsreg.inputs.convergence_threshold = [1e-07, 1e-07, 1e-07]
+    antsreg.inputs.convergence_window_size = [5, 5, 5]
+    antsreg.inputs.radius_or_number_of_bins = [32, 32, 32]
+    antsreg.inputs.sampling_strategy = ['Regular', 'Regular', 'None']  # 'None'
+    antsreg.inputs.sampling_percentage = [0.25, 0.25, 1]
+    antsreg.inputs.transform_parameters = [(0.1,), (0.1,), (0.1, 3.0, 0.0)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -633,33 +639,33 @@ def fast_diffeo_reg(moving_nii, template_nii, work_dir, option=None, repeat=Fals
 
     # registration setup
     antsreg = Registration()
-    antsreg.inputs.args='--float'
-    antsreg.inputs.fixed_image=template_nii
-    antsreg.inputs.moving_image=moving_nii
-    antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.terminal_output='none'
+    antsreg.inputs.args = '--float'
+    antsreg.inputs.fixed_image = template_nii
+    antsreg.inputs.moving_image = moving_nii
+    antsreg.inputs.output_transform_prefix = outprefix
+    antsreg.inputs.num_threads = multiprocessing.cpu_count()
+    antsreg.terminal_output = 'none'
     if isinstance(option, dict) and "reg_com" in option.keys():
         antsreg.inputs.initial_moving_transform_com = option["reg_com"]
     else:
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
-    antsreg.inputs.winsorize_lower_quantile=0.005
-    antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.shrink_factors=[[6, 4, 2], [4, 2]]
-    antsreg.inputs.smoothing_sigmas=[[4, 2, 1], [2, 1]]
-    antsreg.inputs.sigma_units=['mm', 'mm']
-    antsreg.inputs.transforms=['Affine', 'SyN']
-    antsreg.inputs.use_histogram_matching=[True, True]
-    antsreg.inputs.write_composite_transform=True
-    antsreg.inputs.metric=['Mattes', 'Mattes']
-    antsreg.inputs.metric_weight=[1.0, 1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 500, 250], [50, 50]]
-    antsreg.inputs.convergence_threshold=[1e-05, 1e-05]
-    antsreg.inputs.convergence_window_size=[5, 5]
-    antsreg.inputs.radius_or_number_of_bins=[32, 32]
-    antsreg.inputs.sampling_strategy=['Regular', 'None']  # 'None'
-    antsreg.inputs.sampling_percentage=[0.25, 1]
-    antsreg.inputs.transform_parameters=[(0.1,), (0.1, 3.0, 0.0)]
+    antsreg.inputs.winsorize_lower_quantile = 0.005
+    antsreg.inputs.winsorize_upper_quantile = 0.995
+    antsreg.inputs.shrink_factors = [[6, 4, 2], [4, 2]]
+    antsreg.inputs.smoothing_sigmas = [[4, 2, 1], [2, 1]]
+    antsreg.inputs.sigma_units = ['mm', 'mm']
+    antsreg.inputs.transforms = ['Affine', 'SyN']
+    antsreg.inputs.use_histogram_matching = [True, True]
+    antsreg.inputs.write_composite_transform = True
+    antsreg.inputs.metric = ['Mattes', 'Mattes']
+    antsreg.inputs.metric_weight = [1.0, 1.0]
+    antsreg.inputs.number_of_iterations = [[1000, 500, 250], [50, 50]]
+    antsreg.inputs.convergence_threshold = [1e-05, 1e-05]
+    antsreg.inputs.convergence_window_size = [5, 5]
+    antsreg.inputs.radius_or_number_of_bins = [32, 32]
+    antsreg.inputs.sampling_strategy = ['Regular', 'None']  # 'None'
+    antsreg.inputs.sampling_percentage = [0.25, 1]
+    antsreg.inputs.transform_parameters = [(0.1,), (0.1, 3.0, 0.0)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -685,33 +691,33 @@ def trans_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
 
     # registration setup
     antsreg = Registration()
-    antsreg.inputs.args='--float'
-    antsreg.inputs.fixed_image=template_nii
-    antsreg.inputs.moving_image=moving_nii
-    antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]]
-    antsreg.inputs.sigma_units=['vox']
-    antsreg.inputs.transforms=['Translation']  # ['Rigid', 'Affine', 'SyN']
-    antsreg.terminal_output='none'
-    antsreg.inputs.use_histogram_matching=True
-    antsreg.inputs.write_composite_transform=True
+    antsreg.inputs.args = '--float'
+    antsreg.inputs.fixed_image = template_nii
+    antsreg.inputs.moving_image = moving_nii
+    antsreg.inputs.output_transform_prefix = outprefix
+    antsreg.inputs.num_threads = multiprocessing.cpu_count()
+    antsreg.inputs.smoothing_sigmas = [[6, 4, 1, 0]]
+    antsreg.inputs.sigma_units = ['vox']
+    antsreg.inputs.transforms = ['Translation']  # ['Rigid', 'Affine', 'SyN']
+    antsreg.terminal_output = 'none'
+    antsreg.inputs.use_histogram_matching = True
+    antsreg.inputs.write_composite_transform = True
     if isinstance(option, dict) and "reg_com" in option.keys():
         antsreg.inputs.initial_moving_transform_com = option["reg_com"]
     else:
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
-    antsreg.inputs.winsorize_lower_quantile=0.005
-    antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.metric=['Mattes']  # ['MI', 'MI', 'CC']
-    antsreg.inputs.metric_weight=[1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 500, 250, 50]]  # [100, 70, 50, 20]
-    antsreg.inputs.convergence_threshold=[1e-07]
-    antsreg.inputs.convergence_window_size=[10]
-    antsreg.inputs.radius_or_number_of_bins=[32]  # 4
-    antsreg.inputs.sampling_strategy=['Regular']  # 'None'
-    antsreg.inputs.sampling_percentage=[0.25]  # 1
-    antsreg.inputs.shrink_factors=[[4, 3, 2, 1]]  # *3
-    antsreg.inputs.transform_parameters=[(0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
+    antsreg.inputs.winsorize_lower_quantile = 0.005
+    antsreg.inputs.winsorize_upper_quantile = 0.995
+    antsreg.inputs.metric = ['Mattes']  # ['MI', 'MI', 'CC']
+    antsreg.inputs.metric_weight = [1.0]
+    antsreg.inputs.number_of_iterations = [[1000, 500, 250, 50]]  # [100, 70, 50, 20]
+    antsreg.inputs.convergence_threshold = [1e-07]
+    antsreg.inputs.convergence_window_size = [10]
+    antsreg.inputs.radius_or_number_of_bins = [32]  # 4
+    antsreg.inputs.sampling_strategy = ['Regular']  # 'None'
+    antsreg.inputs.sampling_percentage = [0.25]  # 1
+    antsreg.inputs.shrink_factors = [[4, 3, 2, 1]]  # *3
+    antsreg.inputs.transform_parameters = [(0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -737,33 +743,33 @@ def rigid_reg(moving_nii, template_nii, work_dir, option=None, repeat=False):
 
     # registration setup
     antsreg = Registration()
-    antsreg.inputs.args='--float'
-    antsreg.inputs.fixed_image=template_nii
-    antsreg.inputs.moving_image=moving_nii
-    antsreg.inputs.output_transform_prefix=outprefix
-    antsreg.inputs.num_threads=multiprocessing.cpu_count()
-    antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0]]
-    antsreg.inputs.sigma_units=['vox']
-    antsreg.inputs.transforms=['Rigid']  # ['Rigid', 'Affine', 'SyN']
-    antsreg.terminal_output='none'
-    antsreg.inputs.use_histogram_matching=True
-    antsreg.inputs.write_composite_transform=True
+    antsreg.inputs.args = '--float'
+    antsreg.inputs.fixed_image = template_nii
+    antsreg.inputs.moving_image = moving_nii
+    antsreg.inputs.output_transform_prefix = outprefix
+    antsreg.inputs.num_threads = multiprocessing.cpu_count()
+    antsreg.inputs.smoothing_sigmas = [[6, 4, 1, 0]]
+    antsreg.inputs.sigma_units = ['vox']
+    antsreg.inputs.transforms = ['Rigid']  # ['Rigid', 'Affine', 'SyN']
+    antsreg.terminal_output = 'none'
+    antsreg.inputs.use_histogram_matching = True
+    antsreg.inputs.write_composite_transform = True
     if isinstance(option, dict) and "reg_com" in option.keys():
         antsreg.inputs.initial_moving_transform_com = option["reg_com"]
     else:
         antsreg.inputs.initial_moving_transform_com = 1  # use center of mass for initial transform by default
-    antsreg.inputs.winsorize_lower_quantile=0.005
-    antsreg.inputs.winsorize_upper_quantile=0.995
-    antsreg.inputs.metric=['Mattes']  # ['MI', 'MI', 'CC']
-    antsreg.inputs.metric_weight=[1.0]
-    antsreg.inputs.number_of_iterations=[[1000, 500, 250, 50]]  # [100, 70, 50, 20]
-    antsreg.inputs.convergence_threshold=[1e-07]
-    antsreg.inputs.convergence_window_size=[10]
-    antsreg.inputs.radius_or_number_of_bins=[32]  # 4
-    antsreg.inputs.sampling_strategy=['Regular']  # 'None'
-    antsreg.inputs.sampling_percentage=[0.25]  # 1
-    antsreg.inputs.shrink_factors=[[4, 3, 2, 1]]  # *3
-    antsreg.inputs.transform_parameters=[(0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
+    antsreg.inputs.winsorize_lower_quantile = 0.005
+    antsreg.inputs.winsorize_upper_quantile = 0.995
+    antsreg.inputs.metric = ['Mattes']  # ['MI', 'MI', 'CC']
+    antsreg.inputs.metric_weight = [1.0]
+    antsreg.inputs.number_of_iterations = [[1000, 500, 250, 50]]  # [100, 70, 50, 20]
+    antsreg.inputs.convergence_threshold = [1e-07]
+    antsreg.inputs.convergence_window_size = [10]
+    antsreg.inputs.radius_or_number_of_bins = [32]  # 4
+    antsreg.inputs.sampling_strategy = ['Regular']  # 'None'
+    antsreg.inputs.sampling_percentage = [0.25]  # 1
+    antsreg.inputs.shrink_factors = [[4, 3, 2, 1]]  # *3
+    antsreg.inputs.transform_parameters = [(0.1,)]  # (0.1, 3.0, 0.0) # affine gradient step
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -797,15 +803,15 @@ def ants_apply(moving_nii, reference_nii, interp, transform_list, work_dir, inve
         output_nii[ind] = os.path.join(work_dir, os.path.basename(mvng).split(ext)[0] + '_w.nii.gz')
         # do registration if not already done
         antsapply = ApplyTransforms()
-        antsapply.inputs.dimension=3
-        antsapply.terminal_output='none'  # suppress terminal output
-        antsapply.inputs.input_image=mvng
-        antsapply.inputs.reference_image=reference_nii
-        antsapply.inputs.output_image=output_nii[ind]
-        antsapply.inputs.interpolation=interp
-        antsapply.inputs.default_value=0
-        antsapply.inputs.transforms=transform_list
-        antsapply.inputs.invert_transform_flags=[invert_bool] * len(transform_list)
+        antsapply.inputs.dimension = 3
+        antsapply.terminal_output = 'none'  # suppress terminal output
+        antsapply.inputs.input_image = mvng
+        antsapply.inputs.reference_image = reference_nii
+        antsapply.inputs.output_image = output_nii[ind]
+        antsapply.inputs.interpolation = interp
+        antsapply.inputs.default_value = 0
+        antsapply.inputs.transforms = transform_list
+        antsapply.inputs.invert_transform_flags = [invert_bool] * len(transform_list)
         if not os.path.isfile(output_nii[ind]) or repeat:
             logger.info("- Creating warped image " + output_nii[ind])
             logger.debug(antsapply.cmdline)
@@ -817,6 +823,7 @@ def ants_apply(moving_nii, reference_nii, interp, transform_list, work_dir, inve
     if len(output_nii) == 1:
         output_nii = output_nii[0]
     return output_nii
+
 
 # register data together using reg_target as target, if its a file, use it
 # if not assume its a dict key for an already registered file
@@ -837,9 +844,9 @@ def reg_series(ser_dict, repeat=False):
     # if reg is false, or if there is no input file found, then just make the reg filename same as unreg filename
     for ser in sorted_keys:
         # first, if there is no filename, set to None
-        if not "filename" in ser_dict[ser].keys():
+        if "filename" not in ser_dict[ser].keys():
             ser_dict[ser].update({"filename": "None"})
-        if ser_dict[ser]["filename"] == "None" or not "reg" in ser_dict[ser].keys() or not ser_dict[ser]["reg"]:
+        if ser_dict[ser]["filename"] == "None" or "reg" not in ser_dict[ser].keys() or not ser_dict[ser]["reg"]:
             ser_dict[ser].update({"filename_reg": ser_dict[ser]["filename"]})
             ser_dict[ser].update({"transform": "None"})
             ser_dict[ser].update({"reg": False})
@@ -914,7 +921,7 @@ def reg_series(ser_dict, repeat=False):
             else:
                 movingr = ser_dict[ser]["filename"]
                 movinga = ser_dict[ser]["filename"]
-            if os.path.isfile(movingr) and os.path.isfile(template): # make sure template and moving files exist
+            if os.path.isfile(movingr) and os.path.isfile(template):  # make sure template and moving files exist
                 # handle registration options here
                 if "reg_option" in ser_dict[ser].keys():
                     option = ser_dict[ser]["reg_option"]
@@ -972,7 +979,7 @@ def reg_series(ser_dict, repeat=False):
             else:
                 movingr = ser_dict[ser]["filename"]
                 movinga = ser_dict[ser]["filename"]
-            if os.path.isfile(movingr) and os.path.isfile(template): # check that all files exist prior to reg
+            if os.path.isfile(movingr) and os.path.isfile(template):  # check that all files exist prior to reg
                 # handle registration options here
                 if "reg_option" in ser_dict[ser].keys():
                     option = ser_dict[ser]["reg_option"]
@@ -1035,6 +1042,7 @@ def reg_series(ser_dict, repeat=False):
                 logger.info("- Error attempting to apply existing transform to seies {}".format(ser))
     return ser_dict
 
+
 # split asl and anatomic image (if necessary)
 def split_asl(ser_dict):
     # logging
@@ -1074,6 +1082,7 @@ def split_asl(ser_dict):
         ser_dict.update({"ASL": {"filename": "None", "reg": False}})
     return ser_dict
 
+
 # splitter for handling multi-direction dwi data
 def split_dwi(ser_dict):
     # logging
@@ -1088,7 +1097,7 @@ def split_dwi(ser_dict):
         with open(dwi_bvals, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
             rows = [item for item in reader]
-            vals_bool = [int(item)>0 for item in rows[0]]
+            vals_bool = [int(item) > 0 for item in rows[0]]
         # load data and average if there is more than 1 item in 4th dimension
         dwi_nii = nib.load(dwi)
         dwi_d = dwi_nii.get_data()
@@ -1110,6 +1119,7 @@ def split_dwi(ser_dict):
         if os.path.isfile(f):
             os.remove(f)
     return ser_dict
+
 
 # combine a split 55 direction DTI file if necessary
 def combine_dti55(ser_dict):
@@ -1146,7 +1156,7 @@ def combine_dti55(ser_dict):
         # read original vals
         with open(dti_bvals, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
-            rows = [item[num_b0-1:] for item in reader]
+            rows = [item[num_b0 - 1:] for item in reader]
         with open(dti_bvals, 'w+') as f:
             writer = csv.writer(f, delimiter='\t')
             writer.writerows(rows)
@@ -1154,7 +1164,7 @@ def combine_dti55(ser_dict):
         if os.path.isfile(dtia_bvecs):
             with open(dti_bvecs, 'r') as f:
                 reader = csv.reader(f, delimiter='\t')
-                rows = [item[num_b0-1:] for item in reader]
+                rows = [item[num_b0 - 1:] for item in reader]
             with open(dti_bvecs, 'w+') as f:
                 writer = csv.writer(f, delimiter='\t')
                 writer.writerows(rows)
@@ -1171,7 +1181,7 @@ def combine_dti55(ser_dict):
     dti_d = dti_f.get_data()
     dtia_f = nib.load(dtia)
     dtia_d = dtia_f.get_data()
-    dti_d = np.concatenate([dti_d, np.reshape(dtia_d, [dtia_d.shape[0], dtia_d.shape[1], dtia_d.shape[2],-1])], axis=3)
+    dti_d = np.concatenate([dti_d, np.reshape(dtia_d, [dtia_d.shape[0], dtia_d.shape[1], dtia_d.shape[2], -1])], axis=3)
     dti_f = nib.Nifti1Image(dti_d, dti_f.affine, dti_f.header)
     nib.save(dti_f, dti)
     # combine bvals
@@ -1209,6 +1219,7 @@ def combine_dti55(ser_dict):
         if os.path.isfile(item):
             os.remove(item)
 
+
 # function for converting dcm2nii bval and bvecs files to the necessary inputs for FSL eddy
 # returns a list of filenames [bvals, bvecs, acqp, index] or None if files cannot be made
 def bvec_convert(bvals, bvecs):
@@ -1230,10 +1241,8 @@ def bvec_convert(bvals, bvecs):
         reader = csv.reader(f, delimiter='\t')
         bvecs_rows = [row for row in reader]
     # check if bvecs was actually space delimited, if so don't do anything. If not, then overwrite as space delimited.
-    if len(bvecs_rows[0])>1:
+    if len(bvecs_rows[0]) > 1:
         # check for mutliple B0 entries here - not sure if this is a real issue.
-
-
 
         with open(bvecs, 'w+') as f:
             writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
@@ -1252,7 +1261,7 @@ def bvec_convert(bvals, bvecs):
     # he fourth element in each row is the time (in seconds) between reading the center of the first echo and reading
     # the center of the last echo. It is the "dwell time" multiplied by "number of PE steps - 1" and it is also the
     # reciprocal of the PE bandwidth/pixel.
-    acqp_list = [[0, 1, 0, 0.0655]] # hard-coded for now.
+    acqp_list = [[0, 1, 0, 0.0655]]  # hard-coded for now.
     with open(acqp, 'w+') as f:
         writer = csv.writer(f, delimiter=' ', quoting=csv.QUOTE_MINIMAL)
         writer.writerows(acqp_list)
@@ -1264,6 +1273,7 @@ def bvec_convert(bvals, bvecs):
         writer.writerows(index_list)
     # return outputs as a list
     return [bvals, bvecs, acqp, index]
+
 
 # DTI processing if present
 def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
@@ -1360,7 +1370,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
             dti.inputs.bvals = my_dti_bval
             dti.inputs.base_name = dti_out
             dti.inputs.mask = dti_mask
-            # dti.inputs.args = "-w"  # libc++abi.dylib: terminating with uncaught exception of type NEWMAT::SingularException
+            # dti.inputs.args = "-w"  # terminating with uncaught exception of type NEWMAT::SingularException
             dti.terminal_output = "none"
             dti.inputs.save_tensor = True
             # dti.ignore_exception = True  # for some reason running though nipype causes error at end
@@ -1369,7 +1379,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
                 try:
                     logger.debug(dti.cmdline)
                     _ = dti.run()
-                    # if DTI processing fails to create FA, it may be due to least squares option, so remove and run again
+                    # if DTI processing fails to create FA, it may be due to least squares option
                     if not os.path.isfile(fa_out):
                         dti.inputs.args = ""
                         logger.debug(dti.cmdline)
@@ -1394,6 +1404,7 @@ def dti_proc(ser_dict, dti_index, dti_acqp, dti_bvec, dti_bval, repeat=False):
             logger.info("- Skipping DTI processing since eddy corrected DTI does not exist")
     return ser_dict
 
+
 # make mask based on t1gad and flair and apply to all other images
 def brain_mask(ser_dict, repeat=False):
     # logging
@@ -1406,7 +1417,7 @@ def brain_mask(ser_dict, repeat=False):
     logger.info("BRAIN MASKING:")
 
     # for loop for masking different contrasts
-    to_mask = [c for c in ["FLAIR", "T1gad", "DWI"] if c in ser_dict.keys()] # list of contrasts to mask
+    to_mask = [c for c in ["FLAIR", "T1gad", "DWI"] if c in ser_dict.keys()]  # list of contrasts to mask
     masks = []  # list of completed masks
     for contrast in to_mask:
         # if original and registered files exist for this contrast
@@ -1443,7 +1454,8 @@ def brain_mask(ser_dict, repeat=False):
         majority_cmd = "cp " + masks[0] + " " + combined_mask
     else:
         majority_cmd = "ImageMath 3 " + combined_mask + " MajorityVoting " + " ".join(masks)
-    if not os.path.isfile(combined_mask) and majority_cmd:  # if combined mask file does not exist, and indivudual masks exist
+    if not os.path.isfile(
+            combined_mask) and majority_cmd:  # if combined mask file does not exist, and indivudual masks exist
         logger.info("- Making combined brain mask at " + combined_mask)
         logger.debug(majority_cmd)
         _ = subprocess.call(majority_cmd, shell=True)
@@ -1491,6 +1503,7 @@ def brain_mask(ser_dict, repeat=False):
         logger.info("- Combined mask file not found, expected location is: " + combined_mask)
     return ser_dict
 
+
 # bias correction
 # takes series dict, returns series dict, performs intensity windsorization and n4 bias correction on select volumes
 def bias_correct(ser_dict, repeat=False):
@@ -1503,7 +1516,7 @@ def bias_correct(ser_dict, repeat=False):
     dcm_dir = ser_dict["info"]["dcmdir"]
     # identify files to bias correct
     for srs in ser_dict:
-        if "bias" in ser_dict[srs] and ser_dict[srs]["bias"]: # only do bias if specified in series dict
+        if "bias" in ser_dict[srs] and ser_dict[srs]["bias"]:  # only do bias if specified in series dict
             # get name of masked file and the mask itself
             f = os.path.join(os.path.dirname(dcm_dir), idno + "_" + srs + "_wm.nii.gz")
             mask = os.path.join(os.path.dirname(dcm_dir), idno + "_combined_brain_mask.nii.gz")
@@ -1513,9 +1526,9 @@ def bias_correct(ser_dict, repeat=False):
                 logger.info("- Skipping bias correction for " + srs + " as mask image does not exist.")
             else:
                 # generate output filenames for corrected image and bias field
-                biasfile = f.rsplit(".nii", 1)[0] + "_biasmap.nii.gz"
-                truncated_img = f.rsplit(".nii", 1)[0] + "t.nii.gz"
-                biasimg = truncated_img.rsplit(".nii", 1)[0] + "b.nii.gz"
+                biasfile = str(f.rsplit(".nii", 1)[0]) + "_biasmap.nii.gz"
+                truncated_img = str(f.rsplit(".nii", 1)[0]) + "t.nii.gz"
+                biasimg = str(truncated_img.rsplit(".nii", 1)[0]) + "b.nii.gz"
                 # first truncate image intensities, this also removes any negative values
                 if not os.path.isfile(truncated_img) or repeat:
                     logger.info("- Truncating image intensities for " + f)
@@ -1525,12 +1538,12 @@ def bias_correct(ser_dict, repeat=False):
                     nii = nib.load(f)
                     img = nii.get_data()
                     affine = nii.get_affine()
-                    vals = np.sort(img[mask_img>0.], None)  # sort data in order
+                    vals = np.sort(img[mask_img > 0.], None)  # sort data in order
                     thresh_lo = vals[int(np.round(thresh[0] * len(vals)))]  # define hi and low thresholds
                     thresh_hi = vals[int(np.round(thresh[1] * len(vals)))]
-                    img_trunc = np.where(img<thresh_lo, thresh_lo, img)  # truncate low
-                    img_trunc = np.where(img_trunc>thresh_hi, thresh_hi, img_trunc)  # truncate hi
-                    img_trunc = np.where(mask_img>0., img_trunc, 0.)  # remask data
+                    img_trunc = np.where(img < thresh_lo, thresh_lo, img)  # truncate low
+                    img_trunc = np.where(img_trunc > thresh_hi, thresh_hi, img_trunc)  # truncate hi
+                    img_trunc = np.where(mask_img > 0., img_trunc, 0.)  # remask data
                     nii = nib.Nifti1Image(img_trunc, affine)  # make nii and save
                     nib.save(nii, str(truncated_img))
                 else:
@@ -1538,21 +1551,21 @@ def bias_correct(ser_dict, repeat=False):
                 # run bias correction on truncated image
                 # apply N4 bias correction
                 n4_cmd = N4BiasFieldCorrection()
-                n4_cmd.inputs.copy_header=True
-                n4_cmd.inputs.input_image=truncated_img
-                n4_cmd.inputs.save_bias=True
-                n4_cmd.inputs.bias_image=biasfile
-                n4_cmd.inputs.bspline_fitting_distance=300
-                n4_cmd.inputs.bspline_order=3
-                n4_cmd.inputs.convergence_threshold=1e-6
-                n4_cmd.inputs.dimension=3
+                n4_cmd.inputs.copy_header = True
+                n4_cmd.inputs.input_image = truncated_img
+                n4_cmd.inputs.save_bias = True
+                n4_cmd.inputs.bias_image = biasfile
+                n4_cmd.inputs.bspline_fitting_distance = 300
+                n4_cmd.inputs.bspline_order = 3
+                n4_cmd.inputs.convergence_threshold = 1e-6
+                n4_cmd.inputs.dimension = 3
                 # n4_cmd.inputs.environ=
-                n4_cmd.inputs.mask_image=mask
-                n4_cmd.inputs.n_iterations=[50,50,50,50]
-                n4_cmd.inputs.num_threads=multiprocessing.cpu_count()
-                n4_cmd.inputs.output_image=biasimg
-                n4_cmd.inputs.shrink_factor=3
-                #n4_cmd.inputs.weight_image=
+                n4_cmd.inputs.mask_image = mask
+                n4_cmd.inputs.n_iterations = [50, 50, 50, 50]
+                n4_cmd.inputs.num_threads = multiprocessing.cpu_count()
+                n4_cmd.inputs.output_image = biasimg
+                n4_cmd.inputs.shrink_factor = 3
+                # n4_cmd.inputs.weight_image=
                 if not os.path.isfile(biasimg) or repeat:
                     logger.info("- Bias correcting " + truncated_img)
                     logger.debug(n4_cmd.cmdline)
@@ -1563,6 +1576,7 @@ def bias_correct(ser_dict, repeat=False):
                     logger.debug(n4_cmd.cmdline)
                     ser_dict[srs].update({"filename_bias": biasimg})
     return ser_dict
+
 
 # normalize nifits
 # takes a series dict and returns a series dict, normalizes all masked niis
@@ -1595,6 +1609,7 @@ def norm_niis(ser_dict, repeat=False):
                 ser_dict[srs].update({"filename_norm": normname})
     return ser_dict
 
+
 # make 4d nii
 # takes series dict, returns series dict, makes a 4d nii using all normed series
 def make_nii4d(ser_dict, repeat=False):
@@ -1607,16 +1622,16 @@ def make_nii4d(ser_dict, repeat=False):
     files = []
     # get all normalized images and collect them in a list
     for srs in ser_dict:
-        if "filename_norm" in ser_dict[srs]: # normalized files only, others ignored
+        if "filename_norm" in ser_dict[srs]:  # normalized files only, others ignored
             files.append(ser_dict[srs]["filename_norm"])
             logger.info("- Adding " + srs + " to nii4D list at " + ser_dict[srs]["filename_norm"])
-    if files and len(files)>1: # only attempt work if normalized files exist and there is more than 1
+    if files and len(files) > 1:  # only attempt work if normalized files exist and there is more than 1
         # get dirname from first normalized image, make nii4d name from this
         bdir = os.path.dirname(files[0])
         nii4d = os.path.join(bdir, idno + "_nii4d.nii.gz")
         # if nii4d doesn't exist, make it
-        #nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
-        #os.system(nii4dcmd)
+        # nii4dcmd = "ImageMath 4 " + nii4d + " TimeSeriesAssemble 1 1 " + " ".join(files)
+        # os.system(nii4dcmd)
         merger = Merge()
         merger.inputs.in_files = files
         merger.inputs.dimension = "t"
@@ -1632,6 +1647,7 @@ def make_nii4d(ser_dict, repeat=False):
     else:
         logger.info("- Not enough files to make 4D Nii")
     return ser_dict
+
 
 # create tumor segmentation
 def tumor_seg(ser_dict):
@@ -1663,6 +1679,7 @@ def tumor_seg(ser_dict):
         logger.info("- Tumor segmentation file aready exists at " + seg_file)
     return ser_dict
 
+
 # print and save series dict
 def print_series_dict(series_dict, repeat=False):
     dcm_dir = series_dict["info"]["dcmdir"]
@@ -1679,12 +1696,13 @@ def print_series_dict(series_dict, repeat=False):
             for k, v in a_dict.items():
                 if isinstance(v, dict):
                     v = remove_nonstr_from_dict(v)
-                if isinstance(v, (int, long, float, complex, str, list, dict)):
+                if isinstance(v, (int, float, complex, str, list, dict)):
                     if k == "dicoms" and isinstance(v, list) and v:  # ensure dicoms is a list and is not empty
                         new_dict[k] = v[0]
                     else:
                         new_dict[k] = v
             return new_dict
+
         hr_serdict = remove_nonstr_from_dict(series_dict)
         with open(hr_serdict_outfile, 'w') as f:
             f.write("%s" % yaml.safe_dump(hr_serdict))

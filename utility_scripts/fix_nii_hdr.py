@@ -5,7 +5,8 @@ from glob import glob
 import argparse
 import subprocess
 
-########################## define functions ##########################
+
+# define functions
 def fix_nii_hdr(refs, targets):
     # initialize outputs
     cmds = []
@@ -18,7 +19,8 @@ def fix_nii_hdr(refs, targets):
 
     return cmds
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

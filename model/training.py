@@ -24,14 +24,14 @@ def train_sess(sess, model_spec, writer, params, current_epoch):
     update_metrics = model_spec['update_metrics']
     metrics = model_spec['metrics']
     summary_op = model_spec['summary_op']
-    global_step = tf.train.get_global_step()
+    global_step = tf.compat.v1.train.get_global_step()
 
     # Load the training dataset into the pipeline and initialize the metrics local variables
     sess.run(model_spec['iterator_init_op'])
     sess.run(model_spec['metrics_init_op'])
 
     # run through the entire dataset iterator
-    n=1
+    n = 1
     while True:
         try:
             # log to tensorboard only every summary steps
@@ -45,7 +45,7 @@ def train_sess(sess, model_spec, writer, params, current_epoch):
             else:
                 _, _, loss_val = sess.run([train_op, update_metrics, loss])
                 logging.info("Epoch = %03d" % current_epoch + " Batch = %06d" % n + " Loss = %.5e" % loss_val)
-            n=n+1
+            n = n+1
         except tf.errors.OutOfRangeError:
             break
 
@@ -66,11 +66,11 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
         restore_from: (string) directory or file containing weights to restore the graph
     """
     # Initialize tf.Saver instances to save weights during training
-    last_saver = tf.train.Saver(save_relative_paths=True, max_to_keep=5)  # will keep last 5 epochs
-    best_saver = tf.train.Saver(save_relative_paths=True, max_to_keep=1)  # only keep 1 best checkpoint (best on eval)
+    last_saver = tf.compat.v1.train.Saver(save_relative_paths=True, max_to_keep=5)  # will keep last 5 epochs
+    best_saver = tf.compat.v1.train.Saver(save_relative_paths=True, max_to_keep=1)  # only keep 1 best checkpoint
     begin_at_epoch = 0
 
-    with tf.Session() as sess:
+    with tf.compat.v1.Session() as sess:
         # Initialize model variables
         sess.run(train_model_spec['variable_init_op'])
 
@@ -83,8 +83,8 @@ def train_and_evaluate(train_model_spec, eval_model_spec, model_dir, params, res
             last_saver.restore(sess, restore_from)
 
         # For tensorboard (takes care of writing summaries to files)
-        train_writer = tf.summary.FileWriter(os.path.join(model_dir, 'train_summaries'), sess.graph)
-        eval_writer = tf.summary.FileWriter(os.path.join(model_dir, 'eval_summaries'), sess.graph)
+        train_writer = tf.compat.v1.summary.FileWriter(os.path.join(model_dir, 'train_summaries'), sess.graph)
+        eval_writer = tf.compat.v1.summary.FileWriter(os.path.join(model_dir, 'eval_summaries'), sess.graph)
 
         # set best eval error to infinity
         best_eval_error = float('inf')

@@ -6,7 +6,8 @@ import multiprocessing
 import argparse
 from glob import glob
 
-########################## define functions ##########################
+
+# define functions
 # Fast ants affine
 # takes moving and template niis and a work dir
 # performs fast affine registration and returns a list of transforms
@@ -14,7 +15,6 @@ def affine_reg(moving_nii1, moving_nii2, template_nii1, template_nii2, work_dir,
 
     # get basenames
     moving_name = os.path.basename(moving_nii2).split(".")[0]
-    template_name = os.path.basename(template_nii1).split(".")[0]
     idno = moving_name.rsplit('_')[0]
     outprefix = os.path.join(work_dir, moving_name + "_2_" + idno + "_FLAIR_w_")
 
@@ -52,30 +52,30 @@ def affine_reg(moving_nii1, moving_nii2, template_nii1, template_nii2, work_dir,
         antsreg.inputs.transform_parameters = [(0.2,), (0.1,), (0.1,)]
     else:
         antsreg = Registration()
-        antsreg.inputs.args='--float'
-        antsreg.inputs.fixed_image=[template_nii2, template_nii1]
-        antsreg.inputs.moving_image=[moving_nii2, moving_nii1]
-        antsreg.inputs.output_transform_prefix=outprefix
-        antsreg.inputs.num_threads=multiprocessing.cpu_count()
-        antsreg.inputs.smoothing_sigmas=[[6, 4, 1, 0], [2, 1, 0]]
-        antsreg.inputs.sigma_units=['vox'] * 2
-        antsreg.inputs.transforms=['Rigid', 'Affine']
-        antsreg.terminal_output='none'
-        antsreg.inputs.use_histogram_matching=True
-        antsreg.inputs.write_composite_transform=True
+        antsreg.inputs.args = '--float'
+        antsreg.inputs.fixed_image = [template_nii2, template_nii1]
+        antsreg.inputs.moving_image = [moving_nii2, moving_nii1]
+        antsreg.inputs.output_transform_prefix = outprefix
+        antsreg.inputs.num_threads = multiprocessing.cpu_count()
+        antsreg.inputs.smoothing_sigmas = [[6, 4, 1, 0], [2, 1, 0]]
+        antsreg.inputs.sigma_units = ['vox'] * 2
+        antsreg.inputs.transforms = ['Rigid', 'Affine']
+        antsreg.terminal_output = 'none'
+        antsreg.inputs.use_histogram_matching = True
+        antsreg.inputs.write_composite_transform = True
         antsreg.inputs.initial_moving_transform_com = 0
-        antsreg.inputs.winsorize_lower_quantile=0.005
-        antsreg.inputs.winsorize_upper_quantile=0.995
-        antsreg.inputs.metric=[['Mattes', 'Mattes'], ['Mattes', 'Mattes']]
-        antsreg.inputs.metric_weight=[[0.5, 0.5], [0.5, 0.5]]
-        antsreg.inputs.number_of_iterations=[[1000, 1000, 1000, 1000], [50, 50, 25]]
-        antsreg.inputs.convergence_threshold=[1e-07, 1e-07]
-        antsreg.inputs.convergence_window_size=[10, 10]
-        antsreg.inputs.radius_or_number_of_bins=[[32, 32], [32, 32]]
-        antsreg.inputs.sampling_strategy=[['Regular', 'Regular'], ['Regular', 'Regular']]
-        antsreg.inputs.sampling_percentage=[[0.5, 0.5], [0.5, 0.5]]
-        antsreg.inputs.shrink_factors=[[4, 3, 2, 1], [4, 2, 1]]
-        antsreg.inputs.transform_parameters=[(0.2,), (0.1,)]
+        antsreg.inputs.winsorize_lower_quantile = 0.005
+        antsreg.inputs.winsorize_upper_quantile = 0.995
+        antsreg.inputs.metric = [['Mattes', 'Mattes'], ['Mattes', 'Mattes']]
+        antsreg.inputs.metric_weight = [[0.5, 0.5], [0.5, 0.5]]
+        antsreg.inputs.number_of_iterations = [[1000, 1000, 1000, 1000], [50, 50, 25]]
+        antsreg.inputs.convergence_threshold = [1e-07, 1e-07]
+        antsreg.inputs.convergence_window_size = [10, 10]
+        antsreg.inputs.radius_or_number_of_bins = [[32, 32], [32, 32]]
+        antsreg.inputs.sampling_strategy = [['Regular', 'Regular'], ['Regular', 'Regular']]
+        antsreg.inputs.sampling_percentage = [[0.5, 0.5], [0.5, 0.5]]
+        antsreg.inputs.shrink_factors = [[4, 3, 2, 1], [4, 2, 1]]
+        antsreg.inputs.transform_parameters = [(0.2,), (0.1,)]
 
     trnsfm = outprefix + "Composite.h5"
     if not os.path.isfile(trnsfm) or repeat:
@@ -86,6 +86,7 @@ def affine_reg(moving_nii1, moving_nii2, template_nii1, template_nii2, work_dir,
         print("Warp file already exists at " + trnsfm)
         print(antsreg.cmdline)
     return trnsfm
+
 
 # Ants apply transforms to list
 # takes moving and reference niis, an output filename, plus a transform list
@@ -106,15 +107,15 @@ def ants_apply(moving_nii, reference_nii, interp, transform_list, work_dir, inve
         output_nii[ind] = os.path.join(work_dir, os.path.basename(mvng).split(ext)[0] + '_w.nii.gz')
         # do registration if not already done
         antsapply = ApplyTransforms()
-        antsapply.inputs.dimension=3
-        antsapply.terminal_output='none'  # suppress terminal output
-        antsapply.inputs.input_image=mvng
-        antsapply.inputs.reference_image=reference_nii
-        antsapply.inputs.output_image=output_nii[ind]
-        antsapply.inputs.interpolation=interp
-        antsapply.inputs.default_value=0
-        antsapply.inputs.transforms=transform_list
-        antsapply.inputs.invert_transform_flags=[invert_bool] * len(transform_list)
+        antsapply.inputs.dimension = 3
+        antsapply.terminal_output = 'none'  # suppress terminal output
+        antsapply.inputs.input_image = mvng
+        antsapply.inputs.reference_image = reference_nii
+        antsapply.inputs.output_image = output_nii[ind]
+        antsapply.inputs.interpolation = interp
+        antsapply.inputs.default_value = 0
+        antsapply.inputs.transforms = transform_list
+        antsapply.inputs.invert_transform_flags = [invert_bool] * len(transform_list)
         if not os.path.isfile(output_nii[ind]) or repeat:
             print("Creating warped image " + output_nii[ind])
             print(antsapply.cmdline)
@@ -126,6 +127,7 @@ def ants_apply(moving_nii, reference_nii, interp, transform_list, work_dir, inve
     if len(output_nii) == 1:
         output_nii = output_nii[0]
     return output_nii
+
 
 def apply_mask(input_file, mask_file, repeat=False):
 
@@ -144,7 +146,8 @@ def apply_mask(input_file, mask_file, repeat=False):
 
     return output_file
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()

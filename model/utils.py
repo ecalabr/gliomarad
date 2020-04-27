@@ -24,8 +24,8 @@ class Params:
     data_prefix = None
     label_prefix = None
     mask_prefix = None
-    mask_dilate = None # must have same number of dims as mask
-    filter_zero = None # set the threshold for filtering out patches where labels is mostly zero
+    mask_dilate = None  # must have same number of dims as mask
+    filter_zero = None  # set the threshold for filtering out patches where labels is mostly zero
 
     dimension_mode = None  # must be 2D, 2.5D, 3D
     data_plane = None
@@ -79,7 +79,7 @@ class Params:
     def check(self):
         """Checks that all required parameters are defined in params.json file"""
         member_val = [getattr(self, attr) for attr in dir(self) if
-                   not callable(getattr(self, attr)) and not attr.startswith("__")]
+                      not callable(getattr(self, attr)) and not attr.startswith("__")]
         members = [attr for attr in dir(self) if not callable(getattr(self, attr)) and not attr.startswith("__")]
         if any([member is None for member in member_val]):
             raise ValueError(
@@ -144,7 +144,7 @@ def learning_rate_picker(learn_rate, learning_rate_decay, global_step):
     # sanity checks
     if not isinstance(learn_rate, (float, list, tuple)):
         raise ValueError("Learning rate must be a float or list/tuple")
-    if not isinstance(learning_rate_decay, (str, unicode)):
+    if not isinstance(learning_rate_decay, str):
         raise ValueError("Learning rate decay parameter must be a string")
 
     # chooser for decay method
@@ -160,7 +160,8 @@ def learning_rate_picker(learn_rate, learning_rate_decay, global_step):
         start_lr = learn_rate[0]
         steps = learn_rate[1]
         decay = learn_rate[2]
-        learning_rate_function = tf.train.exponential_decay(start_lr, global_step, steps, decay, staircase=True)
+        learning_rate_function = tf.compat.v1.train.exponential_decay(start_lr, global_step, steps, decay,
+                                                                      staircase=True)
 
     # not implemented yet
     else:
@@ -181,7 +182,8 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
     """
 
     # sanity checks
-    if not isinstance(loss_method, (str, unicode)): raise ValueError("Loss method parameter must be a string")
+    if not isinstance(loss_method, str):
+        raise ValueError("Loss method parameter must be a string")
     if weights is None:
         weights = 1.0
     loss_methods = ['MSE', 'MAE', 'auxiliary_MAE', 'MSE25D', 'MAE25D', 'softmaxCE', 'weighted_dice', 'gen_dice']
@@ -189,11 +191,11 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
     # chooser for decay method
     # MSE loss
     if loss_method == 'MSE':
-        loss_function = tf.losses.mean_squared_error(labels, predictions, weights)
+        loss_function = tf.compat.v1.losses.mean_squared_error(labels, predictions, weights)
 
     # MAE loss
     elif loss_method == 'MAE':
-        loss_function = tf.losses.absolute_difference(labels, predictions, weights)
+        loss_function = tf.compat.v1.losses.absolute_difference(labels, predictions, weights)
 
     # auxiliary loss
     # https://www-sciencedirect-com.ucsf.idm.oclc.org/science/article/pii/S1361841518301257
@@ -213,7 +215,7 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             else:
                 pred = tf.expand_dims(predictions[:, :, :, i], axis=-1)
             # generate MAE loss
-            loss = tf.losses.absolute_difference(labels, pred, weights)
+            loss = tf.compat.v1.losses.absolute_difference(labels, pred, weights)
             if i == 0:  # for first loop, use full value of loss as this is the final predictions
                 loss_function = loss
             else:  # for all subsequent loops, add the loss times 0.5, as these are auxiliary losses
@@ -239,12 +241,12 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             raise ValueError("Data format not understood: " + str(data_format))
 
         # define loss as only the center slice first
-        loss_function = tf.losses.mean_squared_error(
-            center_pred, center_lab, center_weights, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
+        loss_function = tf.compat.v1.losses.mean_squared_error(
+            center_pred, center_lab, center_weights, reduction=tf.compat.v1.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
 
         # add loss for the rest of the slab to the loss
-        loss_function = tf.add(loss_function, tf.losses.mean_squared_error(
-            predictions, labels, weights, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS))
+        loss_function = tf.add(loss_function, tf.compat.v1.losses.mean_squared_error(
+            predictions, labels, weights, reduction=tf.compat.v1.losses.Reduction.SUM_BY_NONZERO_WEIGHTS))
 
     # 2.5D MAE loss
     elif loss_method == 'MAE25D':
@@ -264,29 +266,19 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             raise ValueError("Data format not understood: " + str(data_format))
 
         # define loss
-        loss_function = tf.losses.absolute_difference(center_lab, center_pred, center_weights)
+        loss_function = tf.compat.v1.losses.absolute_difference(center_lab, center_pred, center_weights)
 
         # add remaining slices at equal weight
-        loss_function = tf.add(loss_function, tf.losses.absolute_difference(labels, predictions, weights))
+        loss_function = tf.add(loss_function, tf.compat.v1.losses.absolute_difference(labels, predictions, weights))
 
     # softmax cross entropy w logits
     elif loss_method == 'softmaxCE':
-        # handle channels last
-        if data_format == 'channels_last':
-            # channels last [b, x, y, z, c]
-            axis = -1
-        # handle channels first
-        elif data_format == 'channels_first':
-            # channels first [b, c, x, y, z]
-            axis = 1
-        else:
-            raise ValueError("Data format not understood: " + str(data_format))
         # define loss function
-        loss_function = tf.losses.sparse_softmax_cross_entropy(
+        loss_function = tf.compat.v1.losses.sparse_softmax_cross_entropy(
             labels=tf.cast(labels, tf.int32),
             logits=predictions,
-            weights=1.0, # not weighting using mask as mask is target
-            reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS
+            weights=1.0,  # not weighting using mask as mask is target
+            reduction=tf.compat.v1.losses.Reduction.SUM_BY_NONZERO_WEIGHTS
         )
 
     # generalized DICE loss for 2D and 2.5D networks
@@ -303,8 +295,8 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             kernel = (float(kerlen) + 1. - np.abs(np.arange(float(kerlen)) - np.arange(float(kerlen))[::-1])) / 2.
             kernel /= kernel.sum()
             kernel = tf.reshape(tf.constant(kernel, dtype=tf.float32), shape=[1, 1, 1, kerlen, 1])
-            y = tf.reduce_sum(tf.multiply(y, kernel), axis=3)
-            y_pred = tf.reduce_sum(tf.multiply(y_pred, kernel), axis=3)
+            y = tf.reduce_sum(input_tensor=tf.multiply(y, kernel), axis=3)
+            y_pred = tf.reduce_sum(input_tensor=tf.multiply(y_pred, kernel), axis=3)
         # handle channels first
         elif len(y_pred.shape) == 5 and data_format == 'channels_first':
             # for channels first [b, c, x, y, z]
@@ -312,20 +304,21 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
             kernel = (kerlen + 1 - np.abs(np.arange(kerlen) - np.arange(kerlen)[::-1])) / 2
             kernel /= kernel.sum()
             kernel = tf.reshape(tf.constant(kernel, dtype=tf.float32), shape=[1, 1, 1, 1, kerlen])
-            y = tf.reduce_sum(tf.multiply(y, kernel), axis=4)
-            y_pred = tf.reduce_sum(tf.multiply(y_pred, kernel), axis=4)
+            y = tf.reduce_sum(input_tensor=tf.multiply(y, kernel), axis=4)
+            y_pred = tf.reduce_sum(input_tensor=tf.multiply(y_pred, kernel), axis=4)
 
-        mean = 0.5 # the weight is the proportion of 1s to 0s in the label set
+        mean = 0.5  # the weight is the proportion of 1s to 0s in the label set
         w_1 = 1. / mean ** 2.
         w_0 = 1. / (1. - mean) ** 2.
         y_true_f_1 = tf.reshape(y, [-1])
         y_pred_f_1 = tf.reshape(y_pred[..., 1] if data_format == 'channels_last' else y_pred[:, 1, ...], [-1])
         y_true_f_0 = tf.reshape(1 - y, [-1])
         y_pred_f_0 = tf.reshape(y_pred[..., 0] if data_format == 'channels_last' else y_pred[:, 0, ...], [-1])
-        int_0 = tf.reduce_sum(y_true_f_0 * y_pred_f_0)
-        int_1 = tf.reduce_sum(y_true_f_1 * y_pred_f_1)
-        gen_dice = 2. * (w_0 * int_0 + w_1 * int_1) / ((w_0 * (tf.reduce_sum(y_true_f_0) + tf.reduce_sum(y_pred_f_0))) +
-                                                       (w_1 * (tf.reduce_sum(y_true_f_1) + tf.reduce_sum(y_pred_f_1))))
+        int_0 = tf.reduce_sum(input_tensor=y_true_f_0 * y_pred_f_0)
+        int_1 = tf.reduce_sum(input_tensor=y_true_f_1 * y_pred_f_1)
+        gen_dice = 2. * (w_0 * int_0 + w_1 * int_1) / (
+                    (w_0 * (tf.reduce_sum(input_tensor=y_true_f_0) + tf.reduce_sum(input_tensor=y_pred_f_0))) +
+                    (w_1 * (tf.reduce_sum(input_tensor=y_true_f_1) + tf.reduce_sum(input_tensor=y_pred_f_1))))
         loss_function = 1. - gen_dice
 
     # not implemented loss
@@ -364,16 +357,19 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
         channels = image_data.shape[0] if data_format == 'channels_first' else image_data.shape[2]
         for z in range(channels):
             ax = fig.add_subplot(1, nplots, z + 1)
-            data_img = np.swapaxes(np.squeeze(image_data[z, :, :]), 0, 1) if data_format == 'channels_first' else np.squeeze(
+            data_img = np.swapaxes(np.squeeze(image_data[z, :, :]), 0,
+                                   1) if data_format == 'channels_first' else np.squeeze(
                 image_data[:, :, z])
             ax.imshow(data_img, cmap='gray')
             ax.set_title('Data Image ' + str(z + 1))
 
         # label data
         label_data = dataset_data["labels"]  # dataset_data[1]
-        if len(label_data.shape) > 3: label_data = np.squeeze(label_data[0, :, :, :])  # handle batch data
+        if len(label_data.shape) > 3:
+            label_data = np.squeeze(label_data[0, :, :, :])  # handle batch data
         ax = fig.add_subplot(1, nplots, nplots)
-        label_img = np.swapaxes(np.squeeze(label_data), 0, 1) if data_format == 'channels_first' else np.squeeze(label_data)
+        label_img = np.swapaxes(np.squeeze(label_data), 0, 1) if data_format == 'channels_first' else np.squeeze(
+            label_data)
         ax.imshow(label_img, cmap='gray')
         ax.set_title('Labels')
 

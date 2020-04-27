@@ -8,7 +8,8 @@ from glob import glob
 import pydicom as dicom
 import re
 
-########################## define functions ##########################
+
+# define functions
 def id_dcmdir_keyword(dicom_dirs, keyword):
     # initialize outputs
     del_dir_list = []
@@ -28,10 +29,10 @@ def id_dcmdir_keyword(dicom_dirs, keyword):
                     if hasattr(hdr, 'SeriesDescription') and hdr.SeriesDescription:
                         desc = str(hdr.SeriesDescription)
                         # check for reformat tag
-                        #if hasattr(hdr, 'ImageType') and 'REFORMATTED' in hdr.ImageType:
+                        # if hasattr(hdr, 'ImageType') and 'REFORMATTED' in hdr.ImageType:
                         #    desc = desc + ' reformat'
                         # check if series description has keyword(s)
-                        if re.search(keyword, desc): #and re.search('reformat', desc):
+                        if re.search(keyword, desc):  # and re.search('reformat', desc):
                             del_dir_list.append(dcm_dir)
                             del_desc_list.append(desc)
     # return the outputs
@@ -45,7 +46,8 @@ def id_dcmdir_keyword(dicom_dirs, keyword):
         print('rm -r ' + del_dir_list[ind])
     return del_dir_list, del_desc_list
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
@@ -91,7 +93,7 @@ if __name__ == '__main__':
     # get the actual dicom directories
     dcm_dirs = []
     for d in data_dirs:
-        dicom_direc_candidates = glob(d + '/*/*')
+        dicom_direc_candidates = glob(str(d) + '/*/*')
         if dicom_direc_candidates:
             for item in dicom_direc_candidates:
                 if os.path.isdir(item):

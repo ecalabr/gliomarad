@@ -5,7 +5,8 @@ import csv
 import os
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 def mpower_csv_convert(mpower_csv, air_csv):
     # define lists
     mrn = []
@@ -58,7 +59,8 @@ def mpower_csv_convert(mpower_csv, air_csv):
 
     return outname
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()

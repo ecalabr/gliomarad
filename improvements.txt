@@ -1,6 +1,5 @@
 incorporate topup DTI files when/where they exist
 
-
 segmentation networks
 
 

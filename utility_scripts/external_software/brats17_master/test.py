@@ -15,15 +15,13 @@ import time
 import os
 import sys
 import tensorflow as tf
-from tensorflow.contrib.data import Iterator
-from util.data_loader import *
-from util.data_process import *
-from util.train_test_func import *
-from util.parse_config import parse_config
+from utility_scripts.external_software.brats17_master.util.data_loader import *
+from utility_scripts.external_software.brats17_master.util.train_test_func import *
+from utility_scripts.external_software.brats17_master.util.parse_config import parse_config
 from train import NetFactory
 
 # set tensorflow verbosity to error
-tf.logging.set_verbosity(tf.logging.ERROR)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 def test(data_root, save_folder, data_names):
     # build fake config file
@@ -122,7 +120,7 @@ def test(data_root, save_folder, data_names):
 
         # construct graph for 1st network
         full_data_shape1 = [batch_size] + data_shape1
-        x1 = tf.placeholder(tf.float32, shape = full_data_shape1)
+        x1 = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape1)
         net_class1 = NetFactory.create(net_type1)
         net1 = net_class1(num_classes = class_num1,w_regularizer = None,
                     b_regularizer = None, name = net_name1)
@@ -142,7 +140,7 @@ def test(data_root, save_folder, data_names):
         class_num1ax   = config_net1ax['class_num']
         
         full_data_shape1ax = [batch_size] + data_shape1ax
-        x1ax = tf.placeholder(tf.float32, shape = full_data_shape1ax)          
+        x1ax = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape1ax)          
         net_class1ax = NetFactory.create(net_type1ax)
         net1ax = net_class1ax(num_classes = class_num1ax,w_regularizer = None,
                     b_regularizer = None, name = net_name1ax)
@@ -158,7 +156,7 @@ def test(data_root, save_folder, data_names):
         class_num1sg   = config_net1sg['class_num']
 
         full_data_shape1sg = [batch_size] + data_shape1sg
-        x1sg = tf.placeholder(tf.float32, shape = full_data_shape1sg)          
+        x1sg = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape1sg)          
         net_class1sg = NetFactory.create(net_type1sg)
         net1sg = net_class1sg(num_classes = class_num1sg,w_regularizer = None,
                     b_regularizer = None, name = net_name1sg)
@@ -174,7 +172,7 @@ def test(data_root, save_folder, data_names):
         class_num1cr   = config_net1cr['class_num']
 
         full_data_shape1cr = [batch_size] + data_shape1cr
-        x1cr = tf.placeholder(tf.float32, shape = full_data_shape1cr)          
+        x1cr = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape1cr)          
         net_class1cr = NetFactory.create(net_type1cr)
         net1cr = net_class1cr(num_classes = class_num1cr,w_regularizer = None,
                     b_regularizer = None, name = net_name1cr)
@@ -194,7 +192,7 @@ def test(data_root, save_folder, data_names):
             
             # construct graph for 2st network
             full_data_shape2 = [batch_size] + data_shape2
-            x2 = tf.placeholder(tf.float32, shape = full_data_shape2)          
+            x2 = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape2)          
             net_class2 = NetFactory.create(net_type2)
             net2 = net_class2(num_classes = class_num2,w_regularizer = None,
                         b_regularizer = None, name = net_name2)
@@ -214,7 +212,7 @@ def test(data_root, save_folder, data_names):
             class_num2ax   = config_net2ax['class_num']
             
             full_data_shape2ax = [batch_size] + data_shape2ax
-            x2ax = tf.placeholder(tf.float32, shape = full_data_shape2ax)          
+            x2ax = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape2ax)          
             net_class2ax = NetFactory.create(net_type2ax)
             net2ax = net_class2ax(num_classes = class_num2ax,w_regularizer = None,
                         b_regularizer = None, name = net_name2ax)
@@ -230,7 +228,7 @@ def test(data_root, save_folder, data_names):
             class_num2sg   = config_net2sg['class_num']
 
             full_data_shape2sg = [batch_size] + data_shape2sg
-            x2sg = tf.placeholder(tf.float32, shape = full_data_shape2sg)          
+            x2sg = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape2sg)          
             net_class2sg = NetFactory.create(net_type2sg)
             net2sg = net_class2sg(num_classes = class_num2sg,w_regularizer = None,
                         b_regularizer = None, name = net_name2sg)
@@ -246,7 +244,7 @@ def test(data_root, save_folder, data_names):
             class_num2cr   = config_net2cr['class_num']
 
             full_data_shape2cr = [batch_size] + data_shape2cr
-            x2cr = tf.placeholder(tf.float32, shape = full_data_shape2cr)          
+            x2cr = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape2cr)          
             net_class2cr = NetFactory.create(net_type2cr)
             net2cr = net_class2cr(num_classes = class_num2cr,w_regularizer = None,
                         b_regularizer = None, name = net_name2cr)
@@ -264,7 +262,7 @@ def test(data_root, save_folder, data_names):
             
             # construct graph for 3st network
             full_data_shape3 = [batch_size] + data_shape3
-            x3 = tf.placeholder(tf.float32, shape = full_data_shape3)          
+            x3 = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape3)          
             net_class3 = NetFactory.create(net_type3)
             net3 = net_class3(num_classes = class_num3,w_regularizer = None,
                         b_regularizer = None, name = net_name3)
@@ -284,7 +282,7 @@ def test(data_root, save_folder, data_names):
             class_num3ax   = config_net3ax['class_num']
             
             full_data_shape3ax = [batch_size] + data_shape3ax
-            x3ax = tf.placeholder(tf.float32, shape = full_data_shape3ax)          
+            x3ax = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape3ax)          
             net_class3ax = NetFactory.create(net_type3ax)
             net3ax = net_class3ax(num_classes = class_num3ax,w_regularizer = None,
                         b_regularizer = None, name = net_name3ax)
@@ -300,7 +298,7 @@ def test(data_root, save_folder, data_names):
             class_num3sg   = config_net3sg['class_num']
             # construct graph for 3st network
             full_data_shape3sg = [batch_size] + data_shape3sg
-            x3sg = tf.placeholder(tf.float32, shape = full_data_shape3sg)          
+            x3sg = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape3sg)          
             net_class3sg = NetFactory.create(net_type3sg)
             net3sg = net_class3sg(num_classes = class_num3sg,w_regularizer = None,
                         b_regularizer = None, name = net_name3sg)
@@ -316,7 +314,7 @@ def test(data_root, save_folder, data_names):
             class_num3cr   = config_net3cr['class_num']
             # construct graph for 3st network
             full_data_shape3cr = [batch_size] + data_shape3cr
-            x3cr = tf.placeholder(tf.float32, shape = full_data_shape3cr)          
+            x3cr = tf.compat.v1.placeholder(tf.float32, shape = full_data_shape3cr)          
             net_class3cr = NetFactory.create(net_type3cr)
             net3cr = net_class3cr(num_classes = class_num3cr,w_regularizer = None,
                         b_regularizer = None, name = net_name3cr)
@@ -325,53 +323,53 @@ def test(data_root, save_folder, data_names):
             proby3cr = tf.nn.softmax(predicty3cr)
 
     # 3, create session and load trained models
-    all_vars = tf.global_variables()
-    sess = tf.InteractiveSession()   
-    sess.run(tf.global_variables_initializer())  
+    all_vars = tf.compat.v1.global_variables()
+    sess = tf.compat.v1.InteractiveSession()   
+    sess.run(tf.compat.v1.global_variables_initializer())  
     if(config_net1):
         net1_vars = [x for x in all_vars if x.name[0:len(net_name1) + 1]==net_name1 + '/']
-        saver1 = tf.train.Saver(net1_vars)
+        saver1 = tf.compat.v1.train.Saver(net1_vars)
         saver1.restore(sess, config_net1['model_file'])
     else:
         net1ax_vars = [x for x in all_vars if x.name[0:len(net_name1ax) + 1]==net_name1ax + '/']
-        saver1ax = tf.train.Saver(net1ax_vars)
+        saver1ax = tf.compat.v1.train.Saver(net1ax_vars)
         saver1ax.restore(sess, config_net1ax['model_file'])
         net1sg_vars = [x for x in all_vars if x.name[0:len(net_name1sg) + 1]==net_name1sg + '/']
-        saver1sg = tf.train.Saver(net1sg_vars)
+        saver1sg = tf.compat.v1.train.Saver(net1sg_vars)
         saver1sg.restore(sess, config_net1sg['model_file'])     
         net1cr_vars = [x for x in all_vars if x.name[0:len(net_name1cr) + 1]==net_name1cr + '/']
-        saver1cr = tf.train.Saver(net1cr_vars)
+        saver1cr = tf.compat.v1.train.Saver(net1cr_vars)
         saver1cr.restore(sess, config_net1cr['model_file'])
 
     if(config_test.get('whole_tumor_only', False) is False):
         if(config_net2):
             net2_vars = [x for x in all_vars if x.name[0:len(net_name2) + 1]==net_name2 + '/']
-            saver2 = tf.train.Saver(net2_vars)
+            saver2 = tf.compat.v1.train.Saver(net2_vars)
             saver2.restore(sess, config_net2['model_file'])
         else:
             net2ax_vars = [x for x in all_vars if x.name[0:len(net_name2ax)+1]==net_name2ax + '/']
-            saver2ax = tf.train.Saver(net2ax_vars)
+            saver2ax = tf.compat.v1.train.Saver(net2ax_vars)
             saver2ax.restore(sess, config_net2ax['model_file'])
             net2sg_vars = [x for x in all_vars if x.name[0:len(net_name2sg)+1]==net_name2sg + '/']
-            saver2sg = tf.train.Saver(net2sg_vars)
+            saver2sg = tf.compat.v1.train.Saver(net2sg_vars)
             saver2sg.restore(sess, config_net2sg['model_file'])     
             net2cr_vars = [x for x in all_vars if x.name[0:len(net_name2cr)+1]==net_name2cr + '/']
-            saver2cr = tf.train.Saver(net2cr_vars)
+            saver2cr = tf.compat.v1.train.Saver(net2cr_vars)
             saver2cr.restore(sess, config_net2cr['model_file'])     
 
         if(config_net3):
             net3_vars = [x for x in all_vars if x.name[0:len(net_name3) + 1]==net_name3 + '/']
-            saver3 = tf.train.Saver(net3_vars)
+            saver3 = tf.compat.v1.train.Saver(net3_vars)
             saver3.restore(sess, config_net3['model_file'])
         else:
             net3ax_vars = [x for x in all_vars if x.name[0:len(net_name3ax) + 1]==net_name3ax+ '/']
-            saver3ax = tf.train.Saver(net3ax_vars)
+            saver3ax = tf.compat.v1.train.Saver(net3ax_vars)
             saver3ax.restore(sess, config_net3ax['model_file'])
             net3sg_vars = [x for x in all_vars if x.name[0:len(net_name3sg) + 1]==net_name3sg+ '/']
-            saver3sg = tf.train.Saver(net3sg_vars)
+            saver3sg = tf.compat.v1.train.Saver(net3sg_vars)
             saver3sg.restore(sess, config_net3sg['model_file'])     
             net3cr_vars = [x for x in all_vars if x.name[0:len(net_name3cr) + 1]==net_name3cr+ '/']
-            saver3cr = tf.train.Saver(net3cr_vars)
+            saver3cr = tf.compat.v1.train.Saver(net3cr_vars)
             saver3cr.restore(sess, config_net3cr['model_file'])     
 
     # 4, load test images

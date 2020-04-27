@@ -6,7 +6,8 @@ import argparse
 import nibabel as nib
 import numpy as np
 
-########################## define functions ##########################
+
+# define functions
 def binary_mask(mask, output, vals_list):
 
     # if output doesnt exist then create it
@@ -16,12 +17,13 @@ def binary_mask(mask, output, vals_list):
             newimg = np.isin(nii.get_data(), vals_list)
         else:
             newimg = nii.get_data() >= vals_list[0]
-        newnii = nib.Nifti1Image(newimg.astype(np.float), nii.affine) # float actuall results in smaller zipped files
+        newnii = nib.Nifti1Image(newimg.astype(np.float), nii.affine)  # float actuall results in smaller zipped files
         nib.save(newnii, output)
 
     return output
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

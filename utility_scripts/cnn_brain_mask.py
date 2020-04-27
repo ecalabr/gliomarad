@@ -8,9 +8,8 @@ from predict import predict_one
 from utility_scripts.prob2seg import convert_prob
 import tensorflow as tf
 
-########################## define functions ##########################
-# define function to make a batch of brain masks from a list of directories
 
+# define function to make a batch of brain masks from a list of directories
 def batch_mask(infer_direcs, param_files, best_last, out_dir, overwrite=False):
     # initiate outputs
     outnames = []
@@ -31,7 +30,7 @@ def batch_mask(infer_direcs, param_files, best_last, out_dir, overwrite=False):
             probs.append(prob)
 
             # clear graph
-            tf.reset_default_graph()
+            tf.compat.v1.reset_default_graph()
 
         # convert probs to mask with cleanup
         idno = os.path.basename(direc.rsplit('/', 1)[0] if direc.endswith('/') else direc)
@@ -53,7 +52,8 @@ def batch_mask(infer_direcs, param_files, best_last, out_dir, overwrite=False):
 
     return outnames
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--infer_dir', default=None,
                         help="Path to directory to generate inference from")
     parser.add_argument('--best_last', default='best_weights',
-                        help="Either 'best_weights' or 'last_weights' - whether to use best or last model weights for inference")
+                        help="'best_weights' or 'last_weights' - whether to use best/last model weights for inference")
     parser.add_argument('--out_dir', default=None,
                         help="Optionally specify temporary directory. Default is model directory.")
     parser.add_argument('--start', default=0,

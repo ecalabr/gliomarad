@@ -5,7 +5,8 @@ import csv
 import subprocess
 import multiprocessing
 
-########################## define functions ##########################
+
+# define functions
 def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, label_values):
     # define start and stop values for data to keep in the radiomics spreadsheet
     shape_s = 25
@@ -25,8 +26,9 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
             output_csv = os.path.join(output_dir, os.path.basename(direc) + '_radiomics_nonorm.csv')
             if not os.path.isfile(output_csv):
                 for image in nonorm_images:
-                    for l in label_values:
-                        line = [glob(direc + '/*' + image + '.nii.gz')[0], glob(direc + '/*' + mask + '.nii.gz')[0], l]
+                    for lab in label_values:
+                        line = [glob(direc + '/*' + image + '.nii.gz')[0], glob(direc + '/*' + mask + '.nii.gz')[0],
+                                lab]
                         output.append(line)
                 with open(output_csv, 'w+') as f:
                     wr = csv.writer(f, quoting=csv.QUOTE_MINIMAL, quotechar="\"")
@@ -39,8 +41,9 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
             output_csv = os.path.join(output_dir, os.path.basename(direc) + '_radiomics_norm.csv')
             if not os.path.isfile(output_csv):
                 for image in norm_images:
-                    for l in label_values:
-                        line = [glob(direc + '/*' + image + '.nii.gz')[0], glob(direc + '/*' + mask + '.nii.gz')[0], l]
+                    for lab in label_values:
+                        line = [glob(direc + '/*' + image + '.nii.gz')[0], glob(direc + '/*' + mask + '.nii.gz')[0],
+                                lab]
                         output.append(line)
                 with open(output_csv, 'w+') as f:
                     wr = csv.writer(f, quoting=csv.QUOTE_MINIMAL, quotechar="\"")
@@ -52,7 +55,8 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
         batch_csvs.sort()
         for batch in batch_csvs:
             output = batch.rsplit('_', 1)[0] + '_output_nonorm.csv'
-            cmd = 'pyradiomics ' + batch + ' -o ' + output + ' -f csv --setting "normalize:False" -j ' + str(multiprocessing.cpu_count())
+            cmd = 'pyradiomics ' + batch + ' -o ' + output + ' -f csv --setting "normalize:False" -j ' + str(
+                multiprocessing.cpu_count())
             if not os.path.isfile(output):
                 print(cmd)
                 subprocess.call(cmd, shell=True)
@@ -63,12 +67,13 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
         batch_csvs.sort()
         for batch in batch_csvs:
             output = batch.rsplit('_', 1)[0] + '_output_norm.csv'
-            cmd = 'pyradiomics ' + batch + ' -o ' + output + ' -f csv --setting "normalize:True" -j ' + str(multiprocessing.cpu_count())
+            cmd = 'pyradiomics ' + batch + ' -o ' + output + ' -f csv --setting "normalize:True" -j ' + str(
+                multiprocessing.cpu_count())
             if not os.path.isfile(output):
                 print(cmd)
                 subprocess.call(cmd, shell=True)
 
-    #combined normalized and non-normalized outputs
+    # combined normalized and non-normalized outputs
     norm_outputs = glob(output_dir + '/*_output_norm.csv')
     nonorm_outputs = glob(output_dir + '/*_output_nonorm.csv')
     norm_outputs.sort()
@@ -85,7 +90,7 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
                 with open(nonorm_outputs[ind], 'r') as f2:
                     nonorm_data = csv.reader(f2)
                     for n, line in enumerate(nonorm_data, 1):
-                        if n>1:
+                        if n > 1:
                             csvout.append(line)
             with open(csvout_file, 'w+') as f3:
                 wr = csv.writer(f3, quoting=csv.QUOTE_MINIMAL, quotechar="\"")
@@ -96,7 +101,7 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
     if not os.path.isfile(final_out):
         output_csvs = glob(output_dir + '/*_output.csv')
         output_csvs.sort()
-        combined_out=[]
+        combined_out = []
         for ind, output in enumerate(output_csvs):
             with open(output, 'r') as f:
                 reader = csv.reader(f, delimiter=',', quotechar='"')
@@ -106,18 +111,19 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
             if ind == 0:
                 headerline = ['ID']
                 # make shape header
-                for l in label_values:
-                    headerline = headerline + [it + '_' + mask + '_' + str(l) for it in data[0][shape_s:shape_e]]
+                for lab in label_values:
+                    headerline = headerline + [it + '_' + mask + '_' + str(lab) for it in data[0][shape_s:shape_e]]
                 for image in images:
-                    for l in label_values:
-                        headerline = headerline + [image + '_' + it + '_' + mask + '_' + str(l) for it in data[0][shape_e:]]
+                    for lab in label_values:
+                        headerline = headerline + [image + '_' + it + '_' + mask + '_' + str(lab) for it in
+                                                   data[0][shape_e:]]
                 combined_out.append(headerline)
 
             # make data line and add to final output
             # first add ID
             line = [output.rsplit('/', 1)[1].split('_')[0]]
             # get ROI shape data once and append to beginning of line
-            for x, l in enumerate(label_values, 1):
+            for x, lab in enumerate(label_values, 1):
                 line = line + [val for val in data[x][shape_s:shape_e]]
             # get image vale data for each image (skipping over shape data, since its the same for all images)
             for n, it in enumerate(data[1:]):
@@ -131,7 +137,8 @@ def radiomics_extract(data_dirs, output_dir, norm_images, nonorm_images, mask, l
 
     return final_out
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()

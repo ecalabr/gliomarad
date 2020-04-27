@@ -4,7 +4,8 @@ import os
 import csv
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 def ucsf500_csv(csv_path, outfile):
     # define genes
     genes = {'EGFR': ['EGFR'], 'PTEN': ['PTEN'], 'TERT': ['TERT'],
@@ -28,7 +29,7 @@ def ucsf500_csv(csv_path, outfile):
                     gene = item.split(' ')[0]
                     for key in genes.keys():
                         if any([gene.startswith(x) for x in genes[key]]):
-                            index = genes.keys().index(key)
+                            index = list(genes.keys()).index(key)
                             if not newline[index] == 'negative':
                                 newline[index] = newline[index] + '; ' + item
                             else:
@@ -42,7 +43,8 @@ def ucsf500_csv(csv_path, outfile):
 
     return outfile
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()

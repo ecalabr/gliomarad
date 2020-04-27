@@ -7,7 +7,7 @@ from model.patch_input_fn import infer_input_fn, infer_input_fn_3d
 from model.model_fn import model_fn
 from glob import glob
 
-########################## define functions ##########################
+
 # define funiction to predict one inference directory
 def predict_one(params, infer_dir, best_last, out_dir):
 
@@ -39,7 +39,8 @@ def predict_one(params, infer_dir, best_last, out_dir):
 
     return nii_out
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments
@@ -49,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--infer_dir', default=None,
                         help="Path to directory to generate inference from")
     parser.add_argument('--best_last', default='last_weights',
-                        help="Either 'best_weights' or 'last_weights' - whether to use best or last weights for inference")
+                        help="'best_weights' or 'last_weights' - whether to use best or last weights for inference")
     parser.add_argument('--out_dir', default=None,
                         help="Optionally specify output directory")
 

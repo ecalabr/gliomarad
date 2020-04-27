@@ -1,4 +1,4 @@
-from net_layers import *
+from model.net_layers import *
 import tensorflow as tf
 
 
@@ -193,13 +193,13 @@ def custom_resid_unet(features, params, is_training, reuse=False):
     # initial input convolution layer
     tensor = conv2d_fixed_pad(features, filt, ksize, [1, 1], [1, 1], dfmt, 'init_conv', reuse)
     tensor = batch_norm(tensor, is_training, dfmt, 'init_bn', reuse)
-    tensor = activation(tensor,act, 'init_act')
+    tensor = activation(tensor, act, 'init_act')
 
     # unet encoder limb with residual bottleneck blocks
     for n, n_layers in enumerate(unet_layout):
         # horizontal blocks
         for layer in range(n_layers):
-            if layer < n_layers -1:
+            if layer < n_layers - 1:
                 layer_name = 'enc_bneck_resid_' + str(n) + '_' + str(layer)
                 tensor = bneck_res_layer(tensor, ksize, filt, 0, dpout, is_training, dfmt, act, layer_name, reuse)
             else:
@@ -366,13 +366,13 @@ def deep_embed_net(features, params, is_training, reuse=False):
     recons = None
     for i in range(layer_layout[0]):
         name = 'embedding_block_' + str(i)
-        tensor, recon = embedding_block(tensor,ksize, filt, dropout, is_training, dfmt, act, name, reuse)
+        tensor, recon = embedding_block(tensor, ksize, filt, dropout, is_training, dfmt, act, name, reuse)
         if i == 0:  # handles first loop where recons has not been defined yet
             recons = recon  # tf.expand_dims(recon, axis=-1)
         else:  # handles subsequent loops
             recons = tf.concat([recons, recon], axis=-1, name=name + '_embed_concat')
 
-     # final output layer
+    # final output layer
     tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
 
     # concatenate all recons and return as one tensor, which will be # of embedding blocks + 1 different predicitons
@@ -416,13 +416,13 @@ def deep_embed_resnet(features, params, is_training, reuse=False):
     recons = None
     for i in range(layer_layout[0]):
         name = 'embedding_block_' + str(i)
-        tensor, recon = embedding_block(tensor,ksize, filt, dropout, is_training, dfmt, act, name, reuse)
+        tensor, recon = embedding_block(tensor, ksize, filt, dropout, is_training, dfmt, act, name, reuse)
         if i == 0:  # handles first loop where recons has not been defined yet
             recons = recon  # tf.expand_dims(recon, axis=-1)
         else:  # handles subsequent loops
             recons = tf.concat([recons, recon], axis=-1, name=name + '_embed_concat')
 
-     # final output layer
+    # final output layer
     tensor = conv2d_fixed_pad(tensor, 1, [1, 1], [1, 1], [1, 1], dfmt, 'final_conv', reuse)
 
     # concatenate all recons and return as one tensor, which will be # of embedding blocks + 1 different predicitons
@@ -431,7 +431,7 @@ def deep_embed_resnet(features, params, is_training, reuse=False):
     return tensor
 
 
-def unet_25D(features, params, is_training, reuse=False):
+def unet_25d(features, params, is_training, reuse=False):
     """
     Creates a unet resnet similar to
     https://vitalab.github.io/deep-learning/2017/05/08/resunet.html
@@ -469,7 +469,8 @@ def unet_25D(features, params, is_training, reuse=False):
             if layer < n_layers - 1:
                 # residual blocks with activation and batch norm
                 layer_name = 'enc_resid_' + str(n) + '_' + str(layer)
-                tensor = resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+                tensor = resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                       reuse, dpout, is_training, act)
             else:
                 # 1x1x3 conv block
                 layer_name = 'enc_conv_' + str(n) + '_' + str(layer)
@@ -516,7 +517,8 @@ def unet_25D(features, params, is_training, reuse=False):
         for layer in range(n_layers):
             if 0 < layer:
                 layer_name = 'dec_resid_' + str(n) + '_' + str(layer)
-                tensor = resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+                tensor = resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                       reuse, dpout, is_training, act)
             else:
                 layer_name = 'conv_dec_blk_' + str(n) + '_' + str(layer)
                 tensor = conv3d_fixed_pad(tensor, filt, [1, 1, 3], strides, dil, dfmt, layer_name, reuse)
@@ -529,7 +531,7 @@ def unet_25D(features, params, is_training, reuse=False):
     return tensor
 
 
-def unet_25D_bneck(features, params, is_training, reuse=False):
+def unet_25d_bneck(features, params, is_training, reuse=False):
     """
     Creates a deep embedding CNN similar to:
     https://vitalab.github.io/deep-learning/2017/05/08/resunet.html
@@ -567,12 +569,13 @@ def unet_25D_bneck(features, params, is_training, reuse=False):
             if layer < n_layers - 1:
                 # residual blocks with activation and batch norm
                 layer_name = 'enc_resid_lvl' + str(n) + '_blk' + str(layer)
-                tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+                tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                             reuse, dpout, is_training, act)
             else:
                 # 1x1x3 conv block
                 layer_name = 'enc_zconv_lvl' + str(n) + '_blk' + str(layer)
-                bneck_resid3d_layer(tensor, filt, [1, 1, 3], strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
-
+                bneck_resid3d_layer(tensor, filt, [1, 1, 3], strides, dil, dfmt, layer_name,
+                                    reuse, dpout, is_training, act)
 
         # create skip connection
         layer_name = 'skip_' + str(n)
@@ -588,7 +591,8 @@ def unet_25D_bneck(features, params, is_training, reuse=False):
     # unet horizontal (bottom) bottleneck blocks
     for layer in range(horz_layers):
         layer_name = 'horz_resid_' + str(layer)
-        tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+        tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                     reuse, dpout, is_training, act)
 
     # reverse layout and skip connections for decoder limb
     skips.reverse()
@@ -612,10 +616,12 @@ def unet_25D_bneck(features, params, is_training, reuse=False):
         for layer in range(n_layers):
             if 0 < layer:
                 layer_name = 'dec_resid_lvl' + str(n) + '_blk' + str(layer)
-                tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
-            else: # 1x1x3 conv block
+                tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                             reuse, dpout, is_training, act)
+            else:  # 1x1x3 conv block
                 layer_name = 'dec_zconv_lvl' + str(n) + '_blk' + str(layer)
-                bneck_resid3d_layer(tensor, filt, [1, 1, 3], strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+                bneck_resid3d_layer(tensor, filt, [1, 1, 3], strides, dil, dfmt, layer_name,
+                                    reuse, dpout, is_training, act)
 
     # output layer
     tensor = conv3d_fixed_pad(tensor, out_filt, [1, 1, 1], [1, 1, 1], [1, 1, 1], dfmt, 'final_conv', reuse)
@@ -623,7 +629,7 @@ def unet_25D_bneck(features, params, is_training, reuse=False):
     return tensor
 
 
-def unet_3D_bneck(features, params, is_training, reuse=False):
+def unet_3d_bneck(features, params, is_training, reuse=False):
     """
     Creates a 3D deep embedding CNN similar to:
     https://vitalab.github.io/deep-learning/2017/05/08/resunet.html
@@ -659,7 +665,8 @@ def unet_3D_bneck(features, params, is_training, reuse=False):
         for layer in range(n_layers):
             # residual blocks with activation and batch norm
             layer_name = 'enc_resid_lvl' + str(n) + '_blk' + str(layer)
-            tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+            tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                         reuse, dpout, is_training, act)
 
         # create skip connection
         layer_name = 'skip_' + str(n)
@@ -675,7 +682,8 @@ def unet_3D_bneck(features, params, is_training, reuse=False):
     # unet horizontal (bottom) bottleneck blocks
     for layer in range(horz_layers):
         layer_name = 'horz_resid_' + str(layer)
-        tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+        tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                     reuse, dpout, is_training, act)
 
     # reverse layout and skip connections for decoder limb
     skips.reverse()
@@ -699,10 +707,12 @@ def unet_3D_bneck(features, params, is_training, reuse=False):
         for layer in range(n_layers):
             if 0 < layer:
                 layer_name = 'dec_resid_lvl' + str(n) + '_blk' + str(layer)
-                tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
-            else: # 1x1x1 conv block
+                tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                             reuse, dpout, is_training, act)
+            else:  # 1x1x1 conv block
                 layer_name = 'dec_conv_lvl' + str(n) + '_blk' + str(layer)
-                bneck_resid3d_layer(tensor, filt, [1, 1, 1], strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+                bneck_resid3d_layer(tensor, filt, [1, 1, 1], strides, dil, dfmt, layer_name,
+                                    reuse, dpout, is_training, act)
 
     # output layer
     tensor = conv3d_fixed_pad(tensor, 1, [1, 1, 1], [1, 1, 1], [1, 1, 1], dfmt, 'final_conv', reuse)
@@ -739,7 +749,8 @@ def bneck_atrous3d(features, params, is_training, reuse=False):
     for layer in range(layer_layout[0]):
         # residual blocks with activation and batch norm
         layer_name = 'bneck_block_' + str(layer)
-        tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name, reuse, dpout, is_training, act)
+        tensor = bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, layer_name,
+                                     reuse, dpout, is_training, act)
 
     # atrous layers
     tensor = batch_norm(tensor, is_training, dfmt, 'atrous_bn', reuse)
@@ -773,30 +784,13 @@ def net_builder(features, params, is_training, reuse=False):
     """
 
     # sanity checks
-    if not isinstance(is_training, bool): raise ValueError("Parameter is_training must be a boolean")
+    if not isinstance(is_training, bool):
+        raise ValueError("Parameter is_training must be a boolean")
 
     # determine network
-    if params.model_name == 'custom_unet_fcnn':
-        network = custom_unet_fcnn(features, params, is_training, reuse)
-    elif params.model_name == 'bneck_resunet':
-        network = bneck_resunet(features, params, is_training, reuse)
-    elif params.model_name == 'custom_unet_maxpool':
-        network = custom_unet_maxpool(features, params, is_training, reuse)
-    elif params.model_name == 'custom_resid_unet':
-        network = custom_resid_unet(features, params, is_training, reuse)
-    elif params.model_name == 'deep_embed_net':
-        network = deep_embed_net(features, params, is_training)
-    elif params.model_name == 'deep_embed_resnet':
-        network = deep_embed_resnet(features, params, is_training)
-    elif params.model_name == 'unet_25D':
-        network = unet_25D(features, params, is_training, reuse)
-    elif params.model_name == 'unet_25D_bneck':
-        network = unet_25D_bneck(features, params, is_training,reuse)
-    elif params.model_name == 'bneck_atrous3d':
-        network = bneck_atrous3d(features, params, is_training, reuse)
-    elif params.model_name == 'unet_3D_bneck' :
-        network = unet_3D_bneck(features, params, is_training, reuse)
+    if params.model_name in globals():
+        network = globals()[params.model_name](features, params, is_training, reuse)
     else:
-        raise ValueError("Specified network does not exist: " + params.model_name)
+        raise ValueError("Specified network does not exist in net_builder.py: " + params.model_name)
 
     return network

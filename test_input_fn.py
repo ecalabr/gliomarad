@@ -1,8 +1,10 @@
 from model.patch_input_fn import *
 from model.utils import *
 import argparse
+import tensorflow as tf
 
-########################## define functions ##########################
+
+# define functions
 def test_input_fn(param_file):
 
     # get params
@@ -24,7 +26,7 @@ def test_input_fn(param_file):
 
     # run tensorflow session
     n = 0
-    with tf.Session() as sess:
+    with tf.compat.v1.Session() as sess:
         for i in range(params.num_epochs):  # multiple epochs
             sess.run(inputs["iterator_init_op"])
             while True:
@@ -40,15 +42,17 @@ def test_input_fn(param_file):
                 if n % 5 == 0:
                     display_tf_dataset(data_slice, params.data_format, params.train_dims)
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--param_file', default='/home/ecalabr/PycharmProjects/gbm_preproc/model/params.json',
+    parser.add_argument('--param_file', default=None,
                         help="Path to params.json")
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
+    assert args.param_file, "Must specify param file with --param_file"
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
 
     # do work

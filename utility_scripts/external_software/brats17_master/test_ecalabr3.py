@@ -10,21 +10,15 @@
 # This software is not certified for clinical use.
 #
 from __future__ import absolute_import, print_function
-import numpy as np
-from scipy import ndimage
 import time
-import os
 import sys
-import tensorflow as tf
-# from tensorflow.contrib.data import Iterator
-from external_software.brats17_master.util.data_loader import *
-from external_software.brats17_master.util.data_process import *
-from external_software.brats17_master.util.train_test_func import *
-from external_software.brats17_master.util.parse_config import parse_config
-from external_software.brats17_master.train import NetFactory
+from utility_scripts.external_software.brats17_master.util.data_loader import *
+from utility_scripts.external_software.brats17_master.util.train_test_func import *
+from utility_scripts.external_software.brats17_master.train import NetFactory
 
 # set debug level to error
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 
 # takes full path to all dirs containing images to be segmented
 def test(dir_list):
@@ -38,17 +32,17 @@ def test(dir_list):
     save_dr = []
     data_nm = []
     idno = []
-    completed = 0 # number of tumors with existing segmentationss
+    completed = 0  # number of tumors with existing segmentationss
     modality = ["FLAIR_wmtb", "T1_wmtb", "predictions_gadnet_best_weights_hist", "T2_wmtb"]
     for i, direc in enumerate(dir_list):
         if direc[-1] == "/":
             direc = direc[:-1]
         idno_tmp = os.path.basename(direc)
         # only process if all required files exist
-        if all(os.path.isfile(os.path.join(direc, idno_tmp + "_"+mod+".nii.gz")) for mod in modality):
+        if all(os.path.isfile(os.path.join(direc, idno_tmp + "_" + mod + ".nii.gz")) for mod in modality):
             # do not repeat if tumor seg file already exists
             if not os.path.isfile(os.path.join(direc, idno_tmp + "_tumor_seg_synthetic.nii.gz")):
-                data_nm.append(idno_tmp) # idno is dirname in this case
+                data_nm.append(idno_tmp)  # idno is dirname in this case
                 save_dr.append(direc)
                 idno.append(idno_tmp)
             else:
@@ -57,14 +51,14 @@ def test(dir_list):
     for i, path in enumerate(data_nm):
         print(os.path.join(data_rt, path) + " >> " + os.path.join(save_dr[i], idno[i] + "_tumor_seg_synthetic.nii.gz"))
     print("This will process " + str(len(data_nm)) + " of " + str(len(dir_list)) + " total directories.")
-    num_incmpl = len(dir_list) - (len(data_nm) + completed) # number of studies without all required images
-    print(str(completed)+" already have existing segmentations and "+str(num_incmpl)+" lack required images.")
+    num_incmpl = len(dir_list) - (len(data_nm) + completed)  # number of studies without all required images
+    print(str(completed) + " already have existing segmentations and " + str(num_incmpl) + " lack required images.")
     # yes no query
     valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
     unanswered = True
     while unanswered:
         sys.stdout.write("Would you like to continue? [y/n] >> ")
-        choice = raw_input().lower()
+        choice = input().lower()
         if choice in valid:
             if not valid[choice]:
                 sys.exit("user aborted")
@@ -72,13 +66,13 @@ def test(dir_list):
                 unanswered = False
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
-    #idno = os.path.basename(data_direc)
+    # idno = os.path.basename(data_direc)
     # build fake config file
-    #if data_direc[-1] == "/":
+    # if data_direc[-1] == "/":
     #    data_direc = data_direc[:-1]
-    #data_rt = os.path.dirname(data_direc)
-    #save_dr = data_direc
-    #data_nm = os.path.basename(data_direc)
+    # data_rt = os.path.dirname(data_direc)
+    # save_dr = data_direc
+    # data_nm = os.path.basename(data_direc)
     sc_p = os.path.dirname(os.path.realpath(__file__))
     config = {"data": {"data_root": data_rt,
                        "save_folder": save_dr,
@@ -176,7 +170,7 @@ def test(dir_list):
 
         # construct graph for 1st network
         full_data_shape1 = [batch_size] + data_shape1
-        x1 = tf.placeholder(tf.float32, shape=full_data_shape1)
+        x1 = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape1)
         net_class1 = NetFactory.create(net_type1)
         net1 = net_class1(num_classes=class_num1, w_regularizer=None,
                           b_regularizer=None, name=net_name1)
@@ -196,7 +190,7 @@ def test(dir_list):
         class_num1ax = config_net1ax['class_num']
 
         full_data_shape1ax = [batch_size] + data_shape1ax
-        x1ax = tf.placeholder(tf.float32, shape=full_data_shape1ax)
+        x1ax = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape1ax)
         net_class1ax = NetFactory.create(net_type1ax)
         net1ax = net_class1ax(num_classes=class_num1ax, w_regularizer=None,
                               b_regularizer=None, name=net_name1ax)
@@ -212,7 +206,7 @@ def test(dir_list):
         class_num1sg = config_net1sg['class_num']
 
         full_data_shape1sg = [batch_size] + data_shape1sg
-        x1sg = tf.placeholder(tf.float32, shape=full_data_shape1sg)
+        x1sg = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape1sg)
         net_class1sg = NetFactory.create(net_type1sg)
         net1sg = net_class1sg(num_classes=class_num1sg, w_regularizer=None,
                               b_regularizer=None, name=net_name1sg)
@@ -228,7 +222,7 @@ def test(dir_list):
         class_num1cr = config_net1cr['class_num']
 
         full_data_shape1cr = [batch_size] + data_shape1cr
-        x1cr = tf.placeholder(tf.float32, shape=full_data_shape1cr)
+        x1cr = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape1cr)
         net_class1cr = NetFactory.create(net_type1cr)
         net1cr = net_class1cr(num_classes=class_num1cr, w_regularizer=None,
                               b_regularizer=None, name=net_name1cr)
@@ -247,7 +241,7 @@ def test(dir_list):
 
             # construct graph for 2st network
             full_data_shape2 = [batch_size] + data_shape2
-            x2 = tf.placeholder(tf.float32, shape=full_data_shape2)
+            x2 = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape2)
             net_class2 = NetFactory.create(net_type2)
             net2 = net_class2(num_classes=class_num2, w_regularizer=None,
                               b_regularizer=None, name=net_name2)
@@ -267,7 +261,7 @@ def test(dir_list):
             class_num2ax = config_net2ax['class_num']
 
             full_data_shape2ax = [batch_size] + data_shape2ax
-            x2ax = tf.placeholder(tf.float32, shape=full_data_shape2ax)
+            x2ax = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape2ax)
             net_class2ax = NetFactory.create(net_type2ax)
             net2ax = net_class2ax(num_classes=class_num2ax, w_regularizer=None,
                                   b_regularizer=None, name=net_name2ax)
@@ -283,7 +277,7 @@ def test(dir_list):
             class_num2sg = config_net2sg['class_num']
 
             full_data_shape2sg = [batch_size] + data_shape2sg
-            x2sg = tf.placeholder(tf.float32, shape=full_data_shape2sg)
+            x2sg = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape2sg)
             net_class2sg = NetFactory.create(net_type2sg)
             net2sg = net_class2sg(num_classes=class_num2sg, w_regularizer=None,
                                   b_regularizer=None, name=net_name2sg)
@@ -299,7 +293,7 @@ def test(dir_list):
             class_num2cr = config_net2cr['class_num']
 
             full_data_shape2cr = [batch_size] + data_shape2cr
-            x2cr = tf.placeholder(tf.float32, shape=full_data_shape2cr)
+            x2cr = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape2cr)
             net_class2cr = NetFactory.create(net_type2cr)
             net2cr = net_class2cr(num_classes=class_num2cr, w_regularizer=None,
                                   b_regularizer=None, name=net_name2cr)
@@ -317,7 +311,7 @@ def test(dir_list):
 
             # construct graph for 3st network
             full_data_shape3 = [batch_size] + data_shape3
-            x3 = tf.placeholder(tf.float32, shape=full_data_shape3)
+            x3 = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape3)
             net_class3 = NetFactory.create(net_type3)
             net3 = net_class3(num_classes=class_num3, w_regularizer=None,
                               b_regularizer=None, name=net_name3)
@@ -337,7 +331,7 @@ def test(dir_list):
             class_num3ax = config_net3ax['class_num']
 
             full_data_shape3ax = [batch_size] + data_shape3ax
-            x3ax = tf.placeholder(tf.float32, shape=full_data_shape3ax)
+            x3ax = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape3ax)
             net_class3ax = NetFactory.create(net_type3ax)
             net3ax = net_class3ax(num_classes=class_num3ax, w_regularizer=None,
                                   b_regularizer=None, name=net_name3ax)
@@ -353,7 +347,7 @@ def test(dir_list):
             class_num3sg = config_net3sg['class_num']
             # construct graph for 3st network
             full_data_shape3sg = [batch_size] + data_shape3sg
-            x3sg = tf.placeholder(tf.float32, shape=full_data_shape3sg)
+            x3sg = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape3sg)
             net_class3sg = NetFactory.create(net_type3sg)
             net3sg = net_class3sg(num_classes=class_num3sg, w_regularizer=None,
                                   b_regularizer=None, name=net_name3sg)
@@ -369,7 +363,7 @@ def test(dir_list):
             class_num3cr = config_net3cr['class_num']
             # construct graph for 3st network
             full_data_shape3cr = [batch_size] + data_shape3cr
-            x3cr = tf.placeholder(tf.float32, shape=full_data_shape3cr)
+            x3cr = tf.compat.v1.placeholder(tf.float32, shape=full_data_shape3cr)
             net_class3cr = NetFactory.create(net_type3cr)
             net3cr = net_class3cr(num_classes=class_num3cr, w_regularizer=None,
                                   b_regularizer=None, name=net_name3cr)
@@ -378,55 +372,55 @@ def test(dir_list):
             proby3cr = tf.nn.softmax(predicty3cr)
 
     # 3, create session and load trained models
-    all_vars = tf.global_variables()
-    sess = tf.InteractiveSession()
+    all_vars = tf.compat.v1.global_variables()
+    sess = tf.compat.v1.InteractiveSession()
     # set tensorflow verbosity
-    tf.logging.set_verbosity(tf.logging.ERROR)
-    sess.run(tf.global_variables_initializer())
+    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+    sess.run(tf.compat.v1.global_variables_initializer())
     if config_net1:
         net1_vars = [x for x in all_vars if x.name[0:len(net_name1) + 1] == net_name1 + '/']
-        saver1 = tf.train.Saver(net1_vars)
+        saver1 = tf.compat.v1.train.Saver(net1_vars)
         saver1.restore(sess, config_net1['model_file'])
     else:
         net1ax_vars = [x for x in all_vars if x.name[0:len(net_name1ax) + 1] == net_name1ax + '/']
-        saver1ax = tf.train.Saver(net1ax_vars)
+        saver1ax = tf.compat.v1.train.Saver(net1ax_vars)
         saver1ax.restore(sess, config_net1ax['model_file'])
         net1sg_vars = [x for x in all_vars if x.name[0:len(net_name1sg) + 1] == net_name1sg + '/']
-        saver1sg = tf.train.Saver(net1sg_vars)
+        saver1sg = tf.compat.v1.train.Saver(net1sg_vars)
         saver1sg.restore(sess, config_net1sg['model_file'])
         net1cr_vars = [x for x in all_vars if x.name[0:len(net_name1cr) + 1] == net_name1cr + '/']
-        saver1cr = tf.train.Saver(net1cr_vars)
+        saver1cr = tf.compat.v1.train.Saver(net1cr_vars)
         saver1cr.restore(sess, config_net1cr['model_file'])
 
     if config_test.get('whole_tumor_only', False) is False:
         if config_net2:
             net2_vars = [x for x in all_vars if x.name[0:len(net_name2) + 1] == net_name2 + '/']
-            saver2 = tf.train.Saver(net2_vars)
+            saver2 = tf.compat.v1.train.Saver(net2_vars)
             saver2.restore(sess, config_net2['model_file'])
         else:
             net2ax_vars = [x for x in all_vars if x.name[0:len(net_name2ax) + 1] == net_name2ax + '/']
-            saver2ax = tf.train.Saver(net2ax_vars)
+            saver2ax = tf.compat.v1.train.Saver(net2ax_vars)
             saver2ax.restore(sess, config_net2ax['model_file'])
             net2sg_vars = [x for x in all_vars if x.name[0:len(net_name2sg) + 1] == net_name2sg + '/']
-            saver2sg = tf.train.Saver(net2sg_vars)
+            saver2sg = tf.compat.v1.train.Saver(net2sg_vars)
             saver2sg.restore(sess, config_net2sg['model_file'])
             net2cr_vars = [x for x in all_vars if x.name[0:len(net_name2cr) + 1] == net_name2cr + '/']
-            saver2cr = tf.train.Saver(net2cr_vars)
+            saver2cr = tf.compat.v1.train.Saver(net2cr_vars)
             saver2cr.restore(sess, config_net2cr['model_file'])
 
         if config_net3:
             net3_vars = [x for x in all_vars if x.name[0:len(net_name3) + 1] == net_name3 + '/']
-            saver3 = tf.train.Saver(net3_vars)
+            saver3 = tf.compat.v1.train.Saver(net3_vars)
             saver3.restore(sess, config_net3['model_file'])
         else:
             net3ax_vars = [x for x in all_vars if x.name[0:len(net_name3ax) + 1] == net_name3ax + '/']
-            saver3ax = tf.train.Saver(net3ax_vars)
+            saver3ax = tf.compat.v1.train.Saver(net3ax_vars)
             saver3ax.restore(sess, config_net3ax['model_file'])
             net3sg_vars = [x for x in all_vars if x.name[0:len(net_name3sg) + 1] == net_name3sg + '/']
-            saver3sg = tf.train.Saver(net3sg_vars)
+            saver3sg = tf.compat.v1.train.Saver(net3sg_vars)
             saver3sg.restore(sess, config_net3sg['model_file'])
             net3cr_vars = [x for x in all_vars if x.name[0:len(net_name3cr) + 1] == net_name3cr + '/']
-            saver3cr = tf.train.Saver(net3cr_vars)
+            saver3cr = tf.compat.v1.train.Saver(net3cr_vars)
             saver3cr.restore(sess, config_net3cr['model_file'])
 
             # 4, load test images
@@ -584,7 +578,7 @@ def test(dir_list):
         final_label = np.zeros(temp_size, np.int16)
         final_label = set_ND_volume_roi_with_bounding_box_range(final_label, temp_bbox[0], temp_bbox[1], out_label)
         seg_outpath = os.path.join(save_dir[i], idno[i] + "_tumor_seg_synthetic.nii.gz")
-        print("Saving output " + str(i+1) + " of " + str(image_num) + " to: " + seg_outpath)
+        print("Saving output " + str(i + 1) + " of " + str(image_num) + " to: " + seg_outpath)
         save_array_as_nifty_volume(final_label, seg_outpath)
         print("- segmentation time = " + str(time.time() - start_t) + " seconds")
         # print(temp_name)
@@ -601,5 +595,3 @@ if __name__ == '__main__':
         exit()
     data_directory = str(sys.argv[1])
     test(data_directory)
-
-

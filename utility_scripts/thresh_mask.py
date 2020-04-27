@@ -8,17 +8,17 @@ import scipy.ndimage
 from glob import glob
 from skimage.morphology import remove_small_objects
 
-########################## define functions ##########################
-def thresh_mask(image, mask, thr, output, less=False):
 
+# define functions
+def thresh_mask(image, mask, thr, output, less=False):
     # load data
     im_nii = nib.load(image)
     im_data = im_nii.get_data()
     mask_data = nib.load(mask).get_data()
 
     # erode mask
-    #struct = scipy.ndimage.generate_binary_structure(3, 2)  # rank 3, connectivity 2
-    #mask_data = scipy.ndimage.morphology.binary_erosion(mask_data, structure=struct)  # erosion
+    # struct = scipy.ndimage.generate_binary_structure(3, 2)  # rank 3, connectivity 2
+    # mask_data = scipy.ndimage.morphology.binary_erosion(mask_data, structure=struct)  # erosion
 
     # threshold image data within mask
     if less:
@@ -39,7 +39,8 @@ def thresh_mask(image, mask, thr, output, less=False):
     nii_out = nib.Nifti1Image(thresh_data, im_nii.affine, im_nii.header)
     nib.save(nii_out, output)
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments
@@ -109,7 +110,8 @@ if __name__ == '__main__':
         if glob(item + '/*' + args.mask + '.nii.gz') and glob(item + '/*' + args.data + '.nii.gz'):
             images.append(glob(item + '/*' + args.data + '.nii.gz')[0])
             masks.append(glob(item + '/*' + args.mask + '.nii.gz')[0])
-            outputs.append(glob(item + '/*' + args.data + '.nii.gz')[0].rsplit('.nii.gz', 1)[0] + "_" + args.outname + '.nii.gz')
+            outputs.append(
+                glob(item + '/*' + args.data + '.nii.gz')[0].rsplit('.nii.gz', 1)[0] + "_" + args.outname + '.nii.gz')
         else:
             print("Directory {} is missing some required files".format(item))
 

@@ -1,8 +1,9 @@
 import time
-from gbm_prep_func import *
+from utility_scripts.gbm_prep_func import *
 import argparse
 
-########################## define functions ##########################
+
+# define functions
 # wrapper function for reading a complete dicom directory with/without registration to one of the images
 def proc_mammo_dcm_dir(dcm_dir, param_file, reg_atlas, rep=False):
     """
@@ -20,18 +21,19 @@ def proc_mammo_dcm_dir(dcm_dir, param_file, reg_atlas, rep=False):
 
     # Pipeline step by step
     make_log(os.path.dirname(dcm_dir), rep)
-    #dcm_dir = unzip_file(dcm_zip)
+    # dcm_dir = unzip_file(dcm_zip)
     dicoms1, hdrs1, series1, dirs1 = get_series(dcm_dir)
     series_dict = make_serdict(reg_atlas, dcm_dir, param_file)
     series_dict = filter_series(dicoms1, hdrs1, series1, dirs1, series_dict)
     series_dict = dcm_list_2_niis(series_dict, dcm_dir, rep)
     series_dict = reg_series(series_dict)
     series_dict = bias_correct(series_dict)
-    #series_dict = print_series_dict(series_dict)
+    # series_dict = print_series_dict(series_dict)
 
     return series_dict
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments

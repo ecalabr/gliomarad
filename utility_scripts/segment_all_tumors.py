@@ -1,11 +1,12 @@
 """ generates automated tumor segmentations for a list of directories """
 
-import external_software.brats17_master.test_ecalabr2 as test_ecalabr2
+import utility_scripts.external_software.brats17_master.test_ecalabr2 as test_ecalabr2
 from glob import glob
 import os
 import argparse
 
-########################## executed  as script ##########################
+
+# executed  as script
 if __name__ == '__main__':
 
     # parse input arguments
@@ -55,4 +56,4 @@ if __name__ == '__main__':
             dir_list = [dir_list]
 
     # run seg
-    test_ecalabr2.test(dir_list, args.bias) # currently using non-bias corrected images, change in test_ecalabr2.py
+    test_ecalabr2.test(dir_list, args.bias)  # currently using non-bias corrected images, change in test_ecalabr2.py
