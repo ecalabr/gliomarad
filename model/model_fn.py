@@ -1,5 +1,6 @@
 from model.net_builder import *
-from model.utils import learning_rate_picker, loss_picker
+from model.utils import learning_rate_picker
+from model.losses import loss_picker
 
 
 def model_fn(inputs, params, mode, reuse=False):

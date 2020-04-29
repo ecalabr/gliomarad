@@ -14,6 +14,7 @@ import tensorflow.python.util.deprecation as deprecation
 # handle tensorflow compatibility issues
 deprecation._PRINT_DEPRECATION_WARNINGS = False  # suppresses depreciation warnings
 tf.compat.v1.disable_eager_execution()  # turns off eager execution which does not work with iterators
+# tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 # define functions
 def train_one(param_file):
