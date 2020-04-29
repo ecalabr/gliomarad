@@ -14,9 +14,9 @@ def binary_mask(mask, output, vals_list):
     if not os.path.isfile(output):
         nii = nib.load(mask)
         if len(vals_list) > 1:
-            newimg = np.isin(nii.get_data(), vals_list)
+            newimg = np.isin(nii.get_fdata(), vals_list)
         else:
-            newimg = nii.get_data() >= vals_list[0]
+            newimg = nii.get_fdata() >= vals_list[0]
         newnii = nib.Nifti1Image(newimg.astype(np.float), nii.affine)  # float actuall results in smaller zipped files
         nib.save(newnii, output)
 

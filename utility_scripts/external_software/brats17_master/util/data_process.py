@@ -60,7 +60,7 @@ def load_nifty_volume_as_array(filename):
         data: a numpy data array
     """
     img = nibabel.load(filename)
-    data = img.get_data()
+    data = img.get_fdata()
     data = np.transpose(data, [2, 1, 0])
     return data
 

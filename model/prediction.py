@@ -142,7 +142,7 @@ def predict(model_spec, model_dir, params, infer_dir, best_last, out_dir=None):
         raise ValueError("Dimension mode must be in [2D, 2.5D, 3D] but is: " + str(params.dimension_mode))
 
     # mask predictions based on original input data
-    # mask = nii.get_data() > 0
+    # mask = nii.get_fdata() > 0
     # predictions = predictions * mask
 
     # convert to nifti format and save

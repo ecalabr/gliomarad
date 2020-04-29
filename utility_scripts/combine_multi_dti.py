@@ -45,7 +45,7 @@ def combine_multi_dti(directory, b0first=False):
     dwi_nii = []
     for x, i in enumerate(dtis, 0):
         dwi_nii = nib.load(dtis[x])
-        dwi_d = dwi_nii.get_data()
+        dwi_d = dwi_nii.get_fdata()
         # read bvals if present
         if bvals_present:
             with open(bvals[x], 'r') as f:

@@ -449,7 +449,7 @@ def split_multiphase(nii_in, options, series, repeat=False):
     else:
         # data loading
         nii = nib.load(nii_in)
-        data = nii.get_data()
+        data = nii.get_fdata()
         # if data is not 4D, then return
         if len(data.shape) < 4 or data.shape[3] < 2:
             logger.info("- Split option was specified for " + series +
@@ -1055,7 +1055,7 @@ def split_asl(ser_dict):
     if os.path.isfile(aslperfa):
         perfnii = nib.load(aslperf)
         perfanii = nib.load(aslperfa)
-        if np.mean(perfnii.get_data()) > np.mean(perfanii.get_data()):
+        if np.mean(perfnii.get_fdata()) > np.mean(perfanii.get_fdata()):
             os.rename(aslperf, anat_outname)
             os.rename(aslperfa, aslperf)
         else:
@@ -1065,7 +1065,7 @@ def split_asl(ser_dict):
         if not os.path.isfile(anat_outname):
             nii = nib.load(aslperf)
             if len(nii.get_shape()) > 3:
-                img = nii.get_data()
+                img = nii.get_fdata()
                 aslimg = np.squeeze(img[:, :, :, 0])
                 anatimg = np.squeeze(img[:, :, :, 1])
                 aff = nii.get_affine()
@@ -1098,7 +1098,7 @@ def split_dwi(ser_dict):
             vals_bool = [int(item) > 0 for item in rows[0]]
         # load data and average if there is more than 1 item in 4th dimension
         dwi_nii = nib.load(dwi)
-        dwi_d = dwi_nii.get_data()
+        dwi_d = dwi_nii.get_fdata()
         if len(dwi_d.shape) > 3:
             avg_dwi = np.mean(dwi_d[:, :, :, vals_bool], axis=3)
             dwi_nii = nib.Nifti1Image(avg_dwi, dwi_nii.affine, dwi_nii.header)
@@ -1108,7 +1108,7 @@ def split_dwi(ser_dict):
         logger.info("- Splitting first volume from multidirection DWI image")
         dwi_nii = nib.load(dwi)
         if len(dwi_nii.shape) > 3:
-            dwi_d = dwi_nii.get_data()
+            dwi_d = dwi_nii.get_fdata()
             dwi_d = np.squeeze(dwi_d[:, :, :, 0])
             dwi_nii = nib.Nifti1Image(dwi_d, dwi_nii.affine, dwi_nii.header)
             nib.save(dwi_nii, dwi)
@@ -1145,7 +1145,7 @@ def combine_dti55(ser_dict):
         # assume multiple b0s and average them
         num_b0 = len(rows[0]) - 55
         dti_f = nib.load(dti)
-        dti_d = dti_f.get_data()
+        dti_d = dti_f.get_fdata()
         b0s = np.mean(dti_d[:, :, :, 0:num_b0], axis=3)
         dti_d = np.concatenate([np.expand_dims(b0s, axis=3), dti_d[:, :, :, num_b0:]], axis=3)
         dti_f = nib.Nifti1Image(dti_d, dti_f.affine, dti_f.header)
@@ -1176,9 +1176,9 @@ def combine_dti55(ser_dict):
         return ser_dict
     logger.info("- Combining split DTI file using combine_dti55 function")
     dti_f = nib.load(dti)
-    dti_d = dti_f.get_data()
+    dti_d = dti_f.get_fdata()
     dtia_f = nib.load(dtia)
-    dtia_d = dtia_f.get_data()
+    dtia_d = dtia_f.get_fdata()
     dti_d = np.concatenate([dti_d, np.reshape(dtia_d, [dtia_d.shape[0], dtia_d.shape[1], dtia_d.shape[2], -1])], axis=3)
     dti_f = nib.Nifti1Image(dti_d, dti_f.affine, dti_f.header)
     nib.save(dti_f, dti)
@@ -1532,9 +1532,9 @@ def bias_correct(ser_dict, repeat=False):
                     logger.info("- Truncating image intensities for " + f)
                     thresh = [0.001, 0.999]  # define thresholds
                     mask_img = nib.load(mask)  # load data
-                    mask_img = mask_img.get_data()
+                    mask_img = mask_img.get_fdata()
                     nii = nib.load(f)
-                    img = nii.get_data()
+                    img = nii.get_fdata()
                     affine = nii.get_affine()
                     vals = np.sort(img[mask_img > 0.], None)  # sort data in order
                     thresh_lo = vals[int(np.round(thresh[0] * len(vals)))]  # define hi and low thresholds
@@ -1594,7 +1594,7 @@ def norm_niis(ser_dict, repeat=False):
                 # load image into memory
                 nii = nib.load(fn)
                 affine = nii.get_affine()
-                img = nii.get_data()
+                img = nii.get_fdata()
                 nzi = np.nonzero(img)
                 mean = np.mean(img[nzi])
                 std = np.std(img[nzi])

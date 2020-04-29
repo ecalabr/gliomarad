@@ -13,8 +13,8 @@ from skimage.morphology import remove_small_objects
 def thresh_mask(image, mask, thr, output, less=False):
     # load data
     im_nii = nib.load(image)
-    im_data = im_nii.get_data()
-    mask_data = nib.load(mask).get_data()
+    im_data = im_nii.get_fdata()
+    mask_data = nib.load(mask).get_fdata()
 
     # erode mask
     # struct = scipy.ndimage.generate_binary_structure(3, 2)  # rank 3, connectivity 2

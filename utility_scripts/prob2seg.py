@@ -62,7 +62,7 @@ def convert_prob(files, nii_out_path, clean):
         files = [files]
     for f in files:
         nii = nib.load(f)
-        data.append(nii.get_data())
+        data.append(nii.get_fdata())
 
     # softmax
     data = [softmax(arr, axis=-1) for arr in data]
