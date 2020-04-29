@@ -730,12 +730,12 @@ def bneck_resid3d_layer(tensor, filt, ksize, strides, dil, dfmt, name, reuse, dr
         tensor = activation(tensor, act, name + '_bneck_conv1_act')
 
     # perform first 1x1 conv for bottleneck block using 1/4 filters - initial bn and act already done above
-    conv3d_fixed_pad(tensor, filt/4, ksize, [1, 1, 1], dil, dfmt, name + '_bneck_conv_1', reuse)
+    conv3d_fixed_pad(tensor, int(round(filt/4)), ksize, [1, 1, 1], dil, dfmt, name + '_bneck_conv_1', reuse)
 
     # perform 3x3 conv for bottleneck block with bn and activation using 1/4 filters
     tensor = batch_norm(tensor, is_training, dfmt, name + '_bneck_conv2_bn', reuse)
     tensor = activation(tensor, act, name + '_bneck_conv2_act')
-    tensor = conv3d_fixed_pad(tensor, filt/4, ksize, strides, dil, dfmt, name + '_bneck_conv2', reuse)
+    tensor = conv3d_fixed_pad(tensor, int(round(filt/4)), ksize, strides, dil, dfmt, name + '_bneck_conv2', reuse)
 
     # perform second 1x1 conv with full filters
     tensor = batch_norm(tensor, is_training, dfmt, name + '_bneck_conv3_bn', reuse)

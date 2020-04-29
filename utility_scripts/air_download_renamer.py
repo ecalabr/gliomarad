@@ -96,7 +96,7 @@ if __name__ == '__main__':
     # get patient list
     mrn_list = []
     access_list = []
-    with open(id_csv, "rb") as csvfile:
+    with open(id_csv, "r") as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         patient_list = list(reader)
     for line in patient_list[1:]:

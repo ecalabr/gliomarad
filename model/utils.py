@@ -228,15 +228,15 @@ def loss_picker(loss_method, labels, predictions, data_format, weights=None):
         # handle channels last
         if data_format == 'channels_last':
             # get center slice for channels last [b, x, y, z, c] and double weights for this slice
-            center_pred = predictions[:, :, :, predictions.shape[3] / 2 + 1, :]
-            center_lab = labels[:, :, :, labels.shape[3] / 2 + 1, :]
-            center_weights = tf.multiply(weights[:, :, :, weights.shape[3] / 2 + 1, :], 2.)
+            center_pred = predictions[:, :, :, int(round(predictions.shape[3] / 2 + 1)), :]
+            center_lab = labels[:, :, :, int(round(labels.shape[3] / 2 + 1)), :]
+            center_weights = tf.multiply(weights[:, :, :, int(round(weights.shape[3] / 2 + 1)), :], 2.)
         # handle channels first
         elif data_format == 'channels_first':
             # get center slice for channels last [b, c, x, y, z] and double weights for this slice
-            center_pred = predictions[:, :, :, :, predictions.shape[3] / 2 + 1]
-            center_lab = labels[:, :, :, :, labels.shape[3] / 2 + 1]
-            center_weights = tf.multiply(weights[:, :, :, :, weights.shape[3] / 2 + 1], 2.)
+            center_pred = predictions[:, :, :, :, int(round(predictions.shape[3] / 2)) + 1]
+            center_lab = labels[:, :, :, :, int(round(labels.shape[3] / 2 + 1))]
+            center_weights = tf.multiply(weights[:, :, :, :, int(round(weights.shape[3] / 2 + 1))], 2.)
         else:
             raise ValueError("Data format not understood: " + str(data_format))
 

@@ -602,7 +602,7 @@ def unet_25d_bneck(features, params, is_training, reuse=False):
     for n, n_layers in enumerate(unet_layout):
 
         # upsample block
-        filt = filt / 2  # half filters before upsampling
+        filt = int(round(filt / 2))  # half filters before upsampling
         layer_name = 'dec_conv_upsample' + str(n)
         tensor = batch_norm(tensor, is_training, dfmt, 'dec_conv_upsample_bn_' + str(n), reuse)
         tensor = activation(tensor, act, 'dec_conv_upsample_act_' + str(n))

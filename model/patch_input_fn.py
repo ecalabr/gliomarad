@@ -430,6 +430,13 @@ def _load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane, norm
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
+    # convert bytes to strings
+    study_dir = byte_convert(study_dir)
+    feature_prefx = byte_convert(feature_prefx)
+    plane = byte_convert(plane)
+    data_fmt = byte_convert(data_fmt)
+    norm_mode = byte_convert(norm_mode)
+
     # sanity checks
     if not os.path.isdir(study_dir):
         raise ValueError("Specified study_directory does not exist")
@@ -601,6 +608,16 @@ def _load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
 
+    # convert bytes to strings
+    study_dir = byte_convert(study_dir)
+    feature_prefx = byte_convert(feature_prefx)
+    label_prefx = byte_convert(label_prefx)
+    mask_prefx = byte_convert(mask_prefx)
+    plane = byte_convert(plane)
+    data_fmt = byte_convert(data_fmt)
+    norm_mode = byte_convert(norm_mode)
+    aug = byte_convert(aug)
+
     # sanity checks
     if plane not in ['ax', 'cor', 'sag']:
         raise ValueError("Did not understand specified plane: " + str(plane))
@@ -716,6 +733,14 @@ def _load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
 
+    # convert bytes to strings
+    study_dir = byte_convert(study_dir)
+    feature_prefx = byte_convert(feature_prefx)
+    label_prefx = byte_convert(label_prefx)
+    plane = byte_convert(plane)
+    data_fmt = byte_convert(data_fmt)
+    norm_mode = byte_convert(norm_mode)
+
     # sanity checks
     if not os.path.isdir(study_dir):
         raise ValueError("Specified study_directory does not exist")
@@ -769,6 +794,13 @@ def _load_multicon_preserve_size_3d(study_dir, feature_prefx, data_fmt, plane='a
     :param norm_mode: (str) The method for normalization, used by _normalize function.
     :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
     """
+
+    # convert bytes to strings
+    study_dir = byte_convert(study_dir)
+    feature_prefx = byte_convert(feature_prefx)
+    plane = byte_convert(plane)
+    data_fmt = byte_convert(data_fmt)
+    norm_mode = byte_convert(norm_mode)
 
     # sanity checks
     if not os.path.isdir(study_dir):

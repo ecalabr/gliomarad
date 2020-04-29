@@ -67,7 +67,7 @@ if __name__ == '__main__':
     # load csv and get accessions and IDs
     access_list = []
     id_list = []
-    with open(args.id_csv, "rb") as csvfile:
+    with open(args.id_csv, "r") as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         id_csv = list(reader)
     for line in id_csv[1:]:
