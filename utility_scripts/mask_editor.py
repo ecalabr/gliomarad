@@ -11,8 +11,10 @@ def seg_edit(direcs, anat_suffix, mask_suffix, addl_suffix=None, addl_suffix2=No
     # handle suffixes without extension
     anat_suffix = anat_suffix + '.nii.gz' if not anat_suffix.endswith('.nii.gz') else anat_suffix
     mask_suffix = mask_suffix + '.nii.gz' if not mask_suffix.endswith('.nii.gz') else mask_suffix
-    addl_suffix = addl_suffix + '.nii.gz' if not addl_suffix.endswith('.nii.gz') else addl_suffix
-    addl_suffix2 = addl_suffix2 + '.nii.gz' if not addl_suffix2.endswith('.nii.gz') else addl_suffix2
+    if addl_suffix:
+        addl_suffix = addl_suffix + '.nii.gz' if not addl_suffix.endswith('.nii.gz') else addl_suffix
+    if addl_suffix2:
+        addl_suffix2 = addl_suffix2 + '.nii.gz' if not addl_suffix2.endswith('.nii.gz') else addl_suffix2
 
     # define outputs
     cmds = []
