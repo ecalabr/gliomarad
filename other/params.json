@@ -1,0 +1,42 @@
+{
+  "data_dir": "/media/ecalabr/scratch/qc_complete",
+  "model_dir": "same",
+  "overwrite": "yes",
+  "data_prefix": ["T1_wmtb", "FLAIR_wmtb", "T2_wmtb", "DWI_wmtb", "DTI_eddy_MD_wm"],
+  "label_prefix": ["T1gad_wmtb"],
+  "mask_prefix": ["tumor_seg"],
+  "mask_dilate": [193, 229, 0],
+  "filter_zero": 0.05,
+
+  "dimension_mode": "2.5D",
+  "data_plane": "ax",
+  "train_dims": [80, 80, 9],
+  "train_patch_overlap": [2, 2, 9],
+  "infer_dims": [200, 232, 9],
+  "infer_patch_overlap": [1, 1, 9],
+  "augment_train_data": "yes",
+  "label_interp": 1,
+
+  "norm_data": true,
+  "norm_labels": true,
+  "norm_mode": "ten_mean",
+
+  "model_name": "unet_25d_bneck",
+  "base_filters": 40,
+  "output_filters": 1,
+  "layer_layout": [4, 5, 6],
+  "final_layer": "conv",
+  "kernel_size": [3, 3, 1],
+  "data_format": "channels_last",
+  "activation": "leaky_relu",
+
+  "shuffle_size": 5000,
+  "batch_size": 8,
+  "num_threads": 1,
+  "train_fract": 0.8,
+  "learning_rate": [0.001, 40000, 0.5],
+  "learning_rate_decay": "exponential",
+  "loss": "MSE25D",
+  "num_epochs":10,
+  "dropout_rate": 0.3
+}

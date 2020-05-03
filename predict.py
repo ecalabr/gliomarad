@@ -1,9 +1,9 @@
 import argparse
 import logging
 import os
-from model.utils import Params, set_logger
+from utilities.utils import Params, set_logger
 from model.prediction import predict
-from model.patch_input_fn import infer_input_fn, infer_input_fn_3d
+from utilities.patch_input_fn import infer_input_fn, infer_input_fn_3d
 from model.model_fn import model_fn
 from glob import glob
 

@@ -7,8 +7,8 @@ import nibabel as nib
 import logging
 import time
 from glob import glob
-from model.patch_input_fn import reconstruct_infer_patches_3d
-from model.patch_input_fn import reconstruct_infer_patches
+from utilities.patch_input_fn import reconstruct_infer_patches_3d
+from utilities.patch_input_fn import reconstruct_infer_patches
 
 
 def predict_sess(sess, model_spec):

@@ -3,7 +3,7 @@
 import logging
 import os
 import tensorflow as tf
-from model.utils import save_dict_to_json
+from utilities.utils import save_dict_to_json
 
 
 def evaluate_sess(sess, model_spec, writer=None):

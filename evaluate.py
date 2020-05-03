@@ -3,10 +3,10 @@
 import argparse
 import logging
 import os
-from model.utils import Params
-from model.utils import set_logger
-from model.patch_input_fn import patch_input_fn
-from model.patch_input_fn import patch_input_fn_3d
+from utilities.utils import Params
+from utilities.utils import set_logger
+from utilities.patch_input_fn import patch_input_fn
+from utilities.patch_input_fn import patch_input_fn_3d
 from model.model_fn import model_fn
 from model.evaluation import evaluate
 
