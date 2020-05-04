@@ -6,7 +6,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 import tensorflow as tf
 from utilities.utils import Params, display_tf_dataset
-from utilities.patch_input_fn import patch_input_fn
+from utilities.patch_input_fn import patch_input_fn, patch_input_fn_3d
 
 
 # define functions
@@ -24,8 +24,8 @@ def test_input_fn(param_file):
     # load inputs with input function
     if params.dimension_mode == '2D':  # handle 2d inputs
         inputs = patch_input_fn(mode='train', params=params).as_numpy_iterator()
-    #elif params.dimension_mode in ['2.5D', '3D']:
-        # inputs = patch_input_fn_3d(mode='train', params=params).as_numpy_iterator()
+    elif params.dimension_mode in ['2.5D', '3D']:
+        inputs = patch_input_fn_3d(mode='train', params=params).as_numpy_iterator()
     else:
         raise ValueError("Dimension mode not understood: " + str(params.dimension_mode))
 

@@ -1,3 +1,4 @@
 metrics choices
-filter zero patches center slice?
 add evaluate.py
+2.5 testing
+https://github.com/tensorflow/tensorflow/issues/35982

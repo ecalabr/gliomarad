@@ -5,10 +5,9 @@ from glob import glob
 import logging
 import os
 # set tensorflow logging to FATAL before importing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, TensorBoard
-from tensorflow.keras.models import load_model
 from utilities.utils import Params
 from utilities.utils import set_logger
 from utilities.patch_input_fn import patch_input_fn, patch_input_fn_3d
@@ -76,9 +75,9 @@ def train(param_file):
     if not os.path.isdir(checkpoint_path):
         os.mkdir(checkpoint_path)
     ckpt = os.path.join(checkpoint_path, 'weights.{epoch:02d}.hdf5')
-    # save checkpoint only if validation loss is higher
-    checkpoint = ModelCheckpoint(ckpt, monitor='val_loss', verbose=1, save_weights_only=False,
-                                 save_best_only=True, mode='auto', save_freq='epoch')
+    # save checkpoint only if validation loss is higher (in case validation is not performed use training loss)
+    checkpoint = ModelCheckpoint(ckpt, monitor='val_loss' if eval_inputs else 'loss', verbose=1,
+                                 save_weights_only=False, save_best_only=True, mode='auto', save_freq='epoch')
 
     # tensorboard callback
     tensorboard = TensorBoard(
@@ -92,7 +91,7 @@ def train(param_file):
     # Train the model
     logging.info("Starting training for {} epochs out of a total of {} epochs".format(epochs_todo, params.num_epochs))
     model.fit(train_inputs, epochs=params.num_epochs, callbacks=callbacks, validation_data=eval_inputs, shuffle=False,
-              initial_epoch=completed_epochs)
+              initial_epoch=completed_epochs, verbose=2)
 
 
 # executed  as script

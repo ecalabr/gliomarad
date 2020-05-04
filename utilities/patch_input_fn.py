@@ -15,9 +15,7 @@ def patch_input_fn(params, mode, infer_dir=None):
         np.save(study_dirs_filepath, study_dirs)  # save study dir list for later use to ensure consistency
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
     eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
-    # if there are no eval dirs return None to model
-    if not any(eval_dirs):
-        return None
+
     # handle infer dir argument
     if infer_dir:
         infer_dir = tf.constant([infer_dir])
@@ -64,6 +62,9 @@ def patch_input_fn(params, mode, infer_dir=None):
     # eval mode
     elif mode == 'eval':
         data_dirs = eval_dirs
+        # if there are no eval dirs return None to model
+        if not any(data_dirs):
+            return None
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
                           params.label_prefix,
@@ -139,9 +140,7 @@ def patch_input_fn_3d(mode, params, infer_dir=None):
         np.save(study_dirs_filepath, study_dirs)  # save study dir list for later use to ensure consistency
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
     eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
-    # if there are no eval dirs return None to model
-    if not any(eval_dirs):
-        return None
+
     # handle infer dir argument
     if infer_dir:
         infer_dir = tf.constant([infer_dir])
@@ -188,6 +187,9 @@ def patch_input_fn_3d(mode, params, infer_dir=None):
     # eval mode
     elif mode == 'eval':
         data_dirs = eval_dirs
+        # if there are no eval dirs return None to model
+        if not any(data_dirs):
+            return None
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
                           params.label_prefix,

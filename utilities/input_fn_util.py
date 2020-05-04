@@ -180,10 +180,10 @@ def tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
     return data
 
 
-def filter_zero_patches(data, data_format, mode, thresh=0.05):
+def filter_zero_patches(labels, data_format, mode, thresh=0.05):
     """
     Filters out patches that contain mostly zeros in the label data. Works for 3D and 2D patches.
-    :param data: (list of tensors) must have {'labels'} key containing labels data
+    :param labels: (tf.tensor) containing labels data (uses only first channel currently)
     :param data_format: (str) either 'channels_first' or 'channels_last' - the tensorflow data format
     :param mode: (str) either '2D' '2.5D' or '3D' - the mode for training
     :param thresh: (float) the threshold percentage for keeping patches. Default is 5%.
@@ -195,30 +195,28 @@ def filter_zero_patches(data, data_format, mode, thresh=0.05):
     if data_format == 'channels_last':
         # handle channels last - use entire slice if 2D, use entire slab if 3D or 2.5D
         if mode == '2.5D':  # [x, y, z, c]
-            # mid_sl = data[:, :, data.get_shape()[2]/2 + 1, 0]
-            mid_sl = data[:, :, :, 0]
+            labels = labels[:, :, int(round(labels.get_shape()[2]/2.)), 0]
         elif mode == '2D':  # [x, y, c]
-            mid_sl = data[:, :, 0]
-        elif mode == '3D':
-            mid_sl = data[:, :, :, 0]
+            labels = labels[:, :, 0]
+        elif mode == '3D':  # [x, y, z, c]
+            labels = labels[:, :, :, 0]
         else:
             raise ValueError("Mode must be 2D, 2.5D, or 3D but is: " + str(mode))
     else:
         # handle channels first - use entire slice if 2D, use entire slab if 3D or 2.5D
         if mode == '2.5D':  # [c, x, y, z]
-            # mid_sl = data[0, :, :, data.get_shape()[2] / 2 + 1]
-            mid_sl = data[0, :, :, :]
+            labels = labels[0, :, :, int(round(labels.get_shape()[2]/2.))]
         elif mode == '2D':  # [c, x, y]
-            mid_sl = data[0, :, :]
-        elif mode == '3D':
-            mid_sl = data[0, :, :, :]
+            labels = labels[0, :, :]
+        elif mode == '3D':  # [c, x, y, z]
+            labels = labels[0, :, :, :]
         else:
-            raise ValueError("Labels shape must be 2D or 3D but is: " + str((data.get_shape())))
+            raise ValueError("Labels shape must be 2D or 3D but is: " + str((labels.get_shape())))
 
-    # eliminate if label slice is 95% empty
+    # make threshold a tf tensor for comparisson
     thr = tf.constant(thresh, dtype=tf.float32)
 
-    return tf.less(thr, tf.math.count_nonzero(mid_sl, dtype=tf.float32) / tf.size(input=mid_sl, out_type=tf.float32))
+    return tf.less(thr, tf.math.count_nonzero(labels, dtype=tf.float32) / tf.size(input=labels, out_type=tf.float32))
 
 
 # DATA UTILITIES
