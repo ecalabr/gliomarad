@@ -5,7 +5,7 @@ from glob import glob
 import logging
 import os
 # set tensorflow logging to FATAL before importing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, TensorBoard
 from tensorflow.keras.models import load_model
@@ -26,10 +26,6 @@ def train(param_file):
         params.model_dir = os.path.dirname(param_file)
     if not os.path.isdir(params.model_dir):
         raise ValueError("Specified model directory does not exist")
-
-    # Check that we are not overwriting some previous experiment
-    if not params.overwrite and os.listdir(params.model_dir):
-        raise ValueError("Overwrite param is false but there are files in specified model directory!")
 
     # Set the logger, delete old log file if overwrite param is set to yes
     log_path = os.path.join(params.model_dir, 'train.log')
@@ -58,8 +54,9 @@ def train(param_file):
     if checkpoints and not params.overwrite:
         latest_ckpt = max(checkpoints, key=os.path.getctime)
         print("Found checkpoint file {}, attempting to resume...".format(latest_ckpt))
-        # Load model:
-        model = load_model(latest_ckpt)
+        # Load model checkpoints:
+        model = model_fn(params)  # recreating model is neccesary if custom loss function is being used
+        model.load_weights(latest_ckpt)
         print("- done loading model")
         # Finding the epoch index from which we are resuming
         completed_epochs = int(os.path.basename(latest_ckpt).split('.')[1])
@@ -93,9 +90,9 @@ def train(param_file):
     callbacks = [learning_rate, checkpoint, tensorboard]
 
     # Train the model
-    logging.info("Starting training for {} of {} total epochs".format(epochs_todo, params.num_epochs))
+    logging.info("Starting training for {} epochs out of a total of {} epochs".format(epochs_todo, params.num_epochs))
     model.fit(train_inputs, epochs=params.num_epochs, callbacks=callbacks, validation_data=eval_inputs, shuffle=False,
-              initial_epoch=completed_epochs + 1)
+              initial_epoch=completed_epochs)
 
 
 # executed  as script
