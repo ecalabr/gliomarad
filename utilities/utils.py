@@ -2,7 +2,6 @@
 
 import json
 import logging
-import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -20,7 +19,6 @@ class Params:
     data_dir = None
     model_dir = None
     overwrite = None
-    restore_dir = None
     data_prefix = None
     label_prefix = None
     mask_prefix = None
@@ -44,11 +42,11 @@ class Params:
     base_filters = None
     output_filters = None
     layer_layout = None
+    final_layer = None
     kernel_size = None
     data_format = None
     activation = None
 
-    buffer_size = None
     shuffle_size = None
     batch_size = None
     num_threads = None
@@ -58,8 +56,6 @@ class Params:
     loss = None
     num_epochs = None
     dropout_rate = None
-
-    save_summary_steps = None
 
     def __init__(self, json_path):
         self.update(json_path)
@@ -132,44 +128,6 @@ def save_dict_to_json(d, json_path):
         json.dump(d, f, indent=4)
 
 
-def learning_rate_picker(learn_rate, learning_rate_decay, global_step):
-    """
-    Takes a learning rate and a string specifying a learning rate decay method and returns a learning rate.
-    :param learn_rate: (float) the learning rate or list/tuple(float) the learning rate, step, and decay factor
-    :param learning_rate_decay (string) the learning rate decay method
-    :param global_step (tensorflow global step) the global step for the model
-    :return: A learning rate function using the specified starting rate
-    """
-
-    # sanity checks
-    if not isinstance(learn_rate, (float, list, tuple)):
-        raise ValueError("Learning rate must be a float or list/tuple")
-    if not isinstance(learning_rate_decay, str):
-        raise ValueError("Learning rate decay parameter must be a string")
-
-    # chooser for decay method
-    if learning_rate_decay == 'constant':
-        if isinstance(learn_rate, (list, tuple)):
-            learn_rate = learn_rate[0]
-        learning_rate_function = learn_rate
-
-    # exponential decay
-    elif learning_rate_decay == 'exponential':
-        if not isinstance(learn_rate, (list, tuple)):
-            raise ValueError("Exponential decay requres three values: starting learning rate, steps, and decay factor")
-        start_lr = learn_rate[0]
-        steps = learn_rate[1]
-        decay = learn_rate[2]
-        learning_rate_function = tf.compat.v1.train.exponential_decay(start_lr, global_step, steps, decay,
-                                                                      staircase=True)
-
-    # not implemented yet
-    else:
-        raise NotImplementedError("Specified learning rate decay method is not implemented: " + learning_rate_decay)
-
-    return learning_rate_function
-
-
 def display_tf_dataset(dataset_data, data_format, data_dims):
     """
     Displays tensorflow dataset output images and labels/regression images.
@@ -191,7 +149,7 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
     # handle 2d case
     if len(data_dims) == 2:
         # image data
-        image_data = dataset_data["features"]  # dataset_data[0]
+        image_data = dataset_data[0]  # dataset_data[0]
         if len(image_data.shape) > 3:
             image_data = np.squeeze(image_data[0, :, :, :])  # handle batch data
         nplots = image_data.shape[0] + 1 if data_format == 'channels_first' else image_data.shape[2] + 1
@@ -205,7 +163,7 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
             ax.set_title('Data Image ' + str(z + 1))
 
         # label data
-        label_data = dataset_data["labels"]  # dataset_data[1]
+        label_data = dataset_data[1]  # dataset_data[1]
         if len(label_data.shape) > 3:
             label_data = np.squeeze(label_data[0, :, :, :])  # handle batch data
         ax = fig.add_subplot(1, nplots, nplots)
@@ -218,7 +176,7 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
     if len(data_dims) == 3:
 
         # load image data
-        image_data = dataset_data["features"]  # dataset_data[0]
+        image_data = dataset_data[0]  # dataset_data[0]
 
         # handle channels first and batch data
         if len(image_data.shape) > 4:
@@ -243,7 +201,7 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
             ax.set_title('Data Image ' + str(z + 1))
 
         # load label data
-        label_data = dataset_data["labels"]  # dataset_data[1]
+        label_data = dataset_data[1]  # dataset_data[1]
 
         # handle channels first and batch data
         if len(label_data.shape) > 4:

@@ -1,7 +1,7 @@
 {
   "data_dir": "/media/ecalabr/scratch/qc_complete",
   "model_dir": "same",
-  "overwrite": "yes",
+  "overwrite": true,
   "data_prefix": ["T1_wmtb", "FLAIR_wmtb", "T2_wmtb", "DWI_wmtb", "DTI_eddy_MD_wm"],
   "label_prefix": ["T1gad_wmtb"],
   "mask_prefix": ["tumor_seg"],
@@ -14,7 +14,7 @@
   "train_patch_overlap": [2, 2, 9],
   "infer_dims": [200, 232, 9],
   "infer_patch_overlap": [1, 1, 9],
-  "augment_train_data": "yes",
+  "augment_train_data": true,
   "label_interp": 1,
 
   "norm_data": true,

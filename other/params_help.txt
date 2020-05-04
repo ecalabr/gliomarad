@@ -4,8 +4,8 @@
 "model_dir": "same",
     The full path to the directory for model outputs. If "same" is passed, then the data directory is used for model outputs.
 
-"overwrite": "yes",
-    Whether or not to overwrite model ouputs if the model is run again. Must be "yes" or "no". Note that specifying "no" will raise an error if a model output already exists in model_dir.
+"overwrite": true,
+    Whether or not to overwrite model ouputs if the model is run again. Must be boolean. Note that specifying false will raise an error if a model output already exists in model_dir.
 
 "data_prefix": ["T1_wmtb", "T2_wmtb", "FLAIR_wmtb", "DWI_wmtb", "ASL_wm", "SWI_wmtb", "DTI_eddy_MD_wm"],
     The prefixes for the input image files specified as a bracketed list. The expected filename format is directory-name_data-prefix.nii.gz i.e. 01234567_flair.nii.gz.
@@ -40,8 +40,8 @@
 "infer_patch_overlap": [1, 1, 9],
     A list of 2 (if using 2D mode) or 3 (if using 2.5D or 3D mode) ints that serve as the divisior for determining the stride passed to extract_image_patches or extract_volume_patches. The inference dimension is divided by the corresponding overlap value to determine the stride. For stride=1 (complete overlap) pass the same value as the corresponding infer dim (this is used for 2.5D inference to ensure stride 1 in z dimension).
 
-"augment_train_data": "yes",
-    Whether or not to randomly rotate the training data (in the axial plane). Must be "yes" or "no"
+"augment_train_data": true,
+    Whether or not to randomly rotate the training data (in the axial plane). Must be boolean.
 
 "label_interp": 1,
     The order of interpolation to be used when randomly rotating the label data. This only matters if augment_train_data == yes. 0 = nearest neighbor, 1 = linear, 2 = cubic, etc

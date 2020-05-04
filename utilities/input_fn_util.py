@@ -670,7 +670,7 @@ def load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane, norm=
 
 
 def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
-                                  data_fmt='channels_last', aug='no', interp=1, norm=True, norm_lab=True,
+                                  data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
                                   norm_mode='zero_mean'):
     """
     Patch loader generates 2D patch data for images and labels given a list of 3D input NiFTI images a mask.
@@ -683,7 +683,7 @@ def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pre
     :param dilate: (int) The amount to dilate the region by in all dimensions
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param aug: (str) 'yes' or 'no' - Whether or not to perform data augmentation with random 3D affine rotation.
+    :param aug: (bool) Whether or not to perform data augmentation with random 3D affine rotation.
     :param interp: (int) The order of spline interpolation for label data. Must be 0-5
     :param norm: (bool) Whether or not to normalize the input data after loading.
     :param norm_lab: (bool) whether or not to normalize the label data after loading.
@@ -699,7 +699,6 @@ def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pre
     plane = byte_convert(plane)
     data_fmt = byte_convert(data_fmt)
     norm_mode = byte_convert(norm_mode)
-    aug = byte_convert(aug)
 
     # sanity checks
     if plane not in ['ax', 'cor', 'sag']:
@@ -739,16 +738,14 @@ def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pre
         labels = nib.load(labels_file).get_fdata()
 
     # center the tumor in the image usine affine, with optional rotation for data augmentation
-    if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
+    if aug:  # if augmenting, select random rotation values for x, y, and z axes
         theta = np.random.random() * (np.pi / 2.) if plane == 'cor' else 0.  # rotation in yz plane
         phi = np.random.random() * (np.pi / 2.) if plane == 'sag' else 0.  # rotation in xz plane
         psi = np.random.random() * (np.pi / 2.) if plane == 'ax' else 0.  # rotation in xy plane
-    elif aug == 'no':  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
+    else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
         theta = 0.
         phi = 0.
         psi = 0.
-    else:
-        raise ValueError("Augment data param argument must be yes or no but is: " + str(aug))
 
     # make affine, calculate offset using mask center of mass and affine
     affine = create_affine(theta=theta, phi=phi, psi=psi)
@@ -800,7 +797,7 @@ def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pre
 
 
 def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
-                                     data_fmt='channels_last', aug='no', interp=1, norm=True, norm_lab=True,
+                                     data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
                                      norm_mode='zero_mean'):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
@@ -813,7 +810,7 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     :param mask_prefx: (str) The prefixe for the image files containing the data mask. None uses no masking.
     :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
     :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param aug: (str) Either yes or no - Whether or not to perform data augmentation with random 3D affine rotation.
+    :param aug: (bool) Whether or not to perform data augmentation with random 3D affine rotation.
     :param interp: (int) The order of spline interpolation for label data. Must be 0-5
     :param norm: (bool) Whether or not to normalize the input data after loading.
     :param norm_lab: (bool) whether or not to normalize the label data after loading.
@@ -829,7 +826,6 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     plane = byte_convert(plane)
     data_fmt = byte_convert(data_fmt)
     norm_mode = byte_convert(norm_mode)
-    aug = byte_convert(aug)
 
     # sanity checks
     if plane not in ['ax', 'cor', 'sag']:
@@ -869,16 +865,14 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
         labels = nib.load(labels_file).get_fdata()
 
     # center the ROI in the image usine affine, with optional rotation for data augmentation
-    if aug == 'yes':  # if augmenting, select random rotation values for x, y, and z axes
+    if aug:  # if augmenting, select random rotation values for x, y, and z axes
         theta = np.random.random() * (np.pi / 2.) if plane == 'cor' else 0.  # rotation in yz plane
         phi = np.random.random() * (np.pi / 2.) if plane == 'sag' else 0.  # rotation in xz plane
         psi = np.random.random() * (np.pi / 2.) if plane == 'ax' else 0.  # rotation in xy plane
-    elif aug == 'no':  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
+    else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
         theta = 0.
         phi = 0.
         psi = 0.
-    else:
-        raise ValueError("Augment data param argument must be yes or no but is: " + str(aug))
 
     # make affine, calculate offset using mask center of mass and affine
     affine = create_affine(theta=theta, phi=phi, psi=psi)
@@ -1059,12 +1053,14 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
         return tf.image.extract_patches(x, sizes=ksizes, strides=strides, rates=rates, padding='SAME')
 
     def extract_patches_inverse(x, y):
-        _x = tf.zeros_like(x)
-        _y = extract_patches(_x)
-        grad = tf.gradients(ys=_y, xs=_x)[0]
-        # Divide by grad, to "average" together the overlapping patches
-        # otherwise they would simply sum up
-        return tf.gradients(ys=_y, xs=_x, grad_ys=y)[0] / grad
+        with tf.GradientTape(persistent=True) as tape:
+            _x = tf.zeros_like(x)
+            tape.watch(_x)
+            _y = extract_patches(_x)
+            grad = tape.gradient(_y, _x)
+            # Divide by grad, to "average" together the overlapping patches
+            # otherwise they would simply sum up
+            return tape.gradient(_y, _x, output_gradients=y) / grad
 
     # load original data but convert to only one channel to match output [batch, x, y, z, channel]
     data = load_multicon_preserve_size(infer_dir, data_prefix, data_format, data_plane)
@@ -1087,8 +1083,7 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
 
     # reconstruct
     reconstructed = extract_patches_inverse(data, predictions)
-    with tf.compat.v1.Session() as sess:
-        output = np.squeeze(reconstructed.eval(session=sess))
+    output = np.squeeze(reconstructed.numpy())
 
     return output
 
@@ -1120,12 +1115,14 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
         return tf.extract_volume_patches(x, ksizes=ksizes, strides=strides, padding='SAME')
 
     def extract_patches_inverse(x, y):
-        _x = tf.zeros_like(x)
-        _y = extract_patches(_x)
-        grad = tf.gradients(ys=_y, xs=_x)[0]
-        # Divide by grad, to "average" together the overlapping patches
-        # otherwise they would simply sum up
-        return tf.gradients(ys=_y, xs=_x, grad_ys=y)[0] / grad
+        with tf.GradientTape(persistent=True) as tape:
+            _x = tf.zeros_like(x)
+            tape.watch(_x)
+            _y = extract_patches(_x)
+            grad = tape.gradient(_y, _x)
+            # Divide by grad, to "average" together the overlapping patches
+            # otherwise they would simply sum up
+            return tape.gradient(_y, _x, output_gradients=y) / grad
 
     # load original data but convert to only one channel to match output [batch, x, y, z, channel]
     data = load_multicon_preserve_size_3d(infer_dir, data_prefix, data_format, data_plane, norm, norm_mode)
@@ -1139,7 +1136,6 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
 
     # reconstruct
     reconstructed = extract_patches_inverse(data, predictions)
-    with tf.compat.v1.Session() as sess:
-        output = np.squeeze(reconstructed.eval(session=sess))
+    output = np.squeeze(reconstructed.numpy())
 
     return output

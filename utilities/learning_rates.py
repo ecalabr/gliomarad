@@ -11,6 +11,23 @@ def constant(learn_rate):
     return constant_lr
 
 
+# constant (no decay)
+def simple_step(learn_rate):
+    if not isinstance(learn_rate, (list, tuple)):
+        raise ValueError("Simple step decay requres three values: starting learning rate, lead in epochs, and factor")
+    init_learn_rate = learn_rate[0]
+    epochs = learn_rate[1]
+    factor = learn_rate[2]
+    # simple function that always returns learn_rate regardless of epoch
+    def step_lr(_epoch):
+        if _epoch < epochs:
+            lr = init_learn_rate
+        else:
+            lr = init_learn_rate * (factor ** (_epoch - epochs))
+        return lr
+    return step_lr
+
+
 # exponential decay
 def exponential(learn_rate):
     if not isinstance(learn_rate, (list, tuple)):
