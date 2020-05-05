@@ -91,7 +91,7 @@ def train(param_file):
     # Train the model
     logging.info("Starting training for {} epochs out of a total of {} epochs".format(epochs_todo, params.num_epochs))
     model.fit(train_inputs, epochs=params.num_epochs, callbacks=callbacks, validation_data=eval_inputs, shuffle=False,
-              initial_epoch=completed_epochs, verbose=2)
+              initial_epoch=completed_epochs, verbose=1)
 
 
 # executed  as script
