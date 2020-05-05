@@ -40,7 +40,7 @@ def patch_input_fn(params, mode, infer_dir=None):
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
-            lambda x: tf.compat.v1.py_func(load_roi_multicon_and_labels,
+            lambda x: tf.numpy_function(load_roi_multicon_and_labels,
                                            [x] + py_func_params,
                                            (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)
@@ -165,7 +165,7 @@ def patch_input_fn_3d(mode, params, infer_dir=None):
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
-            lambda x: tf.compat.v1.py_func(load_roi_multicon_and_labels_3d,
+            lambda x: tf.numpy_function(load_roi_multicon_and_labels_3d,
                                            [x] + py_func_params,
                                            (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)
