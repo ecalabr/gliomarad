@@ -52,8 +52,9 @@ def patch_input_fn(params, mode, infer_dir=None):
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
-        dataset = dataset.filter(lambda x, y: filter_zero_patches(
-            y, params.data_format, params.dimension_mode, params.filter_zero))
+        if params.filter_zero > 0.:
+            dataset = dataset.filter(lambda x, y: filter_zero_patches(
+                y, params.data_format, params.dimension_mode, params.filter_zero))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -81,18 +82,18 @@ def patch_input_fn(params, mode, infer_dir=None):
             lambda x: tf.numpy_function(load_multicon_and_labels,
                                            [x] + py_func_params,
                                            (tf.float32, tf.float32)),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x, y: tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format,
                                      overlap=params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # generate a batch of data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
         # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        #dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
     # infer mode
     elif mode == 'infer':
@@ -109,17 +110,17 @@ def patch_input_fn(params, mode, infer_dir=None):
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size,
                                            [x] + py_func_params,
-                                           tf.float32), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                           tf.float32), num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x: tf_patches_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
         dataset = dataset.batch(batch_size=1, drop_remainder=True)
         # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        #dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
     # error if not train, eval, or infer
     else:
@@ -177,8 +178,9 @@ def patch_input_fn_3d(mode, params, infer_dir=None):
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
-        dataset = dataset.filter(lambda x, y: filter_zero_patches(
-            y, params.data_format, params.dimension_mode, params.filter_zero))
+        if params.filter_zero > 0.:
+            dataset = dataset.filter(lambda x, y: filter_zero_patches(
+                y, params.data_format, params.dimension_mode, params.filter_zero))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -205,18 +207,18 @@ def patch_input_fn_3d(mode, params, infer_dir=None):
             lambda x: tf.numpy_function(load_multicon_and_labels_3d,
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x, y: tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format,
                                     overlap=params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # generate a batch of data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
         # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        #dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
     # infer mode
     elif mode == 'infer':
@@ -234,17 +236,17 @@ def patch_input_fn_3d(mode, params, infer_dir=None):
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
                                         [x] + py_func_params,
-                                        tf.float32), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        tf.float32), num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x: tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
         dataset = dataset.batch(batch_size=1, drop_remainder=True)
         # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        #dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
     # error if not train, eval, or infer
     else:

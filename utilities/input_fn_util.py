@@ -189,7 +189,7 @@ def filter_zero_patches(labels, data_format, mode, thresh=0.05):
     :param thresh: (float) the threshold percentage for keeping patches. Default is 5%.
     :return: Returns tf.bool False if less than threshold, else returns tf.bool True
     """
-    if thresh == 0.:
+    if float(thresh) == 0.:
         return tf.constant(True, dtype=tf.bool)
 
     if data_format == 'channels_last':

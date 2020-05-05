@@ -78,15 +78,16 @@ def train(param_file):
     # save checkpoint only if validation loss is higher (in case validation is not performed use training loss)
     checkpoint = ModelCheckpoint(ckpt, monitor='val_loss' if eval_inputs else 'loss', verbose=1,
                                  save_weights_only=False, save_best_only=True, mode='auto', save_freq='epoch')
-
+    """
     # tensorboard callback
     tensorboard = TensorBoard(
         log_dir=params.model_dir, histogram_freq=1, write_graph=True, write_images=True,
         update_freq='epoch', profile_batch=2, embeddings_freq=0,
         embeddings_metadata=None)
+    """
 
     # combine callbacks for the model
-    callbacks = [learning_rate, checkpoint, tensorboard]
+    callbacks = [learning_rate, checkpoint]  # , tensorboard]
 
     # Train the model
     logging.info("Starting training for {} epochs out of a total of {} epochs".format(epochs_todo, params.num_epochs))
