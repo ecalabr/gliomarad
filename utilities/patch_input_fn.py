@@ -63,6 +63,8 @@ def _patch_input_fn_2d(params, mode, infer_dir=None):
         # generate batch data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        # repeat at least 2 times so dataset doesn't exhaust prematurely during fit
+        dataset = dataset.repeat(count=2)
 
     # eval mode
     elif mode == 'eval':
@@ -192,6 +194,8 @@ def _patch_input_fn_3d(params, mode, infer_dir=None):
         # generate batch data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        # repeat at least 2 times so dataset doesn't exhaust prematurely during fit
+        dataset = dataset.repeat(count=2)
 
     # eval mode
     elif mode == 'eval':

@@ -47,6 +47,9 @@ def train(param_file):
         completed_epochs = int(os.path.basename(latest_ckpt).split('after_epoch_')[1])
     else:
         completed_epochs = 0
+    epochs_left = params.num_epochs - completed_epochs
+
+    """
     # best checkpoint directory/val_loss setup
     best_weights_path = os.path.join(params.model_dir, 'best_weights')
     if not os.path.isdir(best_weights_path):
@@ -57,6 +60,7 @@ def train(param_file):
         best_val_loss = float(os.path.basename(best_ckpt).split('val_loss_')[1])
     else:
         best_val_loss = float('inf')
+    """
 
     # Check for existing model and load if exists, otherwise create from scratch
     if latest_ckpt and not params.overwrite:
@@ -81,7 +85,7 @@ def train(param_file):
         os.mkdir(last_weights_path)
     ckpt = os.path.join(last_weights_path, 'after_epoch_{epoch:02d}.hdf5')
     # save checkpoint only if validation loss is higher (in case validation is not performed use training loss)
-    checkpoint = ModelCheckpoint(ckpt, monitor='loss', verbose=1, save_weights_only=False, save_best_only=False,
+    checkpoint = ModelCheckpoint(ckpt, monitor='val_loss', verbose=1, save_weights_only=False, save_best_only=True,
                                  mode='auto', save_freq='epoch')
 
     # tensorboard callback
@@ -97,8 +101,19 @@ def train(param_file):
     eval_inputs = patch_input_fn(params, mode='eval')
 
     # Train the model with evalutation after each epoch
+    logging.info("Training the model...")
+    model.fit(train_inputs,
+              epochs=epochs_left,
+              initial_epoch=completed_epochs,
+              steps_per_epoch=18400//params.batch_size,
+              callbacks=train_callbacks,
+              validation_data=eval_inputs,
+              shuffle=False,
+              verbose=1)
+
+    """
     logging.info("Starting training for {} epochs out of a total of {} epochs".format(epochs_todo, params.num_epochs))
-    epochs_left = params.num_epochs - completed_epochs
+    
     while epochs_left > 0:
         # train one epoch
         logging.info("Training the model...")
@@ -122,6 +137,7 @@ def train(param_file):
         # increment epochs counters
         epochs_left = epochs_left - 1
         completed_epochs = completed_epochs + 1
+    """
 
 
 # executed  as script
