@@ -46,7 +46,6 @@ def train(param_file):
         completed_epochs = int(os.path.basename(latest_ckpt).split('after_epoch_')[1])
     else:
         completed_epochs = 0
-    epochs_left = params.num_epochs - completed_epochs
 
     """
     # best checkpoint directory/val_loss setup
@@ -101,7 +100,7 @@ def train(param_file):
     # Train the model with evalutation after each epoch
     logging.info("Training the model...")
     model.fit(train_inputs,
-              epochs=epochs_left,
+              epochs=params.num_epochs,
               initial_epoch=completed_epochs,
               steps_per_epoch=18400//params.batch_size,
               callbacks=train_callbacks,
