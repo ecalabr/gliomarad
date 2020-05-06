@@ -18,7 +18,7 @@ def model_fn(params, metrics=('accuracy',)):
     model.compile(optimizer=Adam(), loss=loss, metrics=metrics)
 
     # save text representation of graph
-    model_sum = os.path.join(params.model_dir, 'modelsummary.txt')
+    model_sum = os.path.join(params.model_dir, 'model_summary.txt')
     if not os.path.isfile(model_sum):
         with open(model_sum, 'w+') as f:
             with redirect_stdout(f):
