@@ -2,3 +2,5 @@ metrics choices
 add evaluate.py
 2.5 testing
 https://github.com/tensorflow/tensorflow/issues/35982
+model.fit not working (crashes) with variable length epochs, workaround with epoch for loop
+eventually would be nice to get model.fit working with variable length epochs and use built in validation steps
