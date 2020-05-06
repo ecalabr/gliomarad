@@ -92,18 +92,20 @@ def train(param_file):
     # combine callbacks for the model
     train_callbacks = [learning_rate, checkpoint, tensorboard]
 
+    # make inputs
+    train_inputs = patch_input_fn(params, mode='train')
+    eval_inputs = patch_input_fn(params, mode='eval')
+
     # Train the model with evalutation after each epoch
     logging.info("Starting training for {} epochs out of a total of {} epochs".format(epochs_todo, params.num_epochs))
     epochs_left = params.num_epochs - completed_epochs
     while epochs_left > 0:
         # train one epoch
         logging.info("Training the model...")
-        train_inputs = patch_input_fn(params, mode='train')
         model.fit(train_inputs, epochs=completed_epochs + 1, initial_epoch=completed_epochs, callbacks=train_callbacks,
                   shuffle=False, verbose=1)
         # eval one epoch
         logging.info("Evaluating the model...")
-        eval_inputs = patch_input_fn(params, mode='eval')
         results = model.evaluate(eval_inputs, verbose=1, callbacks=None)
         # move to best_weights directory if val_loss improves
         if results[0] < best_val_loss:
