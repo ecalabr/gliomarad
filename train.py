@@ -13,7 +13,6 @@ from utilities.utils import set_logger
 from utilities.patch_input_fn import patch_input_fn
 from utilities.learning_rates import learning_rate_picker
 from model.model_fn import model_fn
-import shutil
 
 
 # define functions
@@ -74,7 +73,6 @@ def train(param_file):
         logging.info("Creating the model...")
         model = model_fn(params)
         logging.info("- done creating model")
-    epochs_todo = params.num_epochs - completed_epochs
 
     # define learning rate schedule callback for model
     learning_rate = learning_rate_picker(params.learning_rate, params.learning_rate_decay)
