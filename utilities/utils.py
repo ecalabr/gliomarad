@@ -19,6 +19,7 @@ class Params:
     data_dir = None
     model_dir = None
     overwrite = None
+
     data_prefix = None
     label_prefix = None
     mask_prefix = None
@@ -33,6 +34,7 @@ class Params:
     infer_patch_overlap = None
     augment_train_data = None
     label_interp = None
+    mask_weights = None
 
     norm_data = None
     norm_labels = None
@@ -49,6 +51,7 @@ class Params:
 
     shuffle_size = None
     batch_size = None
+    samples_per_epoch = None
     num_threads = None
     train_fract = None
     learning_rate = None

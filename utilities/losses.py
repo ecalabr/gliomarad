@@ -5,13 +5,18 @@ import tensorflow as tf
 
 
 # MSE loss
-def MSE():
-    return tf.keras.losses.MSE()
+def MSE(y_true, y_pred, sample_weight=None):
+    return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=sample_weight)
 
 
 # MAE loss
-def MAE():
-    return tf.keras.losses.MAE()
+def MAE(y_true, y_pred, sample_weight=None):
+    return tf.keras.losses.MeanAbsoluteError()(y_true, y_pred, sample_weight=sample_weight)
+
+
+# MAPE loss
+def MAPE(y_true, y_pred, sample_weight=None):
+    return tf.keras.losses.MeanAbsolutePercentageError()(y_true, y_pred, sample_weight=sample_weight)
 
 
 # softmax cross entropy

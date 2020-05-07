@@ -5,7 +5,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 from utilities.utils import Params, set_logger
-from utilities.patch_input_fn import patch_input_fn, patch_input_fn_3d
+from utilities.patch_input_fn import patch_input_fn
 from model.model_fn import model_fn
 from glob import glob
 import nibabel as nib
@@ -23,16 +23,8 @@ def predict(params, infer_dir):
     set_logger(os.path.join(params.model_dir, 'predict.log'))
     logging.info("Log file created at " + log_path)
 
-    # Create the two iterators over the two datasets
-    logging.info("Generating dataset objects...")
-    # handle 2D vs 3D
-    if params.dimension_mode == '2D':
-        infer_inputs = patch_input_fn(params=params, mode='infer', infer_dir=infer_dir)
-    elif params.dimension_mode in ['2.5D', '3D']:
-        infer_inputs = patch_input_fn_3d(params=params, mode='infer', infer_dir=infer_dir)
-    else:
-        raise ValueError("Training dimensions mode not understood: " + str(params.dimension_mode))
-    logging.info("- done generating dataset objects")
+    # Create the inference dataset structure
+    infer_inputs = patch_input_fn(params=params, mode='infer', infer_dir=infer_dir)
 
     # load latest checkpoint
     checkpoint_path = os.path.join(params.model_dir, 'checkpoints')

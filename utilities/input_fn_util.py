@@ -95,7 +95,7 @@ def tf_patches_infer(data, patch_size, chan_dim, data_format, overlap=1):
     return data
 
 
-def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
+def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1, mask=None):
     """
     Extract 3D patches from a data array with overlap if desired
     :param data: (numpy array) the data tensorflow tensor
@@ -104,6 +104,7 @@ def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     :param chan_dim:  (int) the number of data channels
     :param data_format: (str) either channels_last or channels_first - the tensorflow data format
     :param overlap: (int or list/tuple of ints) the divisor for patch strides - determines the patch overlap in x, y
+    :param mask: (numpy array) optionally pass a mask array which will also be patched and returned
     :return: returns tensorflow tensor patches
     """
 
@@ -121,6 +122,8 @@ def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     if data_format == 'channels_first':
         data = tf.transpose(a=data, perm=[0, 2, 3, 4, 1])
         labels = tf.transpose(a=labels, perm=[0, 2, 3, 4, 1])
+        if mask is not None:
+            mask = tf.transpose(a=mask, perm=[0, 2, 3, 4, 1])
 
     # for sliding window 3d slabs
     ksizes = [1] + patch_size + [1]
@@ -131,13 +134,22 @@ def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1):
     data = tf.reshape(data, [-1] + patch_size + [chan_dim])
     labels = tf.extract_volume_patches(labels, ksizes=ksizes, strides=strides, padding='SAME')
     labels = tf.reshape(labels, [-1] + patch_size + [1])
+    if mask is not None:
+        mask = tf.extract_volume_patches(mask, ksizes=ksizes, strides=strides, padding='SAME')
+        mask = tf.reshape(mask, [-1] + patch_size + [1])
 
     # handle channels first
     if data_format == 'channels_first':
         data = tf.transpose(a=data, perm=[0, 4, 1, 2, 3])
         labels = tf.transpose(a=labels, perm=[0, 4, 1, 2, 3])
+        if mask is not None:
+            mask = tf.transpose(a=mask, perm=[0, 4, 1, 2, 3])
 
-    return data, labels
+    # handle optinally returning mask
+    if mask is not None:
+        return data, labels, mask
+    else:
+        return data, labels
 
 
 def tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
@@ -796,7 +808,7 @@ def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pre
 
 def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
                                      data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
-                                     norm_mode='zero_mean'):
+                                     norm_mode='zero_mean', return_mask=False):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -813,6 +825,8 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     :param norm: (bool) Whether or not to normalize the input data after loading.
     :param norm_lab: (bool) whether or not to normalize the label data after loading.
     :param norm_mode: (str) The method for normalization, used by normalize function.
+    :param return_mask: (bool or list) whether or not to return the mask as one of the outputs. If list, mask values are
+    mapped to the values in the list. For example, passing [1, 2, 4] would map mask value 0->1, 1->2, 2->4.
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
 
@@ -824,6 +838,8 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     plane = byte_convert(plane)
     data_fmt = byte_convert(data_fmt)
     norm_mode = byte_convert(norm_mode)
+    if isinstance(return_mask, bool) and not return_mask:
+        return_mask = None
 
     # sanity checks
     if plane not in ['ax', 'cor', 'sag']:
@@ -898,10 +914,14 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
         data_region[:, :, :, i] = data[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5], i]
     data = data_region
     labels = labels[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
+    if return_mask is not None:
+        mask = mask[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
 
     # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
     labels = np.expand_dims(np.expand_dims(labels, axis=3), axis=0)  # add a batch and channel dimension of 1
+    if return_mask is not None:
+        mask = np.expand_dims(np.expand_dims(mask, axis=3), axis=0)  # add a batch and channel dimension of 1
 
     # handle different planes
     if plane == 'ax':
@@ -909,9 +929,13 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     elif plane == 'cor':
         data = np.transpose(data, axes=[0, 1, 3, 2, 4])
         labels = np.transpose(labels, axes=[0, 1, 3, 2, 4])
+        if return_mask is not None:
+            mask = np.transpose(mask, axes=[0, 1, 3, 2, 4])
     elif plane == 'sag':
         data = np.transpose(data, axes=[0, 2, 3, 1, 4])
         labels = np.transpose(labels, axes=[0, 2, 3, 1, 4])
+        if return_mask is not None:
+            mask = np.transpose(mask, axes=[0, 1, 3, 2, 4])
     else:
         raise ValueError("Did not understand specified plane: " + str(plane))
 
@@ -919,8 +943,19 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     if data_fmt == 'channels_first':
         data = np.transpose(data, axes=[0, 4, 1, 2, 3])
         labels = np.transpose(labels, axes=[0, 4, 1, 2, 3])
+        if return_mask is not None:
+            mask = np.transpose(mask, axes=[0, 4, 1, 2, 3])
 
-    return data.astype(np.float32), labels.astype(np.float32)
+    # handle return_mask argument as list
+    if isinstance(return_mask, np.ndarray):
+        # map each value of mask to the corresponding loss factor
+        mask = return_mask[mask.astype(int)]
+
+    # handle return_mask flag
+    if return_mask is not None:
+        return data.astype(np.float32), labels.astype(np.float32), mask.astype(np.float32)
+    else:
+        return data.astype(np.float32), labels.astype(np.float32)
 
 
 def load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt, plane='ax', norm=True, norm_lab=True,

@@ -2,6 +2,7 @@
   "data_dir": "/media/ecalabr/scratch/qc_complete",
   "model_dir": "same",
   "overwrite": true,
+
   "data_prefix": ["T1_wmtb", "FLAIR_wmtb", "T2_wmtb", "DWI_wmtb", "DTI_eddy_MD_wm"],
   "label_prefix": ["T1gad_wmtb"],
   "mask_prefix": ["tumor_seg"],
@@ -16,6 +17,7 @@
   "infer_patch_overlap": [1, 1, 9],
   "augment_train_data": true,
   "label_interp": 1,
+  "mask_weights": false,
 
   "norm_data": true,
   "norm_labels": true,
@@ -32,6 +34,7 @@
 
   "shuffle_size": 5000,
   "batch_size": 8,
+  "samples_per_epoch": 18400,
   "num_threads": 1,
   "train_fract": 0.8,
   "learning_rate": [0.001, 40000, 0.5],
