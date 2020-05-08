@@ -11,7 +11,7 @@ def constant(learn_rate):
     return constant_lr
 
 
-# constant (no decay)
+# simple stepwise learning rate decay
 def simple_step(learn_rate):
     if not isinstance(learn_rate, (list, tuple)):
         raise ValueError("Simple step decay requres three values: starting learning rate, lead in epochs, and factor")
