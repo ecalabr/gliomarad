@@ -19,6 +19,7 @@ def custom_training(train_dataset, eval_dataset, params):
     for epoch in range(params.num_epochs):
         print('Start of epoch {:d}'.format(epoch))
 
+        # iterate through dataset until exhausted?? git rid of repeat????
         # Iterate over the batches of the dataset.
         for step, (x, y, weights) in enumerate(train_dataset):
 
