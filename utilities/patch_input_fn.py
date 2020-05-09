@@ -275,7 +275,7 @@ def _weighted_patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=N
         # generate batch data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
         # reduce sample_weight (3rd element of tuple) to a single value
-        dataset = dataset.map(lambda x, y, z: (x, y, tf.expand_dims(tf.reduce_mean(z), axis=0)))
+        #dataset = dataset.map(lambda x, y, z: (x, y, tf.expand_dims(tf.reduce_mean(z), axis=0)))
         # prefetch with experimental autotune
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
         # repeat dataset infinitely so that dataset doesn't exhaust prematurely during fit

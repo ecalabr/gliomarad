@@ -1,5 +1,4 @@
 import tensorflow as tf
-from model.net_builder import net_builder
 from utilities.losses import loss_picker
 import logging
 import os
@@ -32,9 +31,9 @@ def custom_training(train_dataset, eval_dataset, completed_epochs, model, params
 
     # Prepare the metrics
     epoch_loss_avg = tf.keras.metrics.Mean()
-    train_acc_metric = tf.keras.metrics.MSE()
+    train_acc_metric = tf.keras.metrics.MeanSquaredError()
     val_loss_avg = tf.keras.metrics.Mean()
-    val_acc_metric = tf.keras.metrics.MSE()
+    val_acc_metric = tf.keras.metrics.MeanSquaredError()
     val_acc_best = float('inf')
 
     # set up logs
@@ -52,7 +51,7 @@ def custom_training(train_dataset, eval_dataset, completed_epochs, model, params
     # epoch loop
     epochs_todo = params.num_epochs-completed_epochs
     logging.info("Starting training for {} of {} total epochs".format(epochs_todo, params.num_epochs))
-    for epoch in range(epochs_todo):
+    for epoch in [el + 1 for el in list(range(epochs_todo))]:
         logging.info('Start of epoch {:d}'.format(epoch))
 
         # epoch loop
@@ -90,22 +89,23 @@ def custom_training(train_dataset, eval_dataset, completed_epochs, model, params
             # the value of the variables to minimize the loss.
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
-            # Update training metrics and log
+            # # Update training metrics and log
             train_acc_metric.update_state(y, y_pred)
-            logs["acc"] = train_acc_metric.result()
             epoch_loss_avg.update_state(loss_value)
-            logs["loss"] = epoch_loss_avg.result()
+            # logs["acc"] = train_acc_metric.result()
+            # logs["loss"] = epoch_loss_avg.result()
 
             # Log every n batches
             if batch % 1 == 0:
-                logging.info("Epoch {:d}/{:d}, batch {:06d}, loss {:06e}".format(epoch, epochs_todo, batch, loss_value))
+                logging.info("Epoch {:d}/{:d}, Batch {:06d}, Batch Loss {:06e}, Epoch Loss {:06e}"
+                             .format(epoch, epochs_todo, batch, loss_value, epoch_loss_avg.result()))
 
             # end of batch callbacks
             #for callback in callbacks:
             #    callback.on_train_batch_end(batch, logs=logs)
 
         # save weights after epoch
-        ckpt = os.path.join(params.model_dir, '/checkpoints/epoch_{:d}.hdf5'.format(epoch))
+        ckpt = os.path.join(params.model_dir, 'checkpoints/epoch_{:d}.hdf5'.format(epoch))
         model.save(ckpt)
 
         # Run a validation loop at the end of each epoch.
@@ -114,19 +114,24 @@ def custom_training(train_dataset, eval_dataset, completed_epochs, model, params
             y_val_pred = model(x_val)
             # Update val metrics
             val_loss_avg.update_state(y_val, y_val_pred)
-            val_acc_metric.update_sate(y_val, y_val_pred)
+            val_acc_metric.update_state(y_val, y_val_pred)
         val_acc = val_acc_metric.result()
         val_acc_metric.reset_states()
         val_loss = val_loss_avg.result()
-        val_loss.reset_states()
+        val_loss_avg.reset_states()
         logs["val_loss"] = val_loss
         logs["val_acc"] = val_acc
         if val_acc < val_acc_best:
-            logging.info('Validation loss for epoch {:d} improved from {:06e} to {:06e}'.format(epoch, val_acc_best, val_acc))
-            best_ckpt = os.path.join(params.model_dir, '/checkpoints/epoch_{:d}_valloss_{:06e}.hdf5'.format(epoch, val_acc))
+            logging.info("Validation loss for epoch {:d} improved from {:06e} to {:06e}"
+                         .format(epoch, val_acc_best, val_acc))
+            best_ckpt = os.path.join(params.model_dir, "checkpoints/epoch_{:d}_valloss_{:06e}.hdf5"
+                                     .format(epoch, val_acc))
             logging.info("New best checkpoint {}".format(best_ckpt))
             shutil.copy(ckpt, best_ckpt)
             val_acc_best = val_acc
+        else:
+            logging.info("Validation loss for epoch {:d} ({:06e}) did not improve from {:06e}"
+                         .format(epoch, val_acc, val_acc_best))
 
         # end of epoch callbacks
         #for callback in callbacks:

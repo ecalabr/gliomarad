@@ -42,9 +42,9 @@ def train(param_file):
     if not os.path.isdir(checkpoint_path):
         os.mkdir(checkpoint_path)
     checkpoints = glob(checkpoint_path + '/*.hdf5')
-    if checkpoints:
+    if checkpoints and not params.overwrite:
         latest_ckpt = max(checkpoints, key=os.path.getctime)
-        epoch_num = os.path.basename(latest_ckpt).split('epoch_')[1]
+        epoch_num = os.path.splitext(os.path.basename(latest_ckpt).split('epoch_')[1])[0]
         # handle saves with validation loss in filename
         if '_valloss' in epoch_num:
             epoch_num = epoch_num.split('_valloss')[0]
