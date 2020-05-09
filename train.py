@@ -13,6 +13,7 @@ from utilities.utils import set_logger
 from utilities.patch_input_fn import patch_input_fn
 from utilities.learning_rates import learning_rate_picker
 from model.model_fn import model_fn
+from training import custom_training
 
 
 # define functions
@@ -51,6 +52,10 @@ def train(param_file):
     else:
         completed_epochs = 0
 
+    # generate dataset objects for model inputs
+    train_inputs = patch_input_fn(params, mode='train')
+    eval_inputs = patch_input_fn(params, mode='eval')
+
     # Check for existing model and load if exists, otherwise create from scratch
     if latest_ckpt and not params.overwrite:
         print("Found checkpoint file {}, attempting to resume...".format(latest_ckpt))
@@ -64,16 +69,11 @@ def train(param_file):
         model = model_fn(params)
         logging.info("- done creating model")
 
-    # generate dataset objects for model inputs
-    train_inputs = patch_input_fn(params, mode='train')
-    eval_inputs = patch_input_fn(params, mode='eval')
-
-    # CALLBACKS
+    # SET CALLBACKS
     # define learning rate schedule callback for model
-    learning_rate = learning_rate_picker(params.learning_rate, params.learning_rate_decay)
-    learning_rate = LearningRateScheduler(learning_rate)
+    learning_rate = LearningRateScheduler(learning_rate_picker(params.learning_rate, params.learning_rate_decay))
 
-    # set checkpoint save callback
+    # checkpoint save callback
     if not os.path.isdir(checkpoint_path):
         os.mkdir(checkpoint_path)
     if eval_inputs:
@@ -91,17 +91,23 @@ def train(param_file):
     # combine callbacks for the model
     train_callbacks = [learning_rate, checkpoint, tensorboard]
 
+
     # TRAINING
     # Train the model with evalutation after each epoch
     logging.info("Training the model...")
-    model.fit(train_inputs,
-              epochs=params.num_epochs,
-              initial_epoch=completed_epochs,
-              steps_per_epoch=params.samples_per_epoch//params.batch_size,
-              callbacks=train_callbacks,
-              validation_data=eval_inputs,
-              shuffle=False,
-              verbose=1)
+    if params.mask_weights is not None:
+        # custom training loop for weighted loss
+        custom_training(train_inputs, eval_inputs, completed_epochs, model, params)
+    else:
+        # model.fit API for non-weighted loss
+        model.fit(train_inputs,
+                  epochs=params.num_epochs,
+                  initial_epoch=completed_epochs,
+                  steps_per_epoch=params.samples_per_epoch // params.batch_size,
+                  callbacks=train_callbacks,
+                  validation_data=eval_inputs,
+                  shuffle=False,
+                  verbose=1)
 
 
 # executed  as script

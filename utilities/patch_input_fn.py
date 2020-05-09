@@ -279,7 +279,7 @@ def _weighted_patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=N
         # prefetch with experimental autotune
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
         # repeat dataset infinitely so that dataset doesn't exhaust prematurely during fit
-        dataset = dataset.repeat()
+        # dataset = dataset.repeat()  # don't repeat in custom training loop
 
     # eval mode
     elif mode == 'eval':
