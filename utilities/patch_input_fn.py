@@ -8,7 +8,9 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # generate input dataset objects for the different training modes
     # train mode
     if mode == 'train':
+        # variable setup
         data_dirs = train_dirs
+        data_chan = len(params.data_prefix)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
                           params.label_prefix,
@@ -31,7 +33,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches
         dataset = dataset.map(
-            lambda x, y: tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format,
+            lambda x, y: tf_patches(x, y, params.train_dims, data_chan, params.data_format,
                                      overlap=params.train_patch_overlap),
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
@@ -51,7 +53,9 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
 
     # eval mode
     elif mode == 'eval':
+        # variable setup
         data_dirs = eval_dirs
+        data_chan = len(params.data_prefix)
         # if there are no eval dirs return None to model
         if not any(data_dirs):
             return None
@@ -74,7 +78,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
-            lambda x, y: tf_patches(x, y, params.train_dims, len(params.data_prefix), params.data_format,
+            lambda x, y: tf_patches(x, y, params.train_dims, data_chan, params.data_format,
                                      overlap=params.infer_patch_overlap),
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
@@ -122,7 +126,10 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # generate input dataset objects for the different training modes
     # train mode
     if mode == 'train':
+        # variable setup
         data_dirs = train_dirs
+        data_chan = len(params.data_prefix)
+        weighted = False if isinstance(params.mask_weights, bool) and not params.mask_weights else True
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
                           params.label_prefix,
@@ -134,7 +141,8 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
                           params.label_interp,
                           params.norm_data,
                           params.norm_labels,
-                          params.norm_mode]
+                          params.norm_mode,
+                          params.mask_weights]  # param makes loader return weights as last channel in labels data]
         # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
         # map data directories to the data using a custom python function
@@ -145,8 +153,9 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches
         dataset = dataset.map(
-            lambda x, y: tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format,
-                                    overlap=params.train_patch_overlap),
+            lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
+                                       weighted=weighted,
+                                       overlap=params.train_patch_overlap),
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
@@ -165,7 +174,9 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
 
     # eval mode
     elif mode == 'eval':
+        # variable setup
         data_dirs = eval_dirs
+        data_chan = len(params.data_prefix)
         # if there are no eval dirs return None to model
         if not any(data_dirs):
             return None
@@ -187,125 +198,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
-            lambda x, y: tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format,
-                                    overlap=params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # flat map so that each tensor is a single slice
-        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
-        # generate a batch of data
-        dataset = dataset.batch(params.batch_size, drop_remainder=True)
-        # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-
-    # infer mode
-    elif mode == 'infer':
-        if not infer_dir:
-            assert ValueError("Must specify inference directory")
-        # define dims of inference
-        data_dims = list(params.infer_dims)
-        chan_size = len(params.data_prefix)
-        # defined the fixed py_func params, the study directory will be passed separately by the iterator
-        py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data,
-                          params.norm_mode]
-        # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
-        # map data directories to the data using a custom python function
-        dataset = dataset.map(
-            lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
-                                        [x] + py_func_params,
-                                        tf.float32), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # map each dataset to a series of patches based on infer inputs
-        dataset = dataset.map(
-            lambda x: tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # flat map so that each tensor is a single slice
-        dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
-        # generate a batch of data
-        dataset = dataset.batch(batch_size=1, drop_remainder=True)
-        # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-
-    # error if not train, eval, or infer
-    else:
-        raise ValueError("Specified mode does not exist: " + mode)
-
-    return dataset
-
-
-# SAMPLE WEIGHTS INPUT FUNCTION
-def _weighted_patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
-    # generate input dataset objects for the different training modes
-    # train mode
-    if mode == 'train':
-        data_dirs = train_dirs
-        # defined the fixed py_func params, the study directory will be passed separately by the iterator
-        py_func_params = [params.data_prefix,
-                          params.label_prefix,
-                          params.mask_prefix,
-                          params.mask_dilate,
-                          params.data_plane,
-                          params.data_format,
-                          params.augment_train_data,
-                          params.label_interp,
-                          params.norm_data,
-                          params.norm_labels,
-                          params.norm_mode,
-                          params.mask_weights]  # this param makes loader return mask as 3rd tuple element
-        # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
-        # map data directories to the data using a custom python function
-        dataset = dataset.map(
-            lambda x: tf.numpy_function(load_roi_multicon_and_labels_3d,
-                                           [x] + py_func_params,
-                                           (tf.float32, tf.float32, tf.float32)),  # expect 3 values here in tuple
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # map each dataset to a series of patches
-        dataset = dataset.map(
-            lambda x, y, z: tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format,
-                                    overlap=params.train_patch_overlap, mask=z),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # flatten out dataset so that each entry is a single patch and associated label
-        dataset = dataset.flat_map(lambda x, y, z: tf.data.Dataset.from_tensor_slices((x, y, z)))
-        # filter out zero patches
-        if params.filter_zero > 0.:
-            dataset = dataset.filter(lambda x, y, z: filter_zero_patches(
-                y, params.data_format, params.dimension_mode, params.filter_zero))
-        # shuffle a set number of exampes
-        dataset = dataset.shuffle(buffer_size=params.shuffle_size)
-        # generate batch data
-        dataset = dataset.batch(params.batch_size, drop_remainder=True)
-        # reduce sample_weight (3rd element of tuple) to a single value
-        #dataset = dataset.map(lambda x, y, z: (x, y, tf.expand_dims(tf.reduce_mean(z), axis=0)))
-        # prefetch with experimental autotune
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-        # repeat dataset infinitely so that dataset doesn't exhaust prematurely during fit
-        # dataset = dataset.repeat()  # don't repeat in custom training loop
-
-    # eval mode
-    elif mode == 'eval':
-        data_dirs = eval_dirs
-        # if there are no eval dirs return None to model
-        if not any(data_dirs):
-            return None
-        # defined the fixed py_func params, the study directory will be passed separately by the iterator
-        py_func_params = [params.data_prefix,
-                          params.label_prefix,
-                          params.data_format,
-                          params.data_plane,
-                          params.norm_data,
-                          params.norm_labels,
-                          params.norm_mode]
-        # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
-        # map data directories to the data using a custom python function
-        dataset = dataset.map(
-            lambda x: tf.numpy_function(load_multicon_and_labels_3d,
-                                        [x] + py_func_params,
-                                        (tf.float32, tf.float32)),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # map each dataset to a series of patches based on infer inputs
-        dataset = dataset.map(
-            lambda x, y: tf_patches_3d(x, y, params.train_dims, len(params.data_prefix), params.data_format,
+            lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
                                     overlap=params.infer_patch_overlap),
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
@@ -370,18 +263,10 @@ def patch_input_fn(params, mode, infer_dir=None):
     if infer_dir:
         infer_dir = tf.constant([infer_dir])
 
-    # handle 2D vs 3D and mask_weights
+    # handle 2D vs 3D
     if params.dimension_mode == '2D':  # handle 2d inputs
-        # handle mask weights
-        if params.mask_weights:
-            raise NotImplementedError("Mask weights not implemented for 2D input function")
-        else:
-            return _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir)
+        return _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir)
     elif params.dimension_mode in ['2.5D', '3D']:  # handle 3d inputs
-        # handle mask weights
-        if params.mask_weights:
-            return _weighted_patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir)
-        else:
-            return _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir)
+        return _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir)
     else:
         raise ValueError("Training dimensions mode not understood: " + str(params.dimension_mode))

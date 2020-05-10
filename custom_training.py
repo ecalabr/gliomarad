@@ -1,3 +1,6 @@
+
+# CURRENTLY UNUSED
+
 import tensorflow as tf
 from utilities.losses import loss_picker
 import logging
@@ -97,7 +100,7 @@ def custom_training(train_dataset, eval_dataset, completed_epochs, model, params
 
             # Log every n batches
             if batch % 1 == 0:
-                logging.info("Epoch {:d}/{:d}, Batch {:06d}, Batch Loss {:06e}, Epoch Loss {:06e}"
+                logging.info("Epoch {:03d}/{:03d}, Batch {:06d}, Batch Loss {:06e}, Epoch Loss {:06e}"
                              .format(epoch, epochs_todo, batch, loss_value, epoch_loss_avg.result()))
 
             # end of batch callbacks
@@ -107,6 +110,10 @@ def custom_training(train_dataset, eval_dataset, completed_epochs, model, params
         # save weights after epoch
         ckpt = os.path.join(params.model_dir, 'checkpoints/epoch_{:d}.hdf5'.format(epoch))
         model.save(ckpt)
+
+        # reset loss and metrics after epoch
+        train_acc_metric.reset_states()
+        epoch_loss_avg.reset_states()
 
         # Run a validation loop at the end of each epoch.
         logging.info("Running validation after epoch {:d}".format(epoch))

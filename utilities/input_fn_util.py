@@ -95,16 +95,17 @@ def tf_patches_infer(data, patch_size, chan_dim, data_format, overlap=1):
     return data
 
 
-def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1, mask=None):
+def tf_patches_3d(data, labels, patch_size, data_format, data_chan, label_chan=1, overlap=1, weighted=False):
     """
     Extract 3D patches from a data array with overlap if desired
     :param data: (numpy array) the data tensorflow tensor
     :param labels: (numpy array) the labels tensorflow tensor
     :param patch_size: (list or tupe of ints) the patch dimensions
-    :param chan_dim:  (int) the number of data channels
     :param data_format: (str) either channels_last or channels_first - the tensorflow data format
+    :param data_chan: (int) the number of channels in the feature data
+    :param label_chan: (int) the number of channels in the label data
     :param overlap: (int or list/tuple of ints) the divisor for patch strides - determines the patch overlap in x, y
-    :param mask: (numpy array) optionally pass a mask array which will also be patched and returned
+    :param weighted: (bool) weather or not the labels data includes a weight tensor as the last element of labels
     :return: returns tensorflow tensor patches
     """
 
@@ -118,12 +119,10 @@ def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1, ma
     if isinstance(overlap, int):
         overlap = [overlap] * 3
 
-    # handle channels first
+    # handle channels first by temporarily converting to channels last
     if data_format == 'channels_first':
         data = tf.transpose(a=data, perm=[0, 2, 3, 4, 1])
         labels = tf.transpose(a=labels, perm=[0, 2, 3, 4, 1])
-        if mask is not None:
-            mask = tf.transpose(a=mask, perm=[0, 2, 3, 4, 1])
 
     # for sliding window 3d slabs
     ksizes = [1] + patch_size + [1]
@@ -131,25 +130,16 @@ def tf_patches_3d(data, labels, patch_size, chan_dim, data_format, overlap=1, ma
 
     # make patches
     data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
-    data = tf.reshape(data, [-1] + patch_size + [chan_dim])
+    data = tf.reshape(data, [-1] + patch_size + [data_chan])
     labels = tf.extract_volume_patches(labels, ksizes=ksizes, strides=strides, padding='SAME')
-    labels = tf.reshape(labels, [-1] + patch_size + [1])
-    if mask is not None:
-        mask = tf.extract_volume_patches(mask, ksizes=ksizes, strides=strides, padding='SAME')
-        mask = tf.reshape(mask, [-1] + patch_size + [1])
+    labels = tf.reshape(labels, [-1] + patch_size + [label_chan + 1 if weighted else label_chan])
 
     # handle channels first
     if data_format == 'channels_first':
         data = tf.transpose(a=data, perm=[0, 4, 1, 2, 3])
         labels = tf.transpose(a=labels, perm=[0, 4, 1, 2, 3])
-        if mask is not None:
-            mask = tf.transpose(a=mask, perm=[0, 4, 1, 2, 3])
 
-    # handle optinally returning mask
-    if mask is not None:
-        return data, labels, mask
-    else:
-        return data, labels
+    return data, labels
 
 
 def tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
@@ -838,7 +828,10 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     plane = byte_convert(plane)
     data_fmt = byte_convert(data_fmt)
     norm_mode = byte_convert(norm_mode)
+
+    # handle return mask argument, which should be bool or a list (np.ndarray) of ints to map weight values to
     if isinstance(return_mask, bool) and not return_mask:
+        # if return_mask is false set to None for ease of identifying below
         return_mask = None
 
     # sanity checks
@@ -953,7 +946,8 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
 
     # handle return_mask flag
     if return_mask is not None:
-        return data.astype(np.float32), labels.astype(np.float32), mask.astype(np.float32)
+        # concatenate weights to last (channels) dimension of labels to sneak it into model.fit for custom weighted loss
+        return data.astype(np.float32), np.concatenate((labels.astype(np.float32), mask.astype(np.float32)), axis=-1)
     else:
         return data.astype(np.float32), labels.astype(np.float32)
 

@@ -62,8 +62,6 @@
     The number of patches/samples per training batch.
 "samples_per_epoch": 18400,
     The number of individual training samples per epoch. This gets divided by batch_size to determine how many training steps there will be per epoch.
-"num_threads": 4,
-    The number of process threads to use for data preprocessing and patch generation on the CPU.
 "train_fract": 0.9,
     The fraction of input series/directories to be used for training. The rest are used for evaluation.
 "learning_rate": [0.001, 20000, 0.25],

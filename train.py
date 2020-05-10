@@ -13,7 +13,6 @@ from utilities.utils import set_logger
 from utilities.patch_input_fn import patch_input_fn
 from utilities.learning_rates import learning_rate_picker
 from model.model_fn import model_fn
-from training import custom_training
 
 
 # define functions
@@ -62,12 +61,10 @@ def train(param_file):
         # Load model checkpoints:
         model = model_fn(params)  # recreating model is neccesary if custom loss function is being used
         model.load_weights(latest_ckpt)
-        print("- done loading model")
     else:
         # Define the model
         logging.info("Creating the model...")
         model = model_fn(params)
-        logging.info("- done creating model")
 
     # SET CALLBACKS
     # define learning rate schedule callback for model
@@ -91,24 +88,18 @@ def train(param_file):
     # combine callbacks for the model
     train_callbacks = [learning_rate, checkpoint, tensorboard]
 
-
     # TRAINING
-    # Train the model with evalutation after each epoch
-    logging.info("Training the model...")
-    if params.mask_weights is not None:
-        # custom training loop for weighted loss
-        custom_training(train_inputs, eval_inputs, completed_epochs, model, params)
-    else:
-        # model.fit API for non-weighted loss
-        model.fit(train_inputs,
-                  epochs=params.num_epochs,
-                  initial_epoch=completed_epochs,
-                  steps_per_epoch=params.samples_per_epoch // params.batch_size,
-                  callbacks=train_callbacks,
-                  validation_data=eval_inputs,
-                  shuffle=False,
-                  verbose=1)
+    model.fit(train_inputs,
+              epochs=params.num_epochs,
+              initial_epoch=completed_epochs,
+              steps_per_epoch=params.samples_per_epoch // params.batch_size,
+              callbacks=train_callbacks,
+              validation_data=eval_inputs,
+              shuffle=False,
+              verbose=1)
 
+    # completion logging
+    logging.info("Successfully trained model for {} epochs".format(params.num_epochs - completed_epochs))
 
 # executed  as script
 if __name__ == '__main__':

@@ -52,7 +52,6 @@ class Params:
     shuffle_size = None
     batch_size = None
     samples_per_epoch = None
-    num_threads = None
     train_fract = None
     learning_rate = None
     learning_rate_decay = None

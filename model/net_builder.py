@@ -2,6 +2,32 @@ import tensorflow as tf
 from tensorflow.keras.layers import Conv3D, Conv3DTranspose, Conv2D, Conv2DTranspose, Input
 from tensorflow.keras.models import Model
 from model.net_layers import bneck_resid3d, bneck_resid2d
+from tensorflow.python.eager import backprop
+
+
+# custom model class
+class CustomModel(Model):
+    def train_step(self, data):
+        # unpack dataset data
+        x = data[0]
+        if isinstance(data[1], tuple):
+            y = data[1][0]
+            weights = data[1][1]
+        else:
+            y = data[1]
+            weights = None
+
+        with backprop.GradientTape() as tape:
+            y_pred = self(x, training=True)
+            loss = self.compiled_loss(
+                y, y_pred, weights, regularization_losses=self.losses)
+        # For custom training steps, users can just write:
+            trainable_variables = self.trainable_variables
+            gradients = tape.gradient(loss, trainable_variables)
+            self.optimizer.apply_gradients(zip(gradients, trainable_variables))
+
+        self.compiled_metrics.update_state(y, y_pred, weights)
+        return {m.name: m.result() for m in self.metrics}
 
 
 def unet_3d_bneck(params):

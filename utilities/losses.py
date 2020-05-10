@@ -9,6 +9,19 @@ def MSE(y_true, y_pred, sample_weight=None):
     return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=sample_weight)
 
 
+# Pixelwise weigthed MSE loss
+def wMSE(y_true_weights, y_pred):
+    # if weight tensor is included as last dimension of y_true then extract
+    if y_true_weights.shape[-1] == 2:
+        y_true = y_true_weights[..., 0, None]
+        weights = y_true_weights[..., 1, None]
+    # if weight tensor is not included then just calculate without weights (this happens during eval even when weigthed)
+    else:
+        y_true = y_true_weights
+        weights = None
+    return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=weights)
+
+
 # MAE loss
 def MAE(y_true, y_pred, sample_weight=None):
     return tf.keras.losses.MeanAbsoluteError()(y_true, y_pred, sample_weight=sample_weight)
