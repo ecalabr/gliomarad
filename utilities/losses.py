@@ -22,6 +22,28 @@ def wMSE(y_true_weights, y_pred):
     return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=weights)
 
 
+# Pixelwise weigthed MSE loss for nonzero pixels only
+def wMSE_nonzero(y_true_weights, y_pred):
+    # if extra weight tensor is included as last dimension of y_true then extract
+    if y_true_weights.shape[-1] > y_pred.shape[-1]:
+        y_true = y_true_weights[..., 0, None]
+        # pixel weights per provided loss tensor
+        weights = y_true_weights[..., -1, None]
+    # if weight tensor is not included then just calculate without weights (this happens during eval even when weigthed)
+    else:
+        y_true = y_true_weights
+        # weights are 1 where y_true is nonzero
+        weights = tf.cast(tf.cast(y_true, tf.bool), tf.float32)
+    # count nonzeros in y_true per sample in batch
+    non_batch_axes = list(range(1, y_true.ndim))
+    nonzeros_per_sample = tf.math.count_nonzero(y_true, axis=non_batch_axes)
+    # calculate per pixel loss with provided weights
+    loss_tensor = tf.keras.losses.MeanSquaredError(reduction=None)(y_true, y_pred, sample_weight=weights)
+    # mean of nonzero entries along non batch axes, then sum results along batch axis
+    loss_value = tf.reduce_sum(tf.reduce_sum(loss_tensor, axis=non_batch_axes) / nonzeros_per_sample)
+    return loss_value
+
+
 # MAE loss
 def MAE(y_true, y_pred, sample_weight=None):
     return tf.keras.losses.MeanAbsoluteError()(y_true, y_pred, sample_weight=sample_weight)
