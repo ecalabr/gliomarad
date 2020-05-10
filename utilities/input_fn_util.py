@@ -132,6 +132,7 @@ def tf_patches_3d(data, labels, patch_size, data_format, data_chan, label_chan=1
     data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
     data = tf.reshape(data, [-1] + patch_size + [data_chan])
     labels = tf.extract_volume_patches(labels, ksizes=ksizes, strides=strides, padding='SAME')
+    # if weighted is true, then add 1 to label_chan for the weights tensor that should be concatenated here
     labels = tf.reshape(labels, [-1] + patch_size + [label_chan + 1 if weighted else label_chan])
 
     # handle channels first

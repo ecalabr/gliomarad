@@ -28,14 +28,14 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_roi_multicon_and_labels,
-                                           [x] + py_func_params,
-                                           (tf.float32, tf.float32)),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        [x] + py_func_params,
+                                        (tf.float32, tf.float32)),
+                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches
         dataset = dataset.map(
             lambda x, y: tf_patches(x, y, params.train_dims, data_chan, params.data_format,
-                                     overlap=params.train_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                    overlap=params.train_patch_overlap),
+                                    num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
@@ -73,14 +73,14 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_and_labels,
-                                           [x] + py_func_params,
-                                           (tf.float32, tf.float32)),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        [x] + py_func_params,
+                                        (tf.float32, tf.float32)),
+                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x, y: tf_patches(x, y, params.train_dims, data_chan, params.data_format,
-                                     overlap=params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                    overlap=params.infer_patch_overlap),
+                                    num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # generate a batch of data
@@ -102,12 +102,13 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size,
-                                           [x] + py_func_params,
-                                           tf.float32), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        [x] + py_func_params,
+                                        tf.float32),
+                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x: tf_patches_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                       num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
@@ -148,15 +149,15 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_roi_multicon_and_labels_3d,
-                                           [x] + py_func_params,
-                                           (tf.float32, tf.float32)),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        [x] + py_func_params,
+                                        (tf.float32, tf.float32)),
+                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches
         dataset = dataset.map(
             lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
                                        weighted=weighted,
                                        overlap=params.train_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                       num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
@@ -195,12 +196,12 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             lambda x: tf.numpy_function(load_multicon_and_labels_3d,
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
-                                    overlap=params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                       overlap=params.infer_patch_overlap),
+                                       num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # generate a batch of data
@@ -224,11 +225,12 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
                                         [x] + py_func_params,
-                                        tf.float32), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        tf.float32),
+                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x: tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                          num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
