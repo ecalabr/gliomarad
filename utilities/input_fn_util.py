@@ -489,8 +489,8 @@ def normalize(input_img, mode='zero_mean'):
         # perform normalization to [0, 1]
         input_img *= 1.0 / np.max(input_img)
 
-    # handle median stdev
-    elif mode == 'med_stdev':
+    # handle mean stdev
+    elif mode == 'mean_stdev':
         # perform normalization to mean 1000, stdev 200
         new_med = 1000.
         new_stdev = 200.
