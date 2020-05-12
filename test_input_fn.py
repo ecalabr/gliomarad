@@ -6,7 +6,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 import tensorflow as tf
 from utilities.utils import Params, display_tf_dataset
-from utilities.patch_input_fn import patch_input_fn, patch_input_fn_3d
+from utilities.patch_input_fn import patch_input_fn
+import numpy as np
 
 
 # define functions
@@ -22,12 +23,10 @@ def test_input_fn(param_file):
         raise ValueError("Specified model directory does not exist")
 
     # load inputs with input function
-    if params.dimension_mode == '2D':  # handle 2d inputs
-        inputs = patch_input_fn(mode='train', params=params).as_numpy_iterator()
-    elif params.dimension_mode in ['2.5D', '3D']:
-        inputs = patch_input_fn_3d(mode='train', params=params).as_numpy_iterator()
-    else:
-        raise ValueError("Dimension mode not understood: " + str(params.dimension_mode))
+    inputs = patch_input_fn(params, mode='train').as_numpy_iterator()
+
+    # determine if weighted
+    weighted = True if isinstance(params.mask_weights, np.ndarray) or params.mask_weights else False
 
     # run tensorflow session
     n = 0
@@ -43,7 +42,7 @@ def test_input_fn(param_file):
             n = n + 1
             print("Processing slice " + str(n) + " epoch " + str(i + 1))
             if n % 5 == 0:
-                display_tf_dataset(data_slice, params.data_format, params.train_dims)
+                display_tf_dataset(data_slice, params.data_format, params.train_dims, weighted=weighted)
 
 
 # executed  as script

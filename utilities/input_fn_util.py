@@ -379,6 +379,10 @@ def create_affine(theta=None, phi=None, psi=None):
     :return: (np.ndarray) a 3x3 affine rotation matrix.
     """
 
+    # return identitiy if all angles are zero
+    if all(val == 0. for val in [theta, phi, psi]):
+        return np.eye(3)
+
     # define angles
     if theta is None:
         theta = np.random.random() * (np.pi / 2.)
@@ -405,10 +409,10 @@ def create_affine(theta=None, phi=None, psi=None):
     return affine
 
 
-def affine_transform(input_img, affine, offset=None, order=1):
+def affine_transform(image, affine, offset=None, order=1):
     """
     Apply a 3D rotation affine transform to input_img with specified offset and spline interpolation order.
-    :param input_img: (np.ndarray) The input image.
+    :param image: (np.ndarray) The input image.
     :param affine: (np.ndarray) The 3D affine array of shape [3, 3]
     :param offset: (np.ndarray) The offset to apply to the image after rotation, should be shape [3,]
     :param order: (int) The spline interpolation order. Must be 0-5
@@ -416,8 +420,8 @@ def affine_transform(input_img, affine, offset=None, order=1):
     """
 
     # sanity checks
-    if not isinstance(input_img, np.ndarray):
-        raise TypeError("Input image should be np.ndarray but is: " + str(type(input_img)))
+    if not isinstance(image, np.ndarray):
+        raise TypeError("Input image should be np.ndarray but is: " + str(type(image)))
     # define affine if it doesn't exist
     if affine is None:
         affine = create_affine()
@@ -427,7 +431,7 @@ def affine_transform(input_img, affine, offset=None, order=1):
         raise ValueError("Affine should have shape (3, 3)")
     # define offset if it doesn't exist
     if offset is None:
-        center = np.array(input_img.shape)
+        center = np.array(image.shape)
         offset = center - np.dot(affine, center)
     if not isinstance(offset, np.ndarray):
         raise TypeError("Offset should be np.ndarray but is: " + str(type(offset)))
@@ -436,15 +440,17 @@ def affine_transform(input_img, affine, offset=None, order=1):
 
     # Apply affine
     # handle 4d
-    if len(input_img.shape) > 3:
-        output_img = np.zeros(input_img.shape)
-        for i in range(input_img.shape[-1]):
-            output_img[:, :, :, i] = ndi.interpolation.affine_transform(input_img[:, :, :, i], affine,
-                                                                        offset=offset, order=order)
+    if len(image.shape) > 3:
+        # make 4d identity matrix and replace xyz component with 3d affine
+        affine4d = np.eye(4)
+        affine4d[:3, :3] = affine
+        offset4d = np.append(offset, 0.)
+        image = ndi.interpolation.affine_transform(image, affine4d, offset=offset4d, order=order, output=np.float32)
+    # handle 3d
     else:
-        output_img = ndi.interpolation.affine_transform(input_img, affine, offset=offset, order=order)
+        image = ndi.interpolation.affine_transform(image, affine, offset=offset, order=order, output=np.float32)
 
-    return output_img
+    return image
 
 
 def normalize(input_img, mode='zero_mean'):
@@ -465,23 +471,33 @@ def normalize(input_img, mode='zero_mean'):
     # handle zero mean mode
     if mode == 'zero_mean':
         # perform normalization to zero mean unit variance
-        nzi = np.nonzero(input_img)
-        mean = np.mean(input_img[nzi], None)
-        std = np.std(input_img[nzi], None) + epsilon
-        input_img = np.where(input_img != 0., ((input_img - mean) / std), 0.)  # add 10 to prevent negatives
+        nonzero_bool = input_img != 0.
+        mean = np.mean(input_img[nonzero_bool], None)
+        std = np.std(input_img[nonzero_bool], None) + epsilon
+        input_img = np.where(nonzero_bool, ((input_img - mean) / std), 0.)  # add 10 to prevent negatives
 
     # handle ten mean mode
     elif mode == 'ten_mean':
-        # perform normalization to zero mean unit variance
-        nzi = np.nonzero(input_img)
-        mean = np.mean(input_img[nzi], None)
-        std = np.std(input_img[nzi], None) + epsilon
-        input_img = np.where(input_img != 0., ((input_img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
+        # perform normalization to 10 mean unit variance
+        nonzero_bool = input_img != 0.
+        mean = np.mean(input_img[nonzero_bool], None)
+        std = np.std(input_img[nonzero_bool], None) + epsilon
+        input_img = np.where(nonzero_bool, ((input_img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
 
     # handle unit mode
     elif mode == 'unit':
         # perform normalization to [0, 1]
         input_img *= 1.0 / np.max(input_img)
+
+    # handle median stdev
+    elif mode == 'med_stdev':
+        # perform normalization to mean 1000, stdev 200
+        new_med = 1000.
+        new_stdev = 200.
+        nonzero_bool = input_img != 0.
+        mean = np.mean(input_img[nonzero_bool], None)
+        std = np.std(input_img[nonzero_bool], None) + epsilon
+        input_img = np.where(nonzero_bool, ((input_img - mean) / (std/new_stdev)) + new_med, 0.)
 
     # handle not implemented
     else:
@@ -853,13 +869,13 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
 
     # load the mask and get the full data dims - handle None mask argument
     if mask_prefx:
-        mask = (nib.load(mask_file).get_fdata() > 0.).astype(float)
+        mask = nib.load(mask_file).get_fdata()
     else:
-        mask = np.ones_like(nib.load(mask_file).get_fdata(), dtype=float)
+        mask = np.ones_like(nib.load(mask_file).get_fdata(), dtype=np.float32)
     data_dims = mask.shape
 
     # load data and normalize
-    data = np.zeros((data_dims[0], data_dims[1], data_dims[2], len(data_files)))
+    data = np.empty((data_dims[0], data_dims[1], data_dims[2], len(data_files)), dtype=np.float32)
     for i, im_file in enumerate(data_files):
         if norm:
             data[:, :, :, i] = normalize(nib.load(im_file).get_fdata(), mode=norm_mode)
@@ -877,15 +893,15 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
         theta = np.random.random() * (np.pi / 2.) if plane == 'cor' else 0.  # rotation in yz plane
         phi = np.random.random() * (np.pi / 2.) if plane == 'sag' else 0.  # rotation in xz plane
         psi = np.random.random() * (np.pi / 2.) if plane == 'ax' else 0.  # rotation in xy plane
-    else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the ROI
+    else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the mask ROI
         theta = 0.
         phi = 0.
         psi = 0.
 
     # make affine, calculate offset using mask center of mass and affine
     affine = create_affine(theta=theta, phi=phi, psi=psi)
-    com = ndi.measurements.center_of_mass(mask)
-    cent = np.array(mask.shape) / 2.
+    com = ndi.measurements.center_of_mass(mask > 0.)  # get COM for binarized mask
+    cent = np.array(data_dims) / 2.
     offset = com - np.dot(affine, cent)
 
     # apply affines to mask, data, labels
@@ -899,23 +915,17 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     # dilate bbox if necessary - this also ensures that the bbox does not exceed original image dims
     msk_bbox = expand_region(data_dims, msk_bbox, dilate)
 
-    # determine new dim sizes
-    dim_sizes = [msk_bbox[1] - msk_bbox[0], msk_bbox[3] - msk_bbox[2], msk_bbox[5] - msk_bbox[4]]
-
     # extract the region from the data
-    data_region = np.zeros(dim_sizes + [len(data_files)])
-    for i in range(len(data_files)):
-        data_region[:, :, :, i] = data[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5], i]
-    data = data_region
+    data = data[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5], :]
     labels = labels[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
     if return_mask is not None:
         mask = mask[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
 
     # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
-    labels = np.expand_dims(np.expand_dims(labels, axis=3), axis=0)  # add a batch and channel dimension of 1
+    labels = np.expand_dims(labels, axis=(0,4))  # add a batch and channel dimension of 1
     if return_mask is not None:
-        mask = np.expand_dims(np.expand_dims(mask, axis=3), axis=0)  # add a batch and channel dimension of 1
+        mask = np.expand_dims(mask, axis=(0,4))  # add a batch and channel dimension of 1
 
     # handle different planes
     if plane == 'ax':
@@ -940,10 +950,10 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
         if return_mask is not None:
             mask = np.transpose(mask, axes=[0, 4, 1, 2, 3])
 
-    # handle return_mask argument as list
+    # handle return_mask argument as list of value mappings
     if isinstance(return_mask, np.ndarray):
         # map each value of mask to the corresponding loss factor
-        mask = return_mask[mask.astype(int)]
+        mask = return_mask[mask.astype(np.float32)]
 
     # handle return_mask flag
     if return_mask is not None:

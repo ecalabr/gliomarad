@@ -130,12 +130,13 @@ def save_dict_to_json(d, json_path):
         json.dump(d, f, indent=4)
 
 
-def display_tf_dataset(dataset_data, data_format, data_dims):
+def display_tf_dataset(dataset_data, data_format, data_dims, weighted=False):
     """
     Displays tensorflow dataset output images and labels/regression images.
     :param dataset_data: (tf.tensor) output from tf dataset function containing images and labels/regression image
     :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
     :param data_dims: (list or tuple of ints) the data dimensions that come out of the input function
+    :param weighted: (bool) whether or not the labels slice includes weights as the final channel dimension
     :return: displays images for 3 seconds then continues
     """
 
@@ -145,7 +146,7 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
     # define close event and create timer
     def close_event():
         plt.close()
-    timer = fig.canvas.new_timer(interval=3000)
+    timer = fig.canvas.new_timer(interval=4000)
     timer.add_callback(close_event)
 
     # handle 2d case
@@ -192,6 +193,8 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
         # determine n plots and channels
         nplots = image_data.shape[-1] + 1
         channels = image_data.shape[-1]
+        if weighted:
+            nplots += 1
 
         # loop through channels
         for z in range(channels):
@@ -209,19 +212,39 @@ def display_tf_dataset(dataset_data, data_format, data_dims):
         if len(label_data.shape) > 4:
             if data_format == 'channels_first':
                 label_data = np.transpose(label_data, [0, 2, 3, 4, 1])
-            label_data = label_data[0, :, :, :, :]  # handle batch data
+            label_data = label_data[0, :, :, :, :]  # handle batch data by taking only first element of batch
         else:
             if data_format == 'channels_first':
                 label_data = np.transpose(label_data, [1, 2, 3, 0])
 
-        # add to fig
-        ax = fig.add_subplot(1, nplots, nplots)
-        label_img = np.squeeze(label_data)
+        # handle weights
+        weights = None
+        if weighted:
+            weights = label_data[..., [-1]]  # last channel is weights
+            label_data = label_data[..., [0]]  # use first channel for labes
 
-        # concatenate along z to make 1 2d image per slab
-        label_img = np.reshape(np.transpose(label_img), [label_img.shape[0] * label_img.shape[2], label_img.shape[1]])
-        ax.imshow(label_img, cmap='gray')
-        ax.set_title('Labels')
+        # add to fig
+        if weighted:
+            # handle labels first
+            ax = fig.add_subplot(1, nplots, nplots-1)
+            label_img = np.squeeze(label_data)
+            inds = [label_img.shape[0] * label_img.shape[2], label_img.shape[1]]
+            label_img = np.reshape(np.transpose(label_img), inds)
+            ax.imshow(label_img, cmap='gray')
+            ax.set_title('Labels')
+            # finally handle weights
+            ax = fig.add_subplot(1, nplots, nplots)
+            weight_img = np.reshape(np.transpose(weights), inds)
+            ax.imshow(weight_img, cmap='gray')
+            ax.set_title('Weights')
+        else:
+            # handle labels only
+            ax = fig.add_subplot(1, nplots, nplots)
+            label_img = np.squeeze(label_data)
+            label_img = np.reshape(np.transpose(label_img),
+                                   [label_img.shape[0] * label_img.shape[2], label_img.shape[1]])
+            ax.imshow(label_img, cmap='gray')
+            ax.set_title('Labels')
 
     # start timer and show plot
     timer.start()
