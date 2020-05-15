@@ -26,7 +26,7 @@ def test_input_fn(param_file):
     inputs = patch_input_fn(params, mode='train').as_numpy_iterator()
 
     # determine if weighted
-    weighted = True if isinstance(params.mask_weights, np.ndarray) or params.mask_weights else False
+    weighted = False if isinstance(params.mask_weights, np.bool) and not params.mask_weights else True
 
     # run tensorflow session
     n = 0

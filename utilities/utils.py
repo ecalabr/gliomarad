@@ -51,6 +51,7 @@ class Params:
 
     shuffle_size = None
     batch_size = None
+    num_threads = None
     samples_per_epoch = None
     train_fract = None
     learning_rate = None
@@ -241,8 +242,8 @@ def display_tf_dataset(dataset_data, data_format, data_dims, weighted=False):
             # handle labels only
             ax = fig.add_subplot(1, nplots, nplots)
             label_img = np.squeeze(label_data)
-            label_img = np.reshape(np.transpose(label_img),
-                                   [label_img.shape[0] * label_img.shape[2], label_img.shape[1]])
+            inds = [label_img.shape[0] * label_img.shape[2], label_img.shape[1]]
+            label_img = np.reshape(np.transpose(label_img), inds)
             ax.imshow(label_img, cmap='gray')
             ax.set_title('Labels')
 

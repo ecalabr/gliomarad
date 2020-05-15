@@ -130,7 +130,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # variable setup
         data_dirs = train_dirs
         data_chan = len(params.data_prefix)
-        weighted = False if isinstance(params.mask_weights, bool) and not params.mask_weights else True
+        weighted = False if isinstance(params.mask_weights, np.bool) and not params.mask_weights else True
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
                           params.label_prefix,
@@ -151,13 +151,13 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             lambda x: tf.numpy_function(load_roi_multicon_and_labels_3d,
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
-                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                        num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches
         dataset = dataset.map(
             lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
                                        weighted=weighted,
                                        overlap=params.train_patch_overlap),
-                                       num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                                       num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
