@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 
 # https://lars76.github.io/neural-networks/object-detection/losses-for-segmentation/
@@ -19,6 +20,16 @@ def wMSE(y_true_weights, y_pred):
     else:
         y_true = y_true_weights
         weights = None
+    return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=weights)
+
+
+# 2.5 dimensional MSE loss
+def MSE25d(y_true, y_pred):
+    # weight loss such that middle slice is is strongest weighted [b, x, y, z, c]
+    z_dim = 11
+    w_vect = np.ones(z_dim)
+    w_vect[int(round(z_dim/2.))] = z_dim - 1
+    weights = tf.ones_like(y_true, dtype=tf.float32) * np.expand_dims(w_vect, axis=(0,1,2,4))
     return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=weights)
 
 

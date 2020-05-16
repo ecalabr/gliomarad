@@ -129,9 +129,9 @@ def tf_patches_3d(data, labels, patch_size, data_format, data_chan, label_chan=1
     strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], patch_size[2] / overlap[2], 1]
 
     # make patches
-    data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
+    data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='VALID')
     data = tf.reshape(data, [-1] + patch_size + [data_chan])
-    labels = tf.extract_volume_patches(labels, ksizes=ksizes, strides=strides, padding='SAME')
+    labels = tf.extract_volume_patches(labels, ksizes=ksizes, strides=strides, padding='VALID')
     # if weighted is true, then add 1 to label_chan for the weights tensor that should be concatenated here
     labels = tf.reshape(labels, [-1] + patch_size + [label_chan + 1 if weighted else label_chan])
 
@@ -297,6 +297,10 @@ def expand_region(input_dims, region_bbox, delta):
             raise ValueError("When a list is passed, parameter mask_dilate must have one val for each dim in mask")
         return expand_region_dims(input_dims, region_bbox, delta)
 
+    # if delta is zero return
+    if delta == 0:
+        return region_bbox
+
     # determine how much to add on each side of the bounding box
     deltas = np.array([-int(np.floor(delta/2.)), int(np.ceil(delta/2.))] * 3)
 
@@ -310,8 +314,8 @@ def expand_region(input_dims, region_bbox, delta):
             if item < 0:
                 item = 0
         else:  # for odd indices, make sure they do not exceed original dims
-            if item > input_dims[(i-1)/2]:
-                item = input_dims[(i-1)/2]
+            if item > input_dims[int(round((i-1)/2))]:
+                item = input_dims[int(round((i-1)/2))]
         new_bbox.append(item)
 
     return new_bbox
@@ -439,6 +443,76 @@ def affine_transform(image, affine, offset=None, order=1):
         image = ndi.interpolation.affine_transform(image, affine, offset=offset, order=order, output=np.float32)
 
     return image
+
+
+def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, order=1):
+    """
+    Function for affine transforming and extracting an roi from a set of input images and labels
+    :param image: (np.ndarray) a 3d or 4d input image
+    :param roi: (np.ndarray) a 3d mask or segmentation roi
+    :param labels: (np.ndarray) a set of 3d labels (optional)
+    :param affine: (np.ndarray) an affine transform. if None, a random transform is created
+    :param dilate: (np.ndarray) an int or list of 3 ints. If int, each dim is symmetrically expanded by that amount. If
+    an array of 3 ints, then each dimension is expanded to the value of the corresponding int.
+    :param order: (int) the spline order used for label interpolation
+    :return: (np.ndarray) The transformed and cropped images, rois and optionally labels
+    """
+
+    # sanity checks
+    if affine is None:
+        affine = create_affine()
+
+    # get input tight bbox shape
+    roi_bbox = nonzero_slice_inds3d(roi)
+
+    # dilate if necessary
+    if dilate is not None:
+        roi_bbox = expand_region(roi.shape, roi_bbox, dilate)
+
+    # determine output shape
+    in_shape = [roi_bbox[1] - roi_bbox[0], roi_bbox[3] - roi_bbox[2], roi_bbox[5] - roi_bbox[4]]
+    out_x = in_shape[0] * np.abs(affine[0, 0]) + in_shape[1] * np.abs(affine[0, 1]) + in_shape[2] * np.abs(affine[0, 2])
+    out_y = in_shape[0] * np.abs(affine[1, 0]) + in_shape[1] * np.abs(affine[1, 1]) + in_shape[2] * np.abs(affine[1, 2])
+    out_z = in_shape[0] * np.abs(affine[2, 0]) + in_shape[1] * np.abs(affine[2, 1]) + in_shape[2] * np.abs(affine[2, 2])
+    out_shape = [int(np.ceil(out_x)), int(np.ceil(out_y)), int(np.ceil(out_z))]
+
+    # determine affine transform offset
+    inv_af = affine.T
+    c_in = np.array(in_shape) * 0.5 + np.array(roi_bbox[::2])
+    c_out = np.array(out_shape) * 0.5
+    offset = c_in - c_out.dot(inv_af)
+
+    # Apply affine to roi
+    roi = ndi.interpolation.affine_transform(roi, affine, offset=offset, order=0, output=np.float32,
+                                             output_shape=out_shape)
+    # Apply affine to labels if given
+    if labels is not None:
+        labels = ndi.interpolation.affine_transform(labels, affine, offset=offset, order=order, output=np.float32,
+                                                   output_shape=out_shape)
+    # Apply affine to image, accouting for possible 4d image
+    if len(image.shape) > 3:
+        # make 4d identity matrix and replace xyz component with 3d affine
+        affine4d = np.eye(4)
+        affine4d[:3, :3] = affine
+        offset4d = np.append(offset, 0.)
+        out_shape4d = np.append(out_shape, image.shape[-1])
+        image = ndi.interpolation.affine_transform(image, affine4d, offset=offset4d, order=1, output=np.float32,
+                                             output_shape=out_shape4d)
+    else:
+        image = ndi.interpolation.affine_transform(image, affine, offset=offset, order=1, output=np.float32,
+                                                   output_shape=out_shape)
+
+    # crop to rotated input ROI, adjusting for dilate
+    nzi = nonzero_slice_inds3d(roi)
+    if dilate is not None:
+        nzi = expand_region(roi.shape, nzi, dilate)
+    roi = roi[nzi[0]:nzi[1], nzi[2]:nzi[3], nzi[4]:nzi[5]]
+    image = image[nzi[0]:nzi[1], nzi[2]:nzi[3], nzi[4]:nzi[5]]
+    if labels is not None:
+        labels = labels[nzi[0]:nzi[1], nzi[2]:nzi[3], nzi[4]:nzi[5]]
+        return image, roi, labels
+    else:
+        return image, roi
 
 
 def normalize(input_img, mode='zero_mean'):
@@ -886,28 +960,11 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
         phi = 0.
         psi = 0.
 
-    # make affine, calculate offset using mask center of mass and affine
+    # make affine, calculate offset using mask center of mass of binirized mask, get nonzero bbox of mask
     affine = create_affine(theta=theta, phi=phi, psi=psi)
-    com = ndi.measurements.center_of_mass(mask > 0.)  # get COM for binarized mask
-    cent = np.array(data_dims) / 2.
-    offset = com - np.dot(affine, cent)
 
     # apply affines to mask, data, labels
-    mask = affine_transform(mask, affine=affine, offset=offset, order=0)  # nn interp for mask
-    data = affine_transform(data, affine=affine, offset=offset, order=1)  # linear interp for data
-    labels = affine_transform(labels, affine=affine, offset=offset, order=interp)  # user def interp for labels
-
-    # get the tight bounding box of the mask after affine rotation
-    msk_bbox = nonzero_slice_inds3d(mask)
-
-    # dilate bbox if necessary - this also ensures that the bbox does not exceed original image dims
-    msk_bbox = expand_region(data_dims, msk_bbox, dilate)
-
-    # extract the region from the data
-    data = data[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5], :]
-    labels = labels[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
-    if return_mask is not None:
-        mask = mask[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
+    data, mask, labels = affine_transform_roi(data, mask, labels, affine, dilate, interp)
 
     # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
