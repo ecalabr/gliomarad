@@ -158,7 +158,7 @@ if __name__ == '__main__':
         if not os.path.isdir(args.out_dir):
             os.mkdir(args.out_dir)
 
-    # handler inference directory argument
+    # handle inference directory argument
     assert args.infer_dir, "No infer directory specified. Use --infer_dir="
     assert os.path.isdir(args.infer_dir), "No inference directory found at {}".format(args.infer_dir)
     if not glob(args.infer_dir + '/*' + my_params.data_prefix[0] + '.nii.gz'):

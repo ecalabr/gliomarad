@@ -25,7 +25,11 @@ def train(param_file):
     if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
         params.model_dir = os.path.dirname(param_file)
     if not os.path.isdir(params.model_dir):
-        raise ValueError("Specified model directory does not exist")
+        raise ValueError("Specified model directory does not exist: {}".format(params.model_dir))
+
+    # check other important params
+    if not os.path.isdir(params.data_dir):
+        raise ValueError("Specified data directory does not exist: {}".format(params.data_dir))
 
     # Set the logger, delete old log file if overwrite param is set to yes
     log_path = os.path.join(params.model_dir, 'train.log')
