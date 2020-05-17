@@ -67,10 +67,10 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params):
         if params.dimension_mode == '2.5D':
             # handle channels last [b, x, y, z, c]
             if params.data_format == 'channels_last':
-                predictions = predictions[:, :, :, predictions.shape[3]/2 + 1, :]
+                predictions = predictions[:, :, :, int(round(predictions.shape[3]/2.)), :]
             # handle channels first [b, c, x, y, z]
             elif params.data_format == 'channels_first':
-                predictions = predictions[:, :, :, :, predictions.shape[3]/2 + 1]
+                predictions = predictions[:, :, :, :, int(round(predictions.shape[3]/2))]
             else:
                 raise ValueError("Did not understand data format: " + str(params.data_format))
 
