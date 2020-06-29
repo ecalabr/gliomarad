@@ -1,13 +1,19 @@
-metrics choices
 add evaluate.py
-2.5 testing
+- make standard study list for training set and evaluation set, perhaps make shuffle with set random seed in param file?
+- detailed metrics for evaluate
+- evaluate metrics over whole 3d brain but only in brain parenchyma
+
+metrics choices for training validation
+- param file? consider MAE, MSE, MAPE
+
+Eventually maybe add custom evaluation between epochs?
+
 https://github.com/tensorflow/tensorflow/issues/35982
 model.fit not working (crashes) with variable length epochs, workaround with epoch for loop
 eventually would be nice to get model.fit working with variable length epochs so steps_per_epoch does not neet to be specified
 
-see if shapes and batch size are actualy needed for Input layer in net builder. If not, then model could be loaded directly from save in predict.py instead of rebuilding from netbuilder.
-
 test nonzero weighted pixel loss
 
 histogram matching of input images as a normalization method?
+
 brain and tumor combined mask

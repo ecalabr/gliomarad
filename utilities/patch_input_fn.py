@@ -51,54 +51,21 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # repeat dataset infinitely so that dataset doesn't exhaust prematurely during fit
         dataset = dataset.repeat()
 
-    # eval mode
-    elif mode == 'eval':
-        # variable setup
-        data_dirs = eval_dirs
-        data_chan = len(params.data_prefix)
-        # if there are no eval dirs return None to model
-        if not any(data_dirs):
-            return None
-        # defined the fixed py_func params, the study directory will be passed separately by the iterator
-        py_func_params = [params.data_prefix,
-                          params.label_prefix,
-                          params.data_format,
-                          params.train_dims,
-                          params.data_plane,
-                          params.norm_data,
-                          params.norm_labels,
-                          params.norm_mode]
-        # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
-        # map data directories to the data using a custom python function
-        dataset = dataset.map(
-            lambda x: tf.numpy_function(load_multicon_and_labels,
-                                        [x] + py_func_params,
-                                        (tf.float32, tf.float32)),
-                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # map each dataset to a series of patches based on infer inputs
-        dataset = dataset.map(
-            lambda x, y: tf_patches(x, y, params.train_dims, data_chan, params.data_format,
-                                    overlap=params.infer_patch_overlap),
-                                    num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # flat map so that each tensor is a single slice
-        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
-        # generate a batch of data
-        dataset = dataset.batch(params.batch_size, drop_remainder=True)
-        # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-
-    # infer mode
-    elif mode == 'infer':
-        if not infer_dir:
-            assert ValueError("Must specify inference directory")
+    # infer and eval mode
+    elif mode in ['infer', 'eval']:
+        if mode == 'infer':
+            if not infer_dir:
+                assert ValueError("Must specify inference directory for inference mode")
+            dirs = infer_dir
+        else:  # mode == 'eval'
+            dirs = eval_dirs
         # define dims of inference
         data_dims = list(params.infer_dims)
         chan_size = len(params.data_prefix)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data, params.norm_mode]
         # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
+        dataset = tf.data.Dataset.from_tensor_slices(dirs)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size,
@@ -112,7 +79,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
-        dataset = dataset.batch(batch_size=1, drop_remainder=True)
+        dataset = dataset.batch(batch_size=1, drop_remainder=False)
         # automatic prefetching to improve efficiency
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
@@ -173,46 +140,14 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         # repeat dataset infinitely so that dataset doesn't exhaust prematurely during fit
         dataset = dataset.repeat()
 
-    # eval mode
-    elif mode == 'eval':
-        # variable setup
-        data_dirs = eval_dirs
-        data_chan = len(params.data_prefix)
-        # if there are no eval dirs return None to model
-        if not any(data_dirs):
-            return None
-        # defined the fixed py_func params, the study directory will be passed separately by the iterator
-        py_func_params = [params.data_prefix,
-                          params.label_prefix,
-                          params.data_format,
-                          params.data_plane,
-                          params.norm_data,
-                          params.norm_labels,
-                          params.norm_mode]
-        # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
-        # map data directories to the data using a custom python function
-        dataset = dataset.map(
-            lambda x: tf.numpy_function(load_multicon_and_labels_3d,
-                                        [x] + py_func_params,
-                                        (tf.float32, tf.float32)),
-                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # map each dataset to a series of patches based on infer inputs
-        dataset = dataset.map(
-            lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
-                                       overlap=params.infer_patch_overlap),
-                                       num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # flat map so that each tensor is a single slice
-        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
-        # generate a batch of data
-        dataset = dataset.batch(params.batch_size, drop_remainder=True)
-        # automatic prefetching to improve efficiency
-        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
-
-    # infer mode
-    elif mode == 'infer':
-        if not infer_dir:
-            assert ValueError("Must specify inference directory")
+    # infer and eval mode
+    elif mode in ['infer', 'eval']:
+        if mode == 'infer':
+            if not infer_dir:
+                assert ValueError("Must specify inference directory for inference mode")
+            dirs = infer_dir
+        else:  # mode == 'eval'
+            dirs = eval_dirs
         # define dims of inference
         data_dims = list(params.infer_dims)
         chan_size = len(params.data_prefix)
@@ -220,7 +155,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data,
                           params.norm_mode]
         # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
+        dataset = tf.data.Dataset.from_tensor_slices(dirs)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
