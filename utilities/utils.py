@@ -19,6 +19,7 @@ class Params:
     data_dir = None
     model_dir = None
     overwrite = None
+    random_state = None
 
     data_prefix = None
     label_prefix = None

@@ -4,6 +4,8 @@
     The full path to the directory for model outputs. If "same" is passed, then the data directory is used for model outputs.
 "overwrite": true,
     Whether or not to overwrite model ouputs if the model is run again. Must be boolean. Note that specifying false will raise an error if a model output already exists in model_dir.
+"random_state": 42
+    An integer to be used as the seed for random operations that need to be reproducible (example = directory shuffling for train/test split
 
 
 "data_prefix": ["T1_wmtb", "T2_wmtb", "FLAIR_wmtb", "DWI_wmtb", "ASL_wm", "SWI_wmtb", "DTI_eddy_MD_wm"],

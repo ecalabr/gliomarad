@@ -25,6 +25,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
 
     # loop through each nii
     metrics = []
+    metrics_dict = {}
     n = 0
     for true_nii, pred_nii in zip(true_niis, pred_niis):
         print("Evaluating directory {} of {}...".format(n+1, len(pred_niis)))
@@ -43,12 +44,20 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
         pred_im = np.squeeze(nib.load(pred_nii).get_fdata()[nonzero_inds])
         mape = np.mean(np.abs((true_im - pred_im) / true_im))
         metrics.append(mape)
+        metrics_dict.update({os.path.dirname(true_nii): mape})
         n += 1
+    # add mean metrics to metrics_dict
+    metrics_dict.update({'mean': np.mean(metrics)})
 
     # save metrics
-    metrics_filepath = os.path.join(out_dir, 'eval_metrics.json')
+    # use prefix string to ID which mask was used for evaluation
+    if mask:
+        mask_str = mask + '_{}'.format(mask_val)
+    else:
+        mask_str = 'no_mask'
+    metrics_filepath = os.path.join(out_dir, mask_str + '_eval_metrics.json')
     with open(metrics_filepath, 'w+', encoding='utf-8') as fi:
-        json.dump(study_dirs, fi, ensure_ascii=False, indent=4)
+        json.dump(metrics_dict, fi, ensure_ascii=False, indent=4)
 
     return metrics
 
