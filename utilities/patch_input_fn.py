@@ -190,7 +190,8 @@ def patch_input_fn(params, mode, infer_dir=None):
     else:
         study_dirs = glob(params.data_dir + '/*/')
         study_dirs.sort()  # study dirs sorted in alphabetical order
-        random.Random(params.random_state).shuffle(study_dirs)  # randomly shuffle input directories for training
+        # randomly shuffle input directories for training using a user defined randomization seed
+        random.Random(params.random_state).shuffle(study_dirs)
         with open(study_dirs_filepath, 'w+', encoding='utf-8') as f:
             json.dump(study_dirs, f, ensure_ascii=False, indent=4)  # save study dir list for consistency
     train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
