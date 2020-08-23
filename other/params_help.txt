@@ -43,7 +43,7 @@
 "model_name": "unet_25d_bneck",
     The name of the network that is going to be trained. This must be defined in net_builder.py
 "base_filters": 32,
-    The base number of filters used in network construction. Should be divisible by 4 when using bottleneck layers.
+    The base number of filters used in network construction. Should be divisible by 4 when using bottleneck layers. Should also be a multiple of 8 for tensor core usage.
 "output_filters": 1,
     The number of output filters for the final layer of the network. For example, 2 could be used for a binary categorization task, 1 could be used for a synthetic output task.
 "layer_layout": [3, 4, 6],
@@ -56,12 +56,13 @@
     The tensorflow data format. Must be either "channels_last" or "channels_first". Either should work regardless of the model or input data; however, channels first is incompletely tested.
 "activation": "leaky_relu",
     The name of the activation function used during network construction. This must be defined in losses.py loss_picker function.
-
+"mixed_precision": true,
+    Whether or not to use mixed precision float for tensorflow ops to take advantage of Nvidia tensor cores. Only useful if CUDA compute capability is 7.0 or higher.
 
 "shuffle_size": 1000,
     The size of the shuffle buffer. This should be much higher than the number of training patches that come from a single image series, or else it won't really be shuffling the data.
-"batch_size": 4,
-    The number of patches/samples per training batch.
+"batch_size": 8,
+    The number of patches/samples per training batch. Should be a multiple of 8 for tensor core usage.
 "num_threads": 2,
     The number of threads to use for image input function processing.
 "samples_per_epoch": 18400,

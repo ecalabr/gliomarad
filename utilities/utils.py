@@ -49,6 +49,7 @@ class Params:
     kernel_size = None
     data_format = None
     activation = None
+    mixed_precision = None
 
     shuffle_size = None
     batch_size = None

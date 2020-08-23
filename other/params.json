@@ -25,13 +25,14 @@
   "norm_mode": "ten_mean",
 
   "model_name": "unet_25d_bneck",
-  "base_filters": 40,
+  "base_filters": 32,
   "output_filters": 1,
   "layer_layout": [4, 5, 6],
   "final_layer": "conv",
   "kernel_size": [3, 3, 1],
   "data_format": "channels_last",
   "activation": "leaky_relu",
+  "mixed_precision": true,
 
   "shuffle_size": 5000,
   "batch_size": 8,

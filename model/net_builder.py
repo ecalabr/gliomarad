@@ -3,7 +3,10 @@ from tensorflow.keras.layers import Conv3D, Conv3DTranspose, Conv2D, Conv2DTrans
 from tensorflow.keras.models import Model
 from model.net_layers import bneck_resid3d, bneck_resid2d, conv3d_act_bn
 from tensorflow.python.eager import backprop
+from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
+
+# helper functions
 
 # custom model class
 class CustomModel(Model):
@@ -92,13 +95,13 @@ def unet_3d(params):
 
     # output layer
     if params.final_layer == "conv":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.sigmoid(x)
+        x = tf.nn.sigmoid(x, dtype='float32')
     elif params.final_layer == "softmax":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1, dtype='float32')
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
@@ -172,13 +175,13 @@ def unet_3d_bneck(params):
 
     # output layer
     if params.final_layer == "conv":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.sigmoid(x)
+        x = tf.nn.sigmoid(x, dtype='float32')
     elif params.final_layer == "softmax":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1, dtype='float32')
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
@@ -254,13 +257,13 @@ def unet_25d_bneck(params):
 
     # output layer
     if params.final_layer == "conv":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.sigmoid(x)
+        x = tf.nn.sigmoid(x, dtype='float32')
     elif params.final_layer == "softmax":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1, dtype='float32')
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
@@ -334,20 +337,32 @@ def unet_2d_bneck(params):
 
     # output layer
     if params.final_layer == "conv":
-        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
         x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.sigmoid(x)
+        x = tf.nn.sigmoid(x, dtype='float32')
     elif params.final_layer == "softmax":
         x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1, dtype='float32')
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
     return Model(inputs=inputs, outputs=x)
 
 
+# Wrapper function
 def net_builder(params):
+    # set up mixed precision computation to take advantage of Nvidia tensor cores
+    # https://www.tensorflow.org/guide/mixed_precision
+    if params.mixed_precision:
+        print("WARNING: using tensorflow mixed precision... This could lead to numeric instability in some cases.")
+        policy = mixed_precision.Policy('mixed_float16')
+        mixed_precision.set_policy(policy)
+        # warn if batch size and/or nfilters is not a multpile of 8
+        if not params.base_filters % 8 == 0:
+            print("WARNING: parameter base_filters is not a multiple of 8, which will slow down tensor cores.")
+        if not params.batch_size % 8 == 0:
+            print("WARNING: parameter batch_size is not a multiple of 8, which will slow down tensor cores.")
 
     # determine network
     if params.model_name in globals():

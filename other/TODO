@@ -1,8 +1,3 @@
-add evaluate.py
-- make standard study list for training set and evaluation set, perhaps make shuffle with set random seed in param file?
-- detailed metrics for evaluate
-- evaluate metrics over whole 3d brain but only in brain parenchyma
-
 metrics choices for training validation
 - param file? consider MAE, MSE, MAPE
 
