@@ -12,3 +12,6 @@ test nonzero weighted pixel loss
 histogram matching of input images as a normalization method?
 
 brain and tumor combined mask
+
+
+Fix eval inputs to tf.keras fit model but preserve input to custom evaluate.py

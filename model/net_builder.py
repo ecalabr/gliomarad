@@ -178,10 +178,10 @@ def unet_3d_bneck(params):
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.sigmoid(x, dtype='float32')
+        x = tf.nn.sigmoid(x)
     elif params.final_layer == "softmax":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1, dtype='float32')
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
@@ -260,10 +260,10 @@ def unet_25d_bneck(params):
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.sigmoid(x, dtype='float32')
+        x = tf.nn.sigmoid(x)
     elif params.final_layer == "softmax":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1, dtype='float32')
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
@@ -340,10 +340,10 @@ def unet_2d_bneck(params):
         x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
         x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.sigmoid(x, dtype='float32')
+        x = tf.nn.sigmoid(x)
     elif params.final_layer == "softmax":
         x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
-        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1, dtype='float32')
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
