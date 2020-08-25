@@ -254,6 +254,8 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
 
 # patch input function for 2d or 3d
 def patch_input_fn(params, mode, infer_dir=None):
+    # set global random seed for tensorflow
+    tf.random.set_seed(params.random_state)
     # Study dirs and prefixes setup
     study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.json')
     if os.path.isfile(study_dirs_filepath):  # load study dirs file if it already exists for consistent training
