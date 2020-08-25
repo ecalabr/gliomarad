@@ -57,7 +57,7 @@ def train(param_file):
 
     # generate dataset objects for model inputs
     train_inputs = patch_input_fn(params, mode='train')
-    eval_inputs = patch_input_fn(params, mode='train')
+    eval_inputs = patch_input_fn(params, mode='eval')
 
     # Check for existing model and load if exists, otherwise create from scratch
     if latest_ckpt and not params.overwrite:
@@ -99,7 +99,6 @@ def train(param_file):
               steps_per_epoch=params.samples_per_epoch // params.batch_size,
               callbacks=train_callbacks,
               validation_data=eval_inputs,
-              validation_steps=params.samples_per_epoch // params.batch_size,
               shuffle=False,
               verbose=1)
 
