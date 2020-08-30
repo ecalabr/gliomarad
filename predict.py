@@ -21,7 +21,7 @@ def predict(params, infer_dir):
     if os.path.isfile(log_path) and params.overwrite == 'yes':
         os.remove(log_path)
     set_logger(log_path)
-    logging.info("Log file created at " + log_path)
+    logging.info("- log file created at " + log_path)
 
     # Create the inference dataset structure
     infer_inputs = patch_input_fn(params=params, mode='infer', infer_dir=infer_dir)
@@ -31,7 +31,7 @@ def predict(params, infer_dir):
     checkpoints = glob(checkpoint_path + '/*.hdf5')
     if checkpoints:
         latest_ckpt = max(checkpoints, key=os.path.getctime)
-        print("Loading checkpoint from {}...".format(latest_ckpt))
+        print("- loading checkpoint from {}...".format(latest_ckpt))
         # net_builder input layer uses train_dims, so set these to infer dims to allow different size inference
         params.train_dims = params.infer_dims
         params.batch_size = 1  # batch size for inference is hard-coded to 1
@@ -118,7 +118,7 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params):
     model_name = os.path.basename(params.model_dir)
     nii_out = os.path.join(out_dir, name_prefix + '_predictions_' + model_name + '.nii.gz')
     img = nib.Nifti1Image(predictions, affine)
-    logging.info("Saving predictions to: " + nii_out)
+    logging.info("- saving predictions to: " + nii_out)
     nib.save(img, nii_out)
     if not os.path.isfile(nii_out):
         raise ValueError("Output nii could not be created at {}".format(nii_out))
