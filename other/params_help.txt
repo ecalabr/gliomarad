@@ -58,6 +58,8 @@
     The name of the activation function used during network construction. This must be defined in losses.py loss_picker function.
 "mixed_precision": true,
     Whether or not to use mixed precision float for tensorflow ops to take advantage of Nvidia tensor cores. Only useful if CUDA compute capability is 7.0 or higher.
+"dist_strat": none,
+    Specify a distribution strategy for multi-gpu training. Currently supports "Mirrored" (case insensitive) with everything else resulting in default no distribution.
 
 "shuffle_size": 1000,
     The size of the shuffle buffer. This should be much higher than the number of training patches that come from a single image series, or else it won't really be shuffling the data.

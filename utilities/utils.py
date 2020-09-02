@@ -50,6 +50,7 @@ class Params:
     data_format = None
     activation = None
     mixed_precision = None
+    dist_strat = None
 
     shuffle_size = None
     batch_size = None

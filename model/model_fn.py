@@ -8,14 +8,22 @@ from contextlib import redirect_stdout
 
 def model_fn(params, metrics=('accuracy',)):
 
+    # model distribution strategy
+    if params.dist_strat.lower() == 'mirrored':
+        strategy = tf.distribute.MirroredStrategy()
+        params.batch_size = params.batch_size * strategy.num_replicas_in_sync
+    else:
+        strategy = tf.distribute.get_strategy()
+
     # consider adding metric choices here
     if not isinstance(metrics, list):
         metrics = list(metrics)
 
-    # Define loss using loss picker function
-    model = net_builder(params)
-    loss = loss_picker(params)
-    model.compile(optimizer=Adam(), loss=loss, metrics=metrics)
+    # Define model and loss using loss picker function
+    with strategy.scope():
+        model = net_builder(params)
+        loss = loss_picker(params)
+        model.compile(optimizer=Adam(), loss=loss, metrics=metrics)
 
     # save text representation of graph
     model_sum = os.path.join(params.model_dir, 'model_summary.txt')

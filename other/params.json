@@ -33,6 +33,7 @@
   "data_format": "channels_last",
   "activation": "leaky_relu",
   "mixed_precision": true,
+  "dist_strat": "none",
 
   "shuffle_size": 5000,
   "batch_size": 8,
