@@ -30,7 +30,8 @@ def MSE25d(y_true, y_pred):
     w_vect = np.ones(z_dim)
     w_vect[int(round(z_dim/2.))] = z_dim - 1
     weights = tf.ones_like(y_true, dtype=tf.float32) * np.expand_dims(w_vect, axis=(0,1,2,4))
-    return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=weights)
+    return tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)(y_true, y_pred,
+                                                                                      sample_weight=weights)
 
 
 # Pixelwise weigthed MSE loss for nonzero pixels only

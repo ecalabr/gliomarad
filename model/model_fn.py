@@ -4,12 +4,14 @@ from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 import os
 from contextlib import redirect_stdout
+import logging
 
 
 def model_fn(params, metrics=('accuracy',)):
 
     # model distribution strategy
     if params.dist_strat.lower() == 'mirrored':
+        logging.info("Using Mirrored distribution strategy")
         strategy = tf.distribute.MirroredStrategy()
         params.batch_size = params.batch_size * strategy.num_replicas_in_sync
     else:
