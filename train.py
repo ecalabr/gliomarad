@@ -7,6 +7,7 @@ import os
 # set tensorflow logging level before importing
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.INFO)
+import tensorflow as tf
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, TensorBoard
 from utilities.utils import Params
 from utilities.utils import set_logger
@@ -20,6 +21,15 @@ def train(param_file):
 
     # load params from param file
     params = Params(param_file)
+
+    # determine distribute strategy
+    # model distribution strategy
+    if params.dist_strat.lower() == 'mirrored':
+        logging.info("Using Mirrored distribution strategy")
+        params.strategy = tf.distribute.MirroredStrategy()
+    else:
+        params.strategy = tf.distribute.get_strategy()
+    params.batch_size = params.batch_size * params.strategy.num_replicas_in_sync
 
     # determine model dir
     if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
