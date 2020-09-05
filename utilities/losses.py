@@ -7,7 +7,8 @@ import numpy as np
 
 # MSE loss
 def MSE(y_true, y_pred, sample_weight=None):
-    return tf.keras.losses.MeanSquaredError()(y_true, y_pred, sample_weight=sample_weight)
+    return tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)(y_true, y_pred,
+                                                                                      sample_weight=sample_weight)
 
 
 # Pixelwise weigthed MSE loss
