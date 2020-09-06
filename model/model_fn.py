@@ -12,6 +12,14 @@ def model_fn(params, metrics=('accuracy',)):
     if not isinstance(metrics, list):
         metrics = list(metrics)
 
+    # handle distribution strategy if not already defined
+    if not hasattr(params, 'strategy'):
+        if params.dist_strat.lower() == 'mirrored':
+            params.strategy = tf.distribute.MirroredStrategy()
+        else:
+            params.strategy = tf.distribute.get_strategy()
+        params.batch_size = params.batch_size * params.strategy.num_replicas_in_sync
+
     # Define model and loss using loss picker function
     with params.strategy.scope():
         model = net_builder(params)
