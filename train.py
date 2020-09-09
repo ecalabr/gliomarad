@@ -47,7 +47,8 @@ def train(param_file):
         print("Overwriting existing log...")
         os.remove(log_path)
     set_logger(log_path)
-    logging.info("Log file created at " + log_path)
+    logging.info("Log file created at: {}".format(log_path))
+    logging.info("Using TensorFlow version {}".format(tf.__version__))
 
     # set up checkpoint directories and determine current epoch
     checkpoint_path = os.path.join(params.model_dir, 'checkpoints')
@@ -91,26 +92,39 @@ def train(param_file):
         ckpt = os.path.join(checkpoint_path, 'epoch_{epoch:02d}_valloss_{val_loss:.4f}.hdf5')
     else:
         ckpt = os.path.join(checkpoint_path, 'epoch_{epoch:02d}.hdf5')
-    checkpoint = ModelCheckpoint(ckpt, monitor='val_loss', verbose=1, save_weights_only=False, save_best_only=False,
-                                 mode='auto', save_freq='epoch')
+    checkpoint = ModelCheckpoint(
+        ckpt,
+        monitor='val_loss',
+        verbose=1,
+        save_weights_only=False,
+        save_best_only=False,
+        mode='auto',
+        save_freq='epoch')
 
     # tensorboard callback
     tensorboard = TensorBoard(
-        log_dir=params.model_dir, histogram_freq=1, write_graph=True, write_images=True, update_freq='epoch',
-        profile_batch=2, embeddings_freq=0, embeddings_metadata=None)
+        log_dir=params.model_dir,
+        histogram_freq=0,
+        write_graph=True,
+        write_images=False,
+        update_freq=(params.samples_per_epoch // params.batch_size) // 100, # write losses/metrics 100x per epoch
+        profile_batch=2,
+        embeddings_freq=0,
+        embeddings_metadata=None)
 
     # combine callbacks for the model
     train_callbacks = [learning_rate, checkpoint, tensorboard]
 
     # TRAINING
-    model.fit(train_inputs,
-              epochs=params.num_epochs,
-              initial_epoch=completed_epochs,
-              steps_per_epoch=params.samples_per_epoch // params.batch_size,
-              callbacks=train_callbacks,
-              validation_data=eval_inputs,
-              shuffle=False,
-              verbose=1)
+    model.fit(
+        train_inputs,
+        epochs=params.num_epochs,
+        initial_epoch=completed_epochs,
+        steps_per_epoch=params.samples_per_epoch // params.batch_size,
+        callbacks=train_callbacks,
+        validation_data=eval_inputs,
+        shuffle=False,
+        verbose=1)
 
     # completion logging
     logging.info("Successfully trained model for {} epochs".format(params.num_epochs - completed_epochs))

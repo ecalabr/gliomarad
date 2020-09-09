@@ -18,6 +18,7 @@ def model_fn(params, metrics=('accuracy',)):
             params.strategy = tf.distribute.MirroredStrategy()
         else:
             params.strategy = tf.distribute.get_strategy()
+        # set global batch size to batch size * num replicas
         params.batch_size = params.batch_size * params.strategy.num_replicas_in_sync
 
     # Define model and loss using loss picker function

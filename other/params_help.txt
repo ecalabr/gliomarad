@@ -15,7 +15,7 @@
 "mask_prefix": ["combined_brain_mask"],
     The prefixes for the input image mask file specified as a bracketed list. The expected filename format is directory-name_mask-prefix.nii.gz i.e. 01234567_brainmask.nii.gz. Can be false, in which case a mask of all 1s is used.
 "mask_dilate": [193, 229, 0],
-    How much to dilate the input mask after cropping the input images to the tight bounding box of the mask. If an integer, then all dimensions are symmetrically expanded by that amount (1/2 before, 1/2 after). If a list of 3 ints, then the input is symmetrically expanded such that its final dimensions are equal to the ints in the list. Each masked input image dimension is expanded to the size of the corresponding int. If the int is 0 or smaller than the corresponding masked input dim, then no expansion is performed in that dimension.
+    How much to dilate the input mask after cropping the input images to the tight bounding box of the mask. If an integer, then all dimensions are symmetrically expanded by that amount (1/2 before, 1/2 after). If a list of 3 ints, then the input is symmetrically expanded such that its final dimensions are equal to the ints in the list. Each masked input image dimension is expanded to the size of the corresponding value. If the int is 0 or smaller than the corresponding masked input dim, then no expansion is performed in that dimension.
 "filter_zero": 0.05,
     Filters out patches where labels == 0 in most of the patch. filter_zero is a float defining the minimum threshold for label pixels > 0 in the patch.
 
