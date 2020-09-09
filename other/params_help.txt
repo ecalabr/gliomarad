@@ -38,8 +38,15 @@
     The order of interpolation to be used when randomly rotating the label data. This only matters if augment_train_data == yes. 0 = nearest neighbor, 1 = linear, 2 = cubic, etc
 "mask_weights": false,
     If true then mask is used as a weight tensor for the loss function during training. If a list is passed, then the values in the mask are mapped to the values in the list. For example, passing [1, 2, 4] would map mask value 0->1, 1->2, 2->4.
-"metrics": ["accuracy", "mse"]
+"metrics": ["accuracy", "mse"],
     A string or list of strings corresponding to tf.keras.metrics function names. These are the metrics to be collected during training.
+
+"norm_data": true,
+    Whether or not to normalize the input data.
+"norm_labels": true,
+    Whether or not to normalize tha label data.
+"norm_mode": "unit",
+    What normalization mode to use. Applies to both data and labels (if norm_data and norm_labels are true). Names correspond to identifier strings in the normalize function in input_fn_util.py.
 
 "model_name": "unet_25d_bneck",
     The name of the network that is going to be trained. This must be defined in net_builder.py
