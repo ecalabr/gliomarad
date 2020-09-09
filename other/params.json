@@ -19,6 +19,7 @@
   "augment_train_data": true,
   "label_interp": 1,
   "mask_weights": false,
+  "metrics": ["mape", "acc"],
 
   "norm_data": true,
   "norm_labels": true,

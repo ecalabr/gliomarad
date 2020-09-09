@@ -6,10 +6,11 @@ import os
 from contextlib import redirect_stdout
 
 
-def model_fn(params, metrics=('accuracy',)):
+def model_fn(params):
 
-    # consider adding metric choices here
-    if not isinstance(metrics, list):
+    # metrics
+    metrics = params.metrics
+    if not isinstance(metrics, (list, tuple)):
         metrics = list(metrics)
 
     # handle distribution strategy if not already defined

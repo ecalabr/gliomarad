@@ -36,6 +36,7 @@ class Params:
     augment_train_data = None
     label_interp = None
     mask_weights = None
+    metrics = None
 
     norm_data = None
     norm_labels = None
