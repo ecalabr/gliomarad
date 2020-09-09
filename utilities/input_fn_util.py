@@ -3,6 +3,7 @@ import math
 from glob import glob
 import numpy as np
 import nibabel as nib
+import scipy.stats as stats
 import scipy.ndimage as ndi
 import tensorflow as tf
 
@@ -561,6 +562,21 @@ def normalize(input_img, mode='zero_mean'):
         std = np.std(input_img[nonzero_bool], None) + epsilon
         input_img = np.where(nonzero_bool, ((input_img - mean) / (std/new_stdev)) + new_med, 0.)
 
+    # handle NIQ mean stdev
+    elif mode == 'niq_med_stdev_winsorize':
+        # performs normalized inter-quantile range normalization to median 1000, stdev 200
+        # uses factor of 0.7413 to normalize interquartile range to standard deviation
+        # also winsorizes data at 1% on high end
+        new_med = 1000.
+        new_stdev = 200.
+        nonzero_bool = input_img != 0.
+        input_nz = input_img[nonzero_bool]
+        med = np.median(input_nz, None)
+        niqr = stats.iqr(input_nz, axis=None) * 0.7413 + epsilon
+        input_nz = ((input_nz - med) / (niqr / new_stdev)) + new_med
+        # winsorize at 1% high end
+        input_img[nonzero_bool] = stats.mstats.winsorize(input_nz, limits=[0., .01])
+
     # handle not implemented
     else:
         raise NotImplementedError("Specified normalization mode is not implemented yet: " + mode)
@@ -648,66 +664,6 @@ def byte_convert(byte_data):
     if isinstance(byte_data, (np.ndarray, list)):   return list(map(byte_convert, byte_data))
 
     return byte_data
-
-
-def load_multicon_and_labels(study_dir, feature_prefx, label_prefx, data_fmt, out_dims, plane='ax', norm=True,
-                              norm_lab=True, norm_mode='zero_mean'):
-    """
-    Load multicontrast image data and target data/labels.
-    :param study_dir: (str) A directory containing the desired image data.
-    :param feature_prefx: (list) a list of filenames - the data files to be loaded
-    :param label_prefx: (list) a list containing one string, the labels to be loaded
-    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param out_dims: (list(int)) the desired output data dimensions, data will be zero padded to dims
-    :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
-    :param norm: (bool) Whether or not to normalize the input data after loading.
-    :param norm_lab: (bool) whether or not to normalize the label data after loading.
-    :param norm_mode: (str) The method for normalization, used by normalize function.
-    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
-    """
-
-    # convert bytes to strings
-    study_dir = byte_convert(study_dir)
-    feature_prefx = byte_convert(feature_prefx)
-    label_prefx = byte_convert(label_prefx)
-    plane = byte_convert(plane)
-    data_fmt = byte_convert(data_fmt)
-    norm_mode = byte_convert(norm_mode)
-
-    # sanity checks
-    if not os.path.isdir(study_dir):
-        raise ValueError("Specified study_directory does not exist")
-    if not all([isinstance(a, str) for a in feature_prefx]):
-        raise ValueError("Data prefixes must be strings")
-    if not all([isinstance(a, str) for a in label_prefx]):
-        raise ValueError("Labels prefixes must be strings")
-    if data_fmt not in ['channels_last', 'channels_first']:
-        raise ValueError("data_format invalid")
-    if not all([np.issubdtype(a, np.integer) for a in out_dims]):
-        raise ValueError("data_dims must be a list/tuple of ints")
-
-    # load multi-contrast data - normalize input images
-    data, nzi = load_single_study(study_dir, feature_prefx, data_format=data_fmt, plane=plane, norm=norm,
-                                   norm_mode=norm_mode)
-
-    # load labels data
-    labels = load_single_study(study_dir, label_prefx, data_format=data_fmt, plane=plane,
-                                     norm=norm_lab, norm_mode=norm_mode)
-
-    # do data padding to desired dims - format is [x, y, z, c] or [c, x, y, z]
-    axes = [1, 2] if data_fmt == 'channels_first' else [0, 1]
-    data = zero_pad_image(data, out_dims, axes)
-    labels = zero_pad_image(labels, out_dims, axes)
-
-    # note that load single study handles normalization, image plane, and data format, but does not make z batch dim
-    if data_fmt == 'channels_first':
-        data = np.transpose(data, axes=(3, 0, 1, 2))
-        labels = np.transpose(labels, axes=(3, 0, 1, 2))
-    else:
-        data = np.transpose(data, axes=(2, 0, 1, 3))
-        labels = np.transpose(labels, axes=(2, 0, 1, 3))
-
-    return data, labels
 
 
 def load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane, norm=True, norm_mode='zero_mean'):
@@ -1006,90 +962,6 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
         return data.astype(np.float32), np.concatenate((labels.astype(np.float32), mask.astype(np.float32)), axis=-1)
     else:
         return data.astype(np.float32), labels.astype(np.float32)
-
-
-def load_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, data_fmt, plane='ax', norm=True, norm_lab=True,
-                                 norm_mode='zero_mean'):
-    """
-    Load multicontrast image data and target data/labels without using a target roi. Used primarily for evaluation.
-    :param study_dir: (str) A directory containing the desired image data.
-    :param feature_prefx: (list) a list of filenames - the data files to be loaded
-    :param label_prefx: (list) a list containing one string, the labels to be loaded
-    :param data_fmt: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
-    :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
-    :param norm: (bool) Whether or not to normalize the input data after loading.
-    :param norm_lab: (bool) whether or not to normalize the label data after loading.
-    :param norm_mode: (str) The method for normalization, used by normalize function.
-    :return: a tuple of np ndarrays containing the image data and regression target in the specified tf data format
-    """
-
-    # convert bytes to strings
-    study_dir = byte_convert(study_dir)
-    feature_prefx = byte_convert(feature_prefx)
-    label_prefx = byte_convert(label_prefx)
-    plane = byte_convert(plane)
-    data_fmt = byte_convert(data_fmt)
-    norm_mode = byte_convert(norm_mode)
-
-    # sanity checks
-    if plane not in ['ax', 'cor', 'sag']:
-        raise ValueError("Did not understand specified plane: " + str(plane))
-    if data_fmt not in ['channels_last', 'channels_first']:
-        raise ValueError("Did not understand specified data_fmt: " + str(plane))
-
-    # define full paths
-    data_files = [glob(study_dir + '/*' + contrast + '.nii.gz')[0] for contrast in feature_prefx]
-    labels_file = glob(study_dir + '/*' + label_prefx[0] + '.nii.gz')[0]
-    if not all([os.path.isfile(img) for img in data_files + [labels_file]]):
-        raise ValueError("One or more of the input data/labels/mask files does not exist")
-
-    # get data dims
-    labels_nii = nib.load(labels_file)
-    data_dims = labels_nii.shape
-
-    # load data and normalize
-    data = np.empty((data_dims[0], data_dims[1], data_dims[2], len(data_files)), dtype=np.float32)
-    for i, im_file in enumerate(data_files):
-        if norm:
-            data[:, :, :, i] = normalize(nib.load(im_file).get_fdata(), mode=norm_mode)
-        else:
-            data[:, :, :, i] = nib.load(im_file).get_fdata()
-
-    # load labels with NORMALIZATION - add option for normalized vs non-normalized labels here
-    if norm_lab:
-        labels = normalize(labels_nii.get_fdata(), mode=norm_mode)
-    else:
-        labels = labels_nii.get_fdata()
-
-    # get the tight bounding box of the labels eliminating surrounding zeros
-    msk_bbox = nonzero_slice_inds3d(labels)
-
-    # extract the region from the data
-    data = data[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5], :]
-    labels = labels[msk_bbox[0]:msk_bbox[1], msk_bbox[2]:msk_bbox[3], msk_bbox[4]:msk_bbox[5]]
-
-    # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
-    data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
-    labels = np.expand_dims(labels, axis=(0, 4))  # add a batch and channel dimension of 1
-
-    # handle different planes
-    if plane == 'ax':
-        pass
-    elif plane == 'cor':
-        data = np.transpose(data, axes=[0, 1, 3, 2, 4])
-        labels = np.transpose(labels, axes=[0, 1, 3, 2, 4])
-    elif plane == 'sag':
-        data = np.transpose(data, axes=[0, 2, 3, 1, 4])
-        labels = np.transpose(labels, axes=[0, 2, 3, 1, 4])
-    else:
-        raise ValueError("Did not understand specified plane: " + str(plane))
-
-    # handle channels first data format
-    if data_fmt == 'channels_first':
-        data = np.transpose(data, axes=[0, 4, 1, 2, 3])
-        labels = np.transpose(labels, axes=[0, 4, 1, 2, 3])
-
-    return data.astype(np.float32), labels.astype(np.float32)
 
 
 def load_multicon_preserve_size_3d(study_dir, feat_prefx, data_fmt, plane='ax', norm=True, norm_mode='zero_mean'):

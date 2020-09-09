@@ -9,7 +9,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # train mode - uses patches, patch filtering, batching, data augmentation, and shuffling - works on train_dirs
     if mode == 'train':
         # variable setup
-        data_dirs = tf.random.shuffle(train_dirs) # randomly shuffle input dirs before each training epoch
+        data_dirs = train_dirs
         data_chan = len(params.data_prefix)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
@@ -25,6 +25,8 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
                           params.norm_mode]
         # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
+        # randomly shuffle directory order
+        dataset = dataset.shuffle(buffer_size=len(data_dirs))
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_roi_multicon_and_labels,
@@ -130,7 +132,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # train mode - uses patches, patch filtering, batching, data augmentation, and shuffling - works on train_dirs
     if mode == 'train':
         # variable setup
-        data_dirs = tf.random.shuffle(train_dirs)  # randomly shuffle input dirs before each training epoch
+        data_dirs = train_dirs
         data_chan = len(params.data_prefix)
         weighted = False if isinstance(params.mask_weights, np.bool) and not params.mask_weights else True
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
@@ -148,6 +150,8 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
                           params.mask_weights]  # param makes loader return weights as last channel in labels data]
         # create tensorflow dataset variable from data directories
         dataset = tf.data.Dataset.from_tensor_slices(data_dirs)
+        # randomly shuffle directory order
+        dataset = dataset.shuffle(buffer_size=len(data_dirs))
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_roi_multicon_and_labels_3d,
