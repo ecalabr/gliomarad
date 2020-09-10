@@ -2,6 +2,10 @@ import tensorflow as tf
 import numpy as np
 
 
+# get built in locals
+start_globals = list(globals().keys())
+
+
 # https://lars76.github.io/neural-networks/object-detection/losses-for-segmentation/
 
 
@@ -113,6 +117,8 @@ def loss_picker(params):
     if params.loss in globals():
         loss_fn = globals()[params.loss]
     else:
-        raise NotImplementedError("Specified loss method is not implemented in losses.py: " + params.loss)
+        methods = [k for k in globals().keys() if k not in start_globals]
+        raise NotImplementedError(
+            "Specified loss method: '{}' is not one of the available methods: {}".format(params.loss, methods))
 
     return loss_fn

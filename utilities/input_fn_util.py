@@ -529,57 +529,79 @@ def normalize(input_img, mode='zero_mean'):
         raise TypeError("Input image should be np.ndarray but is: " + str(type(input_img)))
 
     # define epsilon for divide by zero errors
-    epsilon = 1e-10
+    EPSILON = 1e-10
 
     # handle zero mean mode
-    if mode == 'zero_mean':
+    def zero_mean(img):
         # perform normalization to zero mean unit variance
-        nonzero_bool = input_img != 0.
-        mean = np.mean(input_img[nonzero_bool], None)
-        std = np.std(input_img[nonzero_bool], None) + epsilon
-        input_img = np.where(nonzero_bool, ((input_img - mean) / std), 0.)  # add 10 to prevent negatives
+        nonzero_bool = img != 0.
+        mean = np.mean(img[nonzero_bool], None)
+        std = np.std(img[nonzero_bool], None) + EPSILON
+        img = np.where(nonzero_bool, ((img - mean) / std), 0.)  # add 10 to prevent negatives
+        return img
 
     # handle ten mean mode
-    elif mode == 'ten_mean':
+    def ten_mean(img):
         # perform normalization to 10 mean unit variance
-        nonzero_bool = input_img != 0.
-        mean = np.mean(input_img[nonzero_bool], None)
-        std = np.std(input_img[nonzero_bool], None) + epsilon
-        input_img = np.where(nonzero_bool, ((input_img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
+        nonzero_bool = img != 0.
+        mean = np.mean(img[nonzero_bool], None)
+        std = np.std(img[nonzero_bool], None) + EPSILON
+        img = np.where(nonzero_bool, ((img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
+        return img
 
     # handle unit mode
-    elif mode == 'unit':
+    def unit(img):
         # perform normalization to [0, 1]
-        input_img *= 1.0 / np.max(input_img)
+        img *= 1.0 / (np.max(img) + EPSILON)
+        return img
 
     # handle mean stdev
-    elif mode == 'mean_stdev':
+    def mean_stdev(img):
         # perform normalization to mean 1000, stdev 200
+        new_mean = 1000.
+        new_stdev = 200.
+        nonzero_bool = img != 0.
+        mean = np.mean(img[nonzero_bool], None)
+        std = np.std(img[nonzero_bool], None) + EPSILON
+        img = np.where(nonzero_bool, ((img - mean) / (std/new_stdev)) + new_mean, 0.)
+        return img
+
+    # handle median interquartile range
+    def med_iqr(img):
+        # perform normalization to median 1000, normalized interquartile range 200
+        # uses factor of 0.7413 to normalize interquartile range to standard deviation
         new_med = 1000.
         new_stdev = 200.
-        nonzero_bool = input_img != 0.
-        mean = np.mean(input_img[nonzero_bool], None)
-        std = np.std(input_img[nonzero_bool], None) + epsilon
-        input_img = np.where(nonzero_bool, ((input_img - mean) / (std/new_stdev)) + new_med, 0.)
+        nonzero_bool = img != 0.
+        med = np.median(img[nonzero_bool], None)
+        niqr = stats.iqr(img[nonzero_bool], axis=None) * 0.7413 + EPSILON
+        img = np.where(nonzero_bool, ((img - med) / (niqr / new_stdev)) + new_med, 0.)
+        return img
 
     # handle NIQ mean stdev
-    elif mode == 'niq_med_stdev_winsorize':
+    def med_iqr_winsorize(img):
         # performs normalized inter-quantile range normalization to median 1000, stdev 200
         # uses factor of 0.7413 to normalize interquartile range to standard deviation
         # also winsorizes data at 1% on high end
         new_med = 1000.
         new_stdev = 200.
-        nonzero_bool = input_img != 0.
-        input_nz = input_img[nonzero_bool]
+        nonzero_bool = img != 0.
+        input_nz = img[nonzero_bool]
         med = np.median(input_nz, None)
-        niqr = stats.iqr(input_nz, axis=None) * 0.7413 + epsilon
+        niqr = stats.iqr(input_nz, axis=None) * 0.7413 + EPSILON
         input_nz = ((input_nz - med) / (niqr / new_stdev)) + new_med
         # winsorize at 1% high end
-        input_img[nonzero_bool] = stats.mstats.winsorize(input_nz, limits=[0., .01])
+        img[nonzero_bool] = stats.mstats.winsorize(input_nz, limits=[0., .01])
+        return img
 
     # handle not implemented
+    if mode in locals():
+        input_img = locals()[mode](input_img)
     else:
-        raise NotImplementedError("Specified normalization mode is not implemented yet: " + mode)
+        # get list of available normalization modes
+        norm_modes = [k for k in locals().keys() if k not in ["input_img", "mode", "EPSILON"]]
+        raise NotImplementedError(
+            "Specified normalization mode: '{}' is not one of the available modes: {}".format(mode, norm_modes))
 
     return input_img
 

@@ -1,6 +1,10 @@
 from tensorflow.keras.optimizers.schedules import ExponentialDecay
 
 
+# get built in locals
+start_globals = list(globals().keys())
+
+
 # constant (no decay)
 def constant(learn_rate):
     if isinstance(learn_rate, (list, tuple)):
@@ -11,10 +15,10 @@ def constant(learn_rate):
     return constant_lr
 
 
-# simple stepwise learning rate decay
+# simple stepwise learning rate decay with lead-in
 def simple_step(learn_rate):
     if not isinstance(learn_rate, (list, tuple)):
-        raise ValueError("Simple step decay requres three values: starting learning rate, lead in epochs, and factor")
+        raise ValueError("Simple step decay requres three values: starting learning rate, lead-in epochs, and factor")
     init_learn_rate = learn_rate[0]
     epochs = learn_rate[1]
     factor = learn_rate[2]
@@ -39,6 +43,14 @@ def exponential(learn_rate):
     return learning_rate_sced
 
 
+# manual schedule
+def manual(learn_rate):
+    def manual_lr(_epoch):
+        lr = learn_rate[_epoch - 1]
+        return lr
+    return manual_lr
+
+
 def learning_rate_picker(init_learn_rate, decay_method):
 
     # sanity checks
@@ -51,7 +63,9 @@ def learning_rate_picker(init_learn_rate, decay_method):
     if decay_method in globals():
         learning_rate_sched = globals()[decay_method](init_learn_rate)
     else:
-        raise NotImplementedError("Specified learning rate decay method is not implemented in learning_rates.py: "
-                                  + decay_method)
+        # get list of available normalization modes
+        methods = [k for k in globals().keys() if k not in start_globals]
+        raise NotImplementedError(
+            "Specified learning rate method: '{}' is not an available method: {}".format(decay_method, methods))
 
     return learning_rate_sched

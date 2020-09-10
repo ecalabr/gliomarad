@@ -1,6 +1,10 @@
 import tensorflow as tf
 
 
+# get built in locals
+start_globals = list(globals().keys())
+
+
 # regular relu
 def relu():
     return tf.keras.layers.ReLU(
@@ -37,5 +41,6 @@ def activation_layer(activation_method):
         try:
             return tf.keras.layers.Activation(activation_method)
         except:
-            raise NotImplementedError("Specified learning rate decay method is not implemented in learning_rates.py: "
-                                  + activation_method)
+            methods = [k for k in globals().keys() if k not in start_globals]
+            raise NotImplementedError(
+                "Specified activation method: '{}' is not an available method: {}".format(activation_method, methods))
