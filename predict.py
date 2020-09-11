@@ -49,7 +49,7 @@ def predict(params, infer_dir):
     return predictions
 
 
-def predictions_2_nii(predictions, infer_dir, out_dir, params):
+def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     # load one of the original images to restore original shape and to use for masking
     if infer_dir[-1] == '/':
         infer_dir = infer_dir[0:-1]  # remove possible trailing slash
@@ -110,9 +110,11 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params):
     else:
         raise ValueError("Dimension mode must be in [2D, 2.5D, 3D] but is: " + str(params.dimension_mode))
 
-    # mask predictions based on original input data
-    # mask = nii.get_fdata() > 0
-    # predictions = predictions * mask
+    # mask predictions based on provided mask
+    if mask:
+        mask_nii = glob(infer_dir + '/*' + mask + '.nii.gz')[0]
+        mask_img = nib.load(mask_nii).get_fdata() > 0
+        predictions = predictions * mask_img
 
     # convert to nifti format and save
     model_name = os.path.basename(params.model_dir)
