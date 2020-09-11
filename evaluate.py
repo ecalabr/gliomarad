@@ -67,14 +67,17 @@ if __name__ == '__main__':
 
     # parse input arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--param_file', default=None,
+    parser.add_argument('-p', '--param_file', default=None,
                         help="Path to params.json")
-    parser.add_argument('--out_dir', default=None,
+    parser.add_argument('-o', '--out_dir', default=None,
                         help="Optionally specify output directory")
-    parser.add_argument('--mask', default=None,
+    parser.add_argument('-m', '--mask', default=None,
                         help="Optionally specify a mask nii prefix for evaluation")
-    parser.add_argument('--mask_val', default=0,
-                        help="Optionally specify a specific value for the mask nii. Default 0 uses all values >1")
+    parser.add_argument('-v', '--mask_val', default=0,
+                        help="Optionally specify a specific value for the mask nii for evaluation calculations. " +
+                             "Default 0 uses all values >0. Predictions will be masked for mask>0 regardless.")
+    parser.add_argument('-x', '--overwrite', default=False, action="store_true",
+                        help="Use this flag to overwrite existing data")
 
     # handle param argument
     args = parser.parse_args()
@@ -107,7 +110,7 @@ if __name__ == '__main__':
 
     # do work
     # predit each output if it doesn't already exist
-    my_pred_niis = []
+    niis_pred = []
     model_name = os.path.basename(my_params.model_dir)
     for i, eval_dir in enumerate(my_eval_dirs):
         if eval_dir[-1] == '/':
@@ -115,11 +118,13 @@ if __name__ == '__main__':
         name_prefix = os.path.basename(eval_dir)
         pred_out = os.path.join(args.out_dir, name_prefix + '_predictions_' + model_name + '.nii.gz')
         print("Predicting directory {} of {}...".format(int(i+1), len(my_eval_dirs)))
-        if not os.path.isfile(pred_out):
+        if not os.path.isfile(pred_out) or args.overwrite:
             pred = predict(my_params, eval_dir)
-            _ = predictions_2_nii(pred, eval_dir, args.out_dir, my_params)
-        my_pred_niis.append(pred_out)
+            _ = predictions_2_nii(pred, eval_dir, args.out_dir, my_params, mask=args.mask)
+        else:
+            print("Prediction {} already exists and will not be overwritten".format(pred_out))
+        niis_pred.append(pred_out)
 
     # evaluate
-    my_metrics = eval_pred(my_params, my_eval_dirs, my_pred_niis, args.out_dir, args.mask, args.mask_val)
+    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.mask, args.mask_val)
     print(np.mean(my_metrics))
