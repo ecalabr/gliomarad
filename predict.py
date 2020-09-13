@@ -37,8 +37,6 @@ def predict(params, infer_dir):
         params.train_dims = params.infer_dims
         # batch size for inference is hard-coded to 1
         params.batch_size = 1
-        # turn off mixed precision for prediction
-        params.strategy = tf.distribute.get_strategy()
         # recreate the model using infer dims as input dims
         model = model_fn(params)
         # load weights from last checkpoint
@@ -151,6 +149,10 @@ if __name__ == '__main__':
     assert args.param_file, "Must specify param file using --param_file"
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
     my_params = Params(args.param_file)
+
+    # turn of distributed strategy and mixed precision
+    my_params.dist_strat = None
+    my_params.mixed_precision = False
 
     # handle best_last argument
     if args.best_last not in ['best_weights', 'last_weights']:

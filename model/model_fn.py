@@ -15,7 +15,7 @@ def model_fn(params):
 
     # handle distribution strategy if not already defined
     if not hasattr(params, 'strategy'):
-        if params.dist_strat.lower() == 'mirrored':
+        if params.dist_strat and params.dist_strat.lower() == 'mirrored':
             params.strategy = tf.distribute.MirroredStrategy()
         else:
             params.strategy = tf.distribute.get_strategy()

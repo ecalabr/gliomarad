@@ -85,6 +85,10 @@ if __name__ == '__main__':
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
     my_params = Params(args.param_file)
 
+    # turn of distributed strategy and mixed precision
+    my_params.dist_strat = None
+    my_params.mixed_precision = False
+
     # determine model dir
     if my_params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
         my_params.model_dir = os.path.dirname(args.param_file)
