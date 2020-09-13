@@ -531,78 +531,38 @@ def normalize(input_img, mode='zero_mean'):
     # define epsilon for divide by zero errors
     EPSILON = 1e-10
 
-    # handle zero mean mode
-    def zero_mean(img):
-        # perform normalization to zero mean unit variance
-        nonzero_bool = img != 0.
-        mean = np.mean(img[nonzero_bool], axis=None)
-        std = np.std(img[nonzero_bool], axis=None) + EPSILON
-        img = np.where(nonzero_bool, ((img - mean) / std), 0.)  # add 10 to prevent negatives
-        return img
-
-    # handle ten mean mode
-    def ten_mean(img):
-        # perform normalization to 10 mean unit variance
-        nonzero_bool = img != 0.
-        mean = np.mean(img[nonzero_bool], axis=None)
-        std = np.std(img[nonzero_bool], axis=None) + EPSILON
-        img = np.where(nonzero_bool, ((img - mean) / std) + 10., 0.)  # add 10 to prevent negatives
-        return img
-
     # handle unit mode
     def unit(img):
         # perform normalization to [0, 1]
         img *= 1.0 / (np.max(img) + EPSILON)
         return img
 
-    # handle mean stdev
-    def mean_stdev(img):
-        # perform normalization to mean 1000, stdev 200
-        new_mean = 1000.
-        new_stdev = 200.
+    # handle mean zscore
+    def zscore(img):
+        # perform z score normalization to 0 mean, unit std
         nonzero_bool = img != 0.
         mean = np.mean(img[nonzero_bool], axis=None)
         std = np.std(img[nonzero_bool], axis=None) + EPSILON
-        img = np.where(nonzero_bool, ((img - mean) / (std/new_stdev)) + new_mean, 0.)
+        img = np.where(nonzero_bool, ((img - mean) / std), 0.)
         return img
 
     # handle mean stdev
-    def mean_stdev2(img):
-        # perform normalization to mean 1000, stdev 200
-        new_mean = 2000.
-        new_stdev = 200.
+    def mean_stdev(img, new_mean=1000., new_std=200.):
+        # perform normalization to specified mean, stdev
         nonzero_bool = img != 0.
         mean = np.mean(img[nonzero_bool], axis=None)
         std = np.std(img[nonzero_bool], axis=None) + EPSILON
-        img = np.where(nonzero_bool, ((img - mean) / (std / new_stdev)) + new_mean, 0.)
+        img = np.where(nonzero_bool, ((img - mean) / (std/new_std)) + new_mean, 0.)
         return img
 
     # handle median interquartile range
-    def med_iqr(img):
-        # perform normalization to median 4000, normalized interquartile range 200
+    def med_iqr(img, new_med=0., new_stdev=1.):
+        # perform normalization to median, normalized interquartile range
         # uses factor of 0.7413 to normalize interquartile range to standard deviation
-        new_med = 1000.
-        new_stdev = 200.
         nonzero_bool = img != 0.
         med = np.median(img[nonzero_bool], axis=None)
         niqr = stats.iqr(img[nonzero_bool], axis=None) * 0.7413 + EPSILON
         img = np.where(nonzero_bool, ((img - med) / (niqr / new_stdev)) + new_med, 0.)
-        return img
-
-    # handle NIQ mean stdev
-    def med_iqr_winsorize(img):
-        # performs normalized inter-quantile range normalization to median 1000, stdev 200
-        # uses factor of 0.7413 to normalize interquartile range to standard deviation
-        # also winsorizes data at 1% on high end
-        new_med = 1000.
-        new_stdev = 200.
-        nonzero_bool = img != 0.
-        input_nz = img[nonzero_bool]
-        med = np.median(input_nz, axis=None)
-        niqr = stats.iqr(input_nz, axis=None) * 0.7413 + EPSILON
-        input_nz = ((input_nz - med) / (niqr / new_stdev)) + new_med
-        # winsorize at 1% high end
-        img[nonzero_bool] = stats.mstats.winsorize(input_nz, limits=[0., .01])
         return img
 
     # handle not implemented

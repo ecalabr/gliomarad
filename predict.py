@@ -4,6 +4,7 @@ import os
 # set tensorflow logging to FATAL before importing
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
+import tensorflow as tf
 from utilities.utils import Params, set_logger
 from utilities.patch_input_fn import patch_input_fn
 from model.model_fn import model_fn
@@ -34,7 +35,10 @@ def predict(params, infer_dir):
         print("- Loading checkpoint from {}...".format(latest_ckpt))
         # net_builder input layer uses train_dims, so set these to infer dims to allow different size inference
         params.train_dims = params.infer_dims
-        params.batch_size = 1  # batch size for inference is hard-coded to 1
+        # batch size for inference is hard-coded to 1
+        params.batch_size = 1
+        # turn off mixed precision for prediction
+        params.strategy = tf.distribute.get_strategy()
         # recreate the model using infer dims as input dims
         model = model_fn(params)
         # load weights from last checkpoint
