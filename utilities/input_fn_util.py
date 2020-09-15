@@ -1028,9 +1028,10 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
             # otherwise they would simply sum up
             return tape.gradient(_y, _x, output_gradients=y) / grad
 
-    # load original data but convert to only one channel to match output [batch, x, y, z, channel]
+    # load original data as a dummy and convert channel dim size to match output [batch, x, y, z, channel]
     data = load_multicon_preserve_size(infer_dir, data_prefix, data_format, data_plane)
-    # data = data[:, :, :, [1]] if params.data_format == 'channels_last' else data[:, [1], :, :]
+    data = np.zeros((data.shape[0:4] + (params.output_filters,)), dtype=np.float32)
+    # data = data[:, :, :, [0]] if params.data_format == 'channels_last' else data[:, [0], :, :]
 
     # get shape of patches as they would have been generated during inference
     dummy_shape = tf.shape(input=extract_patches(data))
@@ -1045,7 +1046,7 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
     predictions = tf.reshape(predictions, dummy_shape)
 
     # handle argmax
-    predictions = tf.argmax(input=tf.nn.softmax(predictions, axis=-1), axis=-1)
+    # predictions = tf.argmax(input=tf.nn.softmax(predictions, axis=-1), axis=-1)
 
     # reconstruct
     reconstructed = extract_patches_inverse(data, predictions)
@@ -1090,9 +1091,10 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
             # otherwise they would simply sum up
             return tape.gradient(_y, _x, output_gradients=y) / grad
 
-    # load original data but convert to only one channel to match output [batch, x, y, z, channel]
+    # load original data as a dummy and convert channel dim size to match output [batch, x, y, z, channel]
     data = load_multicon_preserve_size_3d(infer_dir, data_prefix, data_format, data_plane, norm, norm_mode)
-    data = data[:, :, :, :, [1]] if params.data_format == 'channels_last' else data[:, [1], :, :, :]
+    data = np.zeros((data.shape[0:4] + (params.output_filters,)), dtype=np.float32)
+    # data = data[:, :, :, :, [0]] if params.data_format == 'channels_last' else data[:, [0], :, :, :]
 
     # get shape of patches as they would have been generated during inference
     dummy_patches = extract_patches(data)
