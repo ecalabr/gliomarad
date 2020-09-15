@@ -88,10 +88,11 @@ def train(param_file):
     # checkpoint save callback
     if not os.path.isdir(checkpoint_path):
         os.mkdir(checkpoint_path)
-    if eval_inputs:
+    # save validation loss in name if evaluation files are passed, else use train loss
+    if params.train_fract < 1.:
         ckpt = os.path.join(checkpoint_path, 'epoch_{epoch:02d}_valloss_{val_loss:.4f}.hdf5')
     else:
-        ckpt = os.path.join(checkpoint_path, 'epoch_{epoch:02d}.hdf5')
+        ckpt = os.path.join(checkpoint_path, 'epoch_{epoch:02d}_trainloss_{loss:.4f}.hdf5')
     checkpoint = ModelCheckpoint(
         ckpt,
         monitor='val_loss',

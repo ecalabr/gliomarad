@@ -266,8 +266,14 @@ def patch_input_fn(params, mode, infer_dir=None):
         with open(study_dirs_filepath) as f:
             study_dirs = json.load(f)
     else:
-        study_dirs = glob(params.data_dir + '/*/')
-        study_dirs.sort()  # study dirs sorted in alphabetical order
+        # get all subdirectories in data_dir
+        study_dirs = [item for item in glob(params.data_dir + '/*/') if os.path.isdir(item)]
+        # make sure all necessary files are present in each folder
+        study_dirs = [study for study in study_dirs if all(
+            [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
+             for item in params.data_prefix + params.label_prefix])]
+        # study dirs sorted in alphabetical order for reproducible results
+        study_dirs.sort()
         # randomly shuffle input directories for training using a user defined randomization seed
         random.Random(params.random_state).shuffle(study_dirs)
         # directory list json is saved AFTER randomization
