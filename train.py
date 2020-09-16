@@ -22,8 +22,22 @@ def train(param_file):
     # load params from param file
     params = Params(param_file)
 
+    # determine model dir
+    if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
+        params.model_dir = os.path.dirname(param_file)
+    if not os.path.isdir(params.model_dir):
+        raise ValueError("Specified model directory does not exist: {}".format(params.model_dir))
+
+    # Set the logger, delete old log file if overwrite param is set to yes
+    log_path = os.path.join(params.model_dir, 'train.log')
+    if os.path.isfile(log_path) and params.overwrite:
+        os.remove(log_path)
+    set_logger(log_path)
+    logging.info("Using model directory {}".format(params.model_dir))
+    logging.info("Using logging file: {}".format(log_path))
+    logging.info("Using TensorFlow version {}".format(tf.__version__))
+
     # determine distribute strategy
-    # model distribution strategy
     if params.dist_strat.lower() == 'mirrored':
         logging.info("Using Mirrored distribution strategy")
         params.strategy = tf.distribute.MirroredStrategy()
@@ -31,24 +45,10 @@ def train(param_file):
         params.strategy = tf.distribute.get_strategy()
     params.batch_size = params.batch_size * params.strategy.num_replicas_in_sync
 
-    # determine model dir
-    if params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
-        params.model_dir = os.path.dirname(param_file)
-    if not os.path.isdir(params.model_dir):
-        raise ValueError("Specified model directory does not exist: {}".format(params.model_dir))
-
     # check other important params
     if not os.path.isdir(params.data_dir):
         raise ValueError("Specified data directory does not exist: {}".format(params.data_dir))
-
-    # Set the logger, delete old log file if overwrite param is set to yes
-    log_path = os.path.join(params.model_dir, 'train.log')
-    if os.path.isfile(log_path) and params.overwrite:
-        print("Overwriting existing log...")
-        os.remove(log_path)
-    set_logger(log_path)
-    logging.info("Log file created at: {}".format(log_path))
-    logging.info("Using TensorFlow version {}".format(tf.__version__))
+    logging.info("Using data directory {}".format(params.data_dir))
 
     # set up checkpoint directories and determine current epoch
     checkpoint_path = os.path.join(params.model_dir, 'checkpoints')
@@ -58,11 +58,8 @@ def train(param_file):
     checkpoints = glob(checkpoint_path + '/*.hdf5')
     if checkpoints and not params.overwrite:
         latest_ckpt = max(checkpoints, key=os.path.getctime)
-        epoch_num = os.path.splitext(os.path.basename(latest_ckpt).split('epoch_')[1])[0]
-        # handle saves with validation loss in filename
-        if '_valloss' in epoch_num:
-            epoch_num = epoch_num.split('_valloss')[0]
-        completed_epochs = int(epoch_num)
+        completed_epochs = int(os.path.splitext(os.path.basename(latest_ckpt).split('epoch_')[1])[0].split('_')[0])
+        logging.info("Checkpoint exists for epoch {}".format(completed_epochs))
     else:
         completed_epochs = 0
 
@@ -72,7 +69,7 @@ def train(param_file):
 
     # Check for existing model and load if exists, otherwise create from scratch
     if latest_ckpt and not params.overwrite:
-        print("Found checkpoint file {}, attempting to resume...".format(latest_ckpt))
+        logging.info("Loading checkpoint file {}".format(latest_ckpt))
         # Load model checkpoints:
         model = model_fn(params)  # recreating model is neccesary if custom loss function is being used
         model.load_weights(latest_ckpt)
@@ -115,6 +112,9 @@ def train(param_file):
 
     # combine callbacks for the model
     train_callbacks = [learning_rate, checkpoint, tensorboard]
+
+    # report
+    logging.info("Training for {} total epochs starting at epoch {}".format(params.num_epochs, completed_epochs + 1))
 
     # TRAINING
     model.fit(
