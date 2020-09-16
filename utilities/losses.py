@@ -74,13 +74,13 @@ def MAPE(y_true, y_pred, sample_weight=None):
 
 
 # softmax cross entropy
-def softmaxCE():
-    return tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+def softmaxCE(y_true, y_pred):
+    return tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)(y_true, y_pred)
 
 
 # binary cross entropy
-def binaryCE():
-    return tf.keras.losses.BinaryCrossentropy(from_logits=False)
+def binaryCE(y_true, y_pred):
+    return tf.keras.losses.BinaryCrossentropy(from_logits=False)(y_true, y_pred)
 
 
 # generalized DICE loss for 2D and 3D networks

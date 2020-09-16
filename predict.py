@@ -53,8 +53,6 @@ def predict(params, infer_dir):
 
 def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     # load one of the original images to restore original shape and to use for masking
-    if infer_dir[-1] == '/':
-        infer_dir = infer_dir[0:-1]  # remove possible trailing slash
     nii1 = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
     affine = nii1.affine
     shape = np.array(nii1.shape)
