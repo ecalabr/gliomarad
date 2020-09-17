@@ -45,16 +45,18 @@ def predict(params, infer_dir):
     else:
         raise ValueError("No checkpoints found at {}".format(checkpoint_path))
 
-    # infer
+    # infer - assuming that model returns probabilities
     predictions = model.predict(infer_inputs)
 
     return predictions
 
 
 def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
+    # assumes that model yeilds probabilities
     # load one of the original images to restore original shape and to use for masking
     nii1 = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
     affine = nii1.affine
+    hdr = nii1.header
     shape = np.array(nii1.shape)
     name_prefix = os.path.basename(infer_dir)
 
@@ -119,7 +121,7 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     # convert to nifti format and save
     model_name = os.path.basename(params.model_dir)
     nii_out = os.path.join(out_dir, name_prefix + '_predictions_' + model_name + '.nii.gz')
-    img = nib.Nifti1Image(predictions, affine)
+    img = nib.Nifti1Image(predictions, affine, hdr)
     logging.info("- Saving predictions to: " + nii_out)
     nib.save(img, nii_out)
     if not os.path.isfile(nii_out):

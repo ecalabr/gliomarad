@@ -14,6 +14,7 @@ from utilities.utils import set_logger
 from utilities.patch_input_fn import patch_input_fn
 from utilities.learning_rates import learning_rate_picker
 from model.model_fn import model_fn
+import numpy as np
 
 
 # define functions
@@ -34,23 +35,33 @@ def train(param_file):
         os.remove(log_path)
     set_logger(log_path)
     logging.info("Using model directory {}".format(params.model_dir))
-    logging.info("Using logging file: {}".format(log_path))
+    logging.info("Using logging file {}".format(log_path))
     logging.info("Using TensorFlow version {}".format(tf.__version__))
 
-    # determine distribute strategy
-    if params.dist_strat.lower() == 'mirrored':
-        logging.info("Using Mirrored distribution strategy")
-        params.strategy = tf.distribute.MirroredStrategy()
-    else:
-        params.strategy = tf.distribute.get_strategy()
-    params.batch_size = params.batch_size * params.strategy.num_replicas_in_sync
-
-    # check other important params
+    # Make sure data directory exists
     if not os.path.isdir(params.data_dir):
         raise ValueError("Specified data directory does not exist: {}".format(params.data_dir))
     logging.info("Using data directory {}".format(params.data_dir))
 
-    # set up checkpoint directories and determine current epoch
+    # determine distribution strategy for multi GPU training
+    if params.dist_strat.lower() == 'mirrored':
+        logging.info("Using Mirrored distribution strategy")
+        params.strategy = tf.distribute.MirroredStrategy()
+        # adjust batch size and learning rate to compensate for mirrored replicas
+        # batch size is multiplied by num replicas
+        params.batch_size = params.batch_size * params.strategy.num_replicas_in_sync
+        logging.info(
+            "Batch size adjusted to {} for {} replicas".format(params.batch_size, params.strategy.num_replicas_in_sync))
+        # initial learning rate is multiplied by squre root of replicas
+        params.learning_rate[0] = params.learning_rate[0] * np.sqrt(params.strategy.num_replicas_in_sync)
+        logging.info(
+            "Initial learning rate adjusted by a factor of {} (root {} for {} replicas)".format(
+                np.sqrt(params.strategy.num_replicas_in_sync), params.strategy.num_replicas_in_sync,
+                params.strategy.num_replicas_in_sync))
+    else:
+        params.strategy = tf.distribute.get_strategy()
+
+    # Determine checkpoint directories and determine current epoch
     checkpoint_path = os.path.join(params.model_dir, 'checkpoints')
     latest_ckpt = None
     if not os.path.isdir(checkpoint_path):
@@ -69,16 +80,17 @@ def train(param_file):
 
     # Check for existing model and load if exists, otherwise create from scratch
     if latest_ckpt and not params.overwrite:
-        logging.info("Loading checkpoint file {}".format(latest_ckpt))
-        # Load model checkpoints:
-        model = model_fn(params)  # recreating model is neccesary if custom loss function is being used
+        logging.info("Creating the model to resume checkpoint")
+        model = model_fn(params)  # recreating model may be neccesary if custom loss function is being used
+        logging.info("Loading model weights checkpoint file {}".format(latest_ckpt))
         model.load_weights(latest_ckpt)
     else:
-        # Define the model
+        # Define the model from scratch
         logging.info("Creating the model...")
         model = model_fn(params)
 
-    # SET CALLBACKS
+    # SET CALLBACKS FOR TRAINING FUNCTION
+
     # define learning rate schedule callback for model
     learning_rate = LearningRateScheduler(learning_rate_picker(params.learning_rate, params.learning_rate_decay))
 
@@ -113,10 +125,8 @@ def train(param_file):
     # combine callbacks for the model
     train_callbacks = [learning_rate, checkpoint, tensorboard]
 
-    # report
-    logging.info("Training for {} total epochs starting at epoch {}".format(params.num_epochs, completed_epochs + 1))
-
     # TRAINING
+    logging.info("Training for {} total epochs starting at epoch {}".format(params.num_epochs, completed_epochs + 1))
     model.fit(
         train_inputs,
         epochs=params.num_epochs,
@@ -126,9 +136,9 @@ def train(param_file):
         validation_data=eval_inputs,
         shuffle=False,
         verbose=1)
-
-    # completion logging
-    logging.info("Successfully trained model for {} epochs".format(params.num_epochs - completed_epochs))
+    logging.info(
+        "Successfully trained model for {} epochs ({} total epochs)".format(params.num_epochs - completed_epochs,
+                                                                            params.num_epochs))
 
 # executed  as script
 if __name__ == '__main__':

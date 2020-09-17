@@ -1045,9 +1045,6 @@ def reconstruct_infer_patches(predictions, infer_dir, params):
     # reshape predictions to original patch shape
     predictions = tf.reshape(predictions, dummy_shape)
 
-    # handle argmax
-    # predictions = tf.argmax(input=tf.nn.softmax(predictions, axis=-1), axis=-1)
-
     # reconstruct
     reconstructed = extract_patches_inverse(data, predictions)
     output = np.squeeze(reconstructed.numpy())
