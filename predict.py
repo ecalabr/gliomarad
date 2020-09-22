@@ -1,10 +1,6 @@
 import argparse
 import logging
 import os
-# set tensorflow logging to FATAL before importing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
-logging.getLogger('tensorflow').setLevel(logging.FATAL)
-import tensorflow as tf
 from utilities.utils import Params, set_logger
 from utilities.patch_input_fn import patch_input_fn
 from model.model_fn import model_fn
@@ -13,6 +9,9 @@ import nibabel as nib
 import numpy as np
 from utilities.input_fn_util import reconstruct_infer_patches, reconstruct_infer_patches_3d
 
+# set tensorflow logging to FATAL before importing
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
+logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
 # define funiction to predict one inference directory
 def predict(params, infer_dir):
@@ -56,7 +55,6 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     # load one of the original images to restore original shape and to use for masking
     nii1 = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
     affine = nii1.affine
-    hdr = nii1.header
     shape = np.array(nii1.shape)
     name_prefix = os.path.basename(infer_dir)
 
@@ -121,7 +119,7 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     # convert to nifti format and save
     model_name = os.path.basename(params.model_dir)
     nii_out = os.path.join(out_dir, name_prefix + '_predictions_' + model_name + '.nii.gz')
-    img = nib.Nifti1Image(predictions, affine, hdr)
+    img = nib.Nifti1Image(predictions, affine)
     logging.info("- Saving predictions to: " + nii_out)
     nib.save(img, nii_out)
     if not os.path.isfile(nii_out):
@@ -180,4 +178,6 @@ if __name__ == '__main__':
 
     # do work
     pred = predict(my_params, args.infer_dir)
+    import tensorflow as tf
+    tf.compat.v1.reset_default_graph()
     nii = predictions_2_nii(pred, args.infer_dir, args.out_dir, my_params)
