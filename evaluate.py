@@ -15,7 +15,7 @@ from nipype.interfaces.ants import MeasureImageSimilarity
 
 
 # define funiction to predict and evaluate one directory
-def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
+def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
     # get sorted lists of true niis, predicted niis, and masks
     true_niis = sorted([glob(eval_d + '/*' + params.label_prefix[0] + '.nii.gz')[0] for eval_d in eval_dirs])
     pred_niis = sorted(pred_niis)
@@ -38,24 +38,21 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
             # load mask
             if mask:
                 mask_im = nib.load(mask_niis[ind]).get_fdata()
-                if mask_val == 0:
-                    nonzero_inds = np.nonzero(mask_im * true_im)
-                else:
-                    nonzero_inds = np.nonzero((mask_im == mask_val) * true_im)
-            else:
-                nonzero_inds = np.nonzero(true_im)
+                true_im = true_im * mask_im
             # do normalization
-            true_im = normalize(true_im, mode=params.norm_mode)[nonzero_inds]
+            true_im = normalize(true_im, mode=params.norm_mode)
             # save results in eval directory and update true_im name
             new_true_nii = nib.Nifti1Image(true_im, true_nii.affine, true_nii.header)
             true_nii_out = os.path.join(out_dir, os.path.basename(true_niis[ind]).split('.nii.gz')[0] + 'n.nii.gz')
             nib.save(new_true_nii, true_nii_out)
-            true_nii = new_true_nii
+            true_nii = true_nii_out
         else:
             true_nii = true_niis[ind]
 
         # perform image comparrison using CC
         sim = MeasureImageSimilarity()
+        if not verbose:
+            sim.terminal_output = 'allatonce'
         sim.inputs.dimension = 3
         sim.inputs.metric = 'CC'
         sim.inputs.fixed_image = true_nii
@@ -67,18 +64,18 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
         if mask:
             sim.inputs.fixed_image_mask = mask_niis[ind]
             sim.inputs.moving_image_mask = mask_niis[ind]
-        print(sim.cmdline)
-        cc = sim.run()
+        if verbose:
+            print(sim.cmdline)
+        cc = np.abs(sim.run().outputs.similarity)
 
         # MI
-        sim.inputs.metri = 'MI'
+        sim.inputs.metric = 'MI'
         sim.inputs.radius_or_number_of_bins = 32
-        mi = sim.run()
+        mi = np.abs(sim.run().outputs.similarity)
 
         # MSE
         sim.inputs.metric = 'MeanSquares'
-        sim.inputs.radius_or_number_of_bins = 4
-        ms = sim.run()
+        ms = np.abs(sim.run().outputs.similarity)
 
         # build dict
         tmp = {pred_nii: {'CC': cc, 'MI' : mi, 'MSE' : ms}}
@@ -89,7 +86,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
     # save metrics
     # use prefix string to ID which mask was used for evaluation
     if mask:
-        mask_str = mask + '_{}'.format(mask_val)
+        mask_str = mask
     else:
         mask_str = 'no_mask'
     metrics_filepath = os.path.join(out_dir, mask_str + '_eval_metrics.json')
@@ -101,7 +98,6 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
     mi_avg = np.mean([metrics_dict[item]['MI'] for item in metrics_dict.keys()])
     ms_avg = np.mean([metrics_dict[item]['MSE'] for item in metrics_dict.keys()])
     metrics = [cc_avg, mi_avg, ms_avg]
-    print("Mean error: CC = {}, MI = {}, MSE = {}".format(cc_avg, mi_avg, ms_avg))
 
     return metrics
 
@@ -117,9 +113,8 @@ if __name__ == '__main__':
                         help="Optionally specify output directory")
     parser.add_argument('-m', '--mask', default=None,
                         help="Optionally specify a mask nii prefix for evaluation")
-    parser.add_argument('-v', '--mask_val', default=0,
-                        help="Optionally specify a specific value for the mask nii for evaluation calculations. " +
-                             "Default 0 uses all values >0. Predictions will be masked for mask>0 regardless.")
+    parser.add_argument('-v', '--verbose', default=False, action="store_true",
+                        help="Verbose terminal output flag")
     parser.add_argument('-x', '--overwrite', default=False, action="store_true",
                         help="Use this flag to overwrite existing data")
 
@@ -174,5 +169,5 @@ if __name__ == '__main__':
         niis_pred.append(pred_out)
 
     # evaluate
-    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.mask, args.mask_val)
-    print(np.mean(my_metrics))
+    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.mask, verbose=args.verbose)
+    print("Mean error: CC = {}, MI = {}, MSE = {}".format(my_metrics[0], my_metrics[1], my_metrics[2]))
