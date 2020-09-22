@@ -11,11 +11,12 @@ import numpy as np
 from utilities.input_fn_util import normalize
 import json
 from predict import predict, predictions_2_nii
+from nipype.interfaces.ants import MeasureImageSimilarity
 
 
 # define funiction to predict and evaluate one directory
 def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
-    # get sorted lists of true niis and predicted niis
+    # get sorted lists of true niis, predicted niis, and masks
     true_niis = sorted([glob(eval_d + '/*' + params.label_prefix[0] + '.nii.gz')[0] for eval_d in eval_dirs])
     pred_niis = sorted(pred_niis)
     if mask:
@@ -23,31 +24,67 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
     else:
         mask_niis = []
 
-    # loop through each nii
-    metrics = []
+    # set up metrics variables for collecting results
     metrics_dict = {}
-    n = 0
-    for true_nii, pred_nii in zip(true_niis, pred_niis):
-        print("Evaluating directory {} of {}...".format(n+1, len(pred_niis)))
-        true_im = nib.load(true_nii).get_fdata()
-        true_im_nonzero = np.nonzero(true_im)
-        # handle mask and mask val
-        if mask:
-            mask_im = nib.load(mask_niis[n]).get_fdata()
-            if mask_val == 0:
-                nonzero_inds = np.nonzero(mask_im * true_im)
+    # loop through each pair of niis for comparissons
+    for ind, pred_nii in enumerate(pred_niis):
+        print("Evaluating directory {} of {}...".format(ind+1, len(pred_niis)))
+
+        # if normalization is specified, then normalize the true nii
+        if params.norm_labels:
+            # load true image
+            true_nii = nib.load(true_niis[ind])
+            true_im = true_nii.get_fdata()
+            # load mask
+            if mask:
+                mask_im = nib.load(mask_niis[ind]).get_fdata()
+                if mask_val == 0:
+                    nonzero_inds = np.nonzero(mask_im * true_im)
+                else:
+                    nonzero_inds = np.nonzero((mask_im == mask_val) * true_im)
             else:
-                nonzero_inds = np.nonzero((mask_im == mask_val) * true_im)
+                nonzero_inds = np.nonzero(true_im)
+            # do normalization
+            true_im = normalize(true_im, mode=params.norm_mode)[nonzero_inds]
+            # save results in eval directory and update true_im name
+            new_true_nii = nib.Nifti1Image(true_im, true_nii.affine, true_nii.header)
+            true_nii_out = os.path.join(out_dir, os.path.basename(true_niis[ind]).split('.nii.gz')[0] + 'n.nii.gz')
+            nib.save(new_true_nii, true_nii_out)
+            true_nii = new_true_nii
         else:
-            nonzero_inds = true_im_nonzero
-        true_im = normalize(true_im, mode=params.norm_mode)[nonzero_inds]
-        pred_im = np.squeeze(nib.load(pred_nii).get_fdata()[nonzero_inds])
-        mape = np.mean(np.abs((true_im - pred_im) / true_im))
-        metrics.append(mape)
-        metrics_dict.update({os.path.dirname(true_nii): mape})
-        n += 1
-    # add mean metrics to metrics_dict
-    metrics_dict.update({'mean': np.mean(metrics)})
+            true_nii = true_niis[ind]
+
+        # perform image comparrison using CC
+        sim = MeasureImageSimilarity()
+        sim.inputs.dimension = 3
+        sim.inputs.metric = 'CC'
+        sim.inputs.fixed_image = true_nii
+        sim.inputs.moving_image = pred_nii
+        sim.inputs.metric_weight = 1.0
+        sim.inputs.radius_or_number_of_bins = 4
+        sim.inputs.sampling_strategy = 'None'  # None = dense sampling
+        sim.inputs.sampling_percentage = 1.0
+        if mask:
+            sim.inputs.fixed_image_mask = mask_niis[ind]
+            sim.inputs.moving_image_mask = mask_niis[ind]
+        print(sim.cmdline)
+        cc = sim.run()
+
+        # MI
+        sim.inputs.metri = 'MI'
+        sim.inputs.radius_or_number_of_bins = 32
+        mi = sim.run()
+
+        # MSE
+        sim.inputs.metric = 'MeanSquares'
+        sim.inputs.radius_or_number_of_bins = 4
+        ms = sim.run()
+
+        # build dict
+        tmp = {pred_nii: {'CC': cc, 'MI' : mi, 'MSE' : ms}}
+
+        # update metrics dict
+        metrics_dict.update(tmp)
 
     # save metrics
     # use prefix string to ID which mask was used for evaluation
@@ -58,6 +95,13 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, mask_val):
     metrics_filepath = os.path.join(out_dir, mask_str + '_eval_metrics.json')
     with open(metrics_filepath, 'w+', encoding='utf-8') as fi:
         json.dump(metrics_dict, fi, ensure_ascii=False, indent=4)
+
+    # print averages
+    cc_avg = np.mean([metrics_dict[item]['CC'] for item in metrics_dict.keys()])
+    mi_avg = np.mean([metrics_dict[item]['MI'] for item in metrics_dict.keys()])
+    ms_avg = np.mean([metrics_dict[item]['MSE'] for item in metrics_dict.keys()])
+    metrics = [cc_avg, mi_avg, ms_avg]
+    print("Mean error: CC = {}, MI = {}, MSE = {}".format(cc_avg, mi_avg, ms_avg))
 
     return metrics
 
