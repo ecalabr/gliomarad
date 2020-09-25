@@ -31,7 +31,7 @@ def unet_3d(params):
     unet_layout = layer_layout[:-1]
 
     # input layer
-    inputs = Input(shape=train_dims, batch_size=batch_size)
+    inputs = Input(shape=train_dims, batch_size=batch_size, dtype='float32')
 
     # initial convolution layer
     x = Conv3D(filt, ksize, padding='same', data_format=dfmt, dtype=policy)(inputs)
@@ -74,12 +74,12 @@ def unet_3d(params):
 
     # output layer
     if params.final_layer == "conv":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.sigmoid(x)
     elif params.final_layer == "softmax":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
@@ -110,7 +110,7 @@ def unet_3d_bneck(params):
     unet_layout = layer_layout[:-1]
 
     # input layer
-    inputs = Input(shape=train_dims, batch_size=batch_size)
+    inputs = Input(shape=train_dims, batch_size=batch_size, dtype='float32')
 
     # initial convolution layer
     x = Conv3D(filt, ksize, padding='same', data_format=dfmt, dtype=policy)(inputs)
@@ -157,12 +157,12 @@ def unet_3d_bneck(params):
 
     # output layer - no mixed precision data policy
     if params.final_layer == "conv":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.sigmoid(x)
     elif params.final_layer == "softmax":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
@@ -193,7 +193,7 @@ def unet_25d_bneck(params):
     unet_layout = layer_layout[:-1]
 
     # input layer
-    inputs = Input(shape=train_dims, batch_size=batch_size)
+    inputs = Input(shape=train_dims, batch_size=batch_size, dtype='float32')
 
     # initial convolution layer
     x = Conv3D(filt, ksize, padding='same', data_format=dfmt, dtype=policy)(inputs)
@@ -242,12 +242,12 @@ def unet_25d_bneck(params):
 
     # output layer
     if params.final_layer == "conv":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.sigmoid(x)
     elif params.final_layer == "softmax":
-        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
@@ -278,7 +278,7 @@ def unet_2d_bneck(params):
     unet_layout = layer_layout[:-1]
 
     # input layer
-    inputs = Input(shape=train_dims, batch_size=batch_size)
+    inputs = Input(shape=train_dims, batch_size=batch_size, dtype='float32')
 
     # initial convolution layer
     x = Conv2D(filt, ksize, padding='same', data_format=dfmt, dtype=policy)(inputs)
@@ -325,12 +325,12 @@ def unet_2d_bneck(params):
 
     # output layer
     if params.final_layer == "conv":
-        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
     elif params.final_layer == "sigmoid":
-        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.sigmoid(x)
     elif params.final_layer == "softmax":
-        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt)(x)
+        x = Conv2D(filters=output_filt, kernel_size=[1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
@@ -356,8 +356,8 @@ def net_builder(params):
     # put current policy in params for use in model construction
     params.policy = policy
 
-    # set default policy to float32, then mixed precision is specified per layer if specified
-    mixed_precision.set_policy(mixed_precision.Policy('float32'))  # default policy for layers
+    # set default policy, subsequent per layer dtype can be specified
+    mixed_precision.set_policy(policy)  # default policy for layers
 
     # determine network
     if params.model_name in globals():
