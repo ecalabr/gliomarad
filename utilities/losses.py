@@ -31,10 +31,11 @@ def wMSE(y_true_weights, y_pred):
 # 2.5 dimensional MSE loss
 def MSE25d(y_true, y_pred):
     # weight loss such that middle slice is is strongest weighted [b, x, y, z, c]
-    z_dim = 9
+    z_dim = y_pred.get_shape().as_list()[3]
     w_vect = np.ones(z_dim)
-    w_vect[int(round(z_dim/2.))] = z_dim - 1
-    weights = tf.ones_like(y_true, dtype=tf.float32) * np.expand_dims(w_vect, axis=(0,1,2,4))
+    w_vect[int(round(z_dim/2.))] = z_dim - 1  # center slice is weighted as much as rest of slices combined
+    weights = tf.ones_like(y_true, dtype=tf.float32) * tf.constant(np.expand_dims(w_vect, axis=(0, 1, 2, 4)),
+                                                                   dtype=tf.float32)
     return tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)(y_true, y_pred,
                                                                                       sample_weight=weights)
 

@@ -114,7 +114,7 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     if mask:
         mask_nii = glob(infer_dir + '/*' + mask + '.nii.gz')[0]
         mask_img = nib.load(mask_nii).get_fdata() > 0
-        predictions = predictions * mask_img
+        predictions = np.squeeze(predictions) * mask_img
 
     # convert to nifti format and save
     model_name = os.path.basename(params.model_dir)

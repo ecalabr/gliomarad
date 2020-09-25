@@ -53,11 +53,11 @@ def train(param_file):
         logging.info(
             "Batch size adjusted to {} for {} replicas".format(params.batch_size, params.strategy.num_replicas_in_sync))
         # initial learning rate is multiplied by squre root of replicas
-        params.learning_rate[0] = params.learning_rate[0] * np.sqrt(params.strategy.num_replicas_in_sync)
-        logging.info(
-            "Initial learning rate adjusted by a factor of {} (root {} for {} replicas)".format(
-                np.sqrt(params.strategy.num_replicas_in_sync), params.strategy.num_replicas_in_sync,
-                params.strategy.num_replicas_in_sync))
+        # params.learning_rate[0] = params.learning_rate[0] * np.sqrt(params.strategy.num_replicas_in_sync)
+        # logging.info(
+        #     "Initial learning rate adjusted by a factor of {} (root {} for {} replicas)".format(
+        #         np.sqrt(params.strategy.num_replicas_in_sync), params.strategy.num_replicas_in_sync,
+        #         params.strategy.num_replicas_in_sync))
     else:
         params.strategy = tf.distribute.get_strategy()
 

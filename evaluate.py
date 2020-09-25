@@ -24,6 +24,11 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
     else:
         mask_niis = []
 
+    # add crop to mask to allow for smaller brain masks to be used
+    # ExtractRegionFromImageByMask
+    # Extract a sub-region from image using the bounding box from a label image, with optional padding radius.
+    # Usage : ExtractRegionFromImageByMask ImageDimension inputImage outputImage labelMaskImage [label=1] [padRadius=0]
+
     # set up metrics variables for collecting results
     metrics_dict = {}
     # loop through each pair of niis for comparissons
@@ -38,7 +43,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
             # load mask
             if mask:
                 mask_im = nib.load(mask_niis[ind]).get_fdata()
-                true_im = true_im * mask_im
+                true_im = true_im * (mask_im > 0.)
             # do normalization
             true_im = normalize(true_im, mode=params.norm_mode)
             # save results in eval directory and update true_im name
@@ -83,6 +88,13 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
         # update metrics dict
         metrics_dict.update(tmp)
 
+    # get metric averages
+    cc_avg = np.mean([metrics_dict[item]['CC'] for item in metrics_dict.keys()])
+    mi_avg = np.mean([metrics_dict[item]['MI'] for item in metrics_dict.keys()])
+    ms_avg = np.mean([metrics_dict[item]['MSE'] for item in metrics_dict.keys()])
+    metrics_dict.update({"Averages": {"CC": cc_avg, "MI": mi_avg, "MSE": ms_avg}})
+    metrics = [cc_avg, mi_avg, ms_avg]
+
     # save metrics
     # use prefix string to ID which mask was used for evaluation
     if mask:
@@ -92,12 +104,6 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
     metrics_filepath = os.path.join(out_dir, mask_str + '_eval_metrics.json')
     with open(metrics_filepath, 'w+', encoding='utf-8') as fi:
         json.dump(metrics_dict, fi, ensure_ascii=False, indent=4)
-
-    # print averages
-    cc_avg = np.mean([metrics_dict[item]['CC'] for item in metrics_dict.keys()])
-    mi_avg = np.mean([metrics_dict[item]['MI'] for item in metrics_dict.keys()])
-    ms_avg = np.mean([metrics_dict[item]['MSE'] for item in metrics_dict.keys()])
-    metrics = [cc_avg, mi_avg, ms_avg]
 
     return metrics
 
@@ -112,7 +118,9 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--out_dir', default=None,
                         help="Optionally specify output directory")
     parser.add_argument('-m', '--mask', default=None,
-                        help="Optionally specify a mask nii prefix for evaluation")
+                        help="Whole brain mask for masking out predictions background")
+    parser.add_argument('-e', '--eval_mask', default=None,
+                        help="Optionally specify a mask nii prefix for evaluation. All values > 0 are included in mask")
     parser.add_argument('-v', '--verbose', default=False, action="store_true",
                         help="Verbose terminal output flag")
     parser.add_argument('-x', '--overwrite', default=False, action="store_true",
@@ -169,5 +177,5 @@ if __name__ == '__main__':
         niis_pred.append(pred_out)
 
     # evaluate
-    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.mask, verbose=args.verbose)
+    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.eval_mask, verbose=args.verbose)
     print("Mean error: CC = {}, MI = {}, MSE = {}".format(my_metrics[0], my_metrics[1], my_metrics[2]))

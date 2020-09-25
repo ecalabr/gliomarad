@@ -345,7 +345,6 @@ def net_builder(params):
     if params.mixed_precision:  # enable mixed precision and warn user
         print("WARNING: using tensorflow mixed precision... This could lead to numeric instability in some cases.")
         policy = mixed_precision.Policy('mixed_float16')
-        mixed_precision.set_policy(policy)
         # warn if batch size and/or nfilters is not a multpile of 8
         if not params.base_filters % 8 == 0:
             print("WARNING: parameter base_filters is not a multiple of 8, which will not use tensor cores.")
@@ -353,8 +352,12 @@ def net_builder(params):
             print("WARNING: parameter batch_size is not a multiple of 8, which will not use tensor cores.")
     else:  # if not using mixed precision, then assume float32
         policy = mixed_precision.Policy('float32')
-    # put current policy in params
+
+    # put current policy in params for use in model construction
     params.policy = policy
+
+    # set default policy to float32, then mixed precision is specified per layer if specified
+    mixed_precision.set_policy(mixed_precision.Policy('float32'))  # default policy for layers
 
     # determine network
     if params.model_name in globals():

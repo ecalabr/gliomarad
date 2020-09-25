@@ -23,7 +23,7 @@ def model_fn(params):
         params.batch_size = params.batch_size * params.strategy.num_replicas_in_sync
 
     # Define model and loss using loss picker function
-    with params.strategy.scope():
+    with params.strategy.scope():  # use distribution strategy scope
         model = net_builder(params)
         loss = loss_picker(params)
         model.compile(optimizer=Adam(), loss=loss, metrics=metrics)
