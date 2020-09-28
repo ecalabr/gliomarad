@@ -12,10 +12,15 @@ from utilities.input_fn_util import normalize
 import json
 from predict import predict, predictions_2_nii
 from nipype.interfaces.ants import MeasureImageSimilarity
+import subprocess
+
+
+# globals
+EPSILON = 1e-10  # small number to avoid divide by zero errors
 
 
 # define funiction to predict and evaluate one directory
-def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
+def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False, redo=False, suffix=None):
     # get sorted lists of true niis, predicted niis, and masks
     true_niis = sorted([glob(eval_d + '/*' + params.label_prefix[0] + '.nii.gz')[0] for eval_d in eval_dirs])
     pred_niis = sorted(pred_niis)
@@ -28,6 +33,59 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
     # ExtractRegionFromImageByMask
     # Extract a sub-region from image using the bounding box from a label image, with optional padding radius.
     # Usage : ExtractRegionFromImageByMask ImageDimension inputImage outputImage labelMaskImage [label=1] [padRadius=0]
+    if mask:
+        # report
+        print("Eval mask specified - cropping files to mask")
+        # temporary output vars
+        tmp_true = []
+        tmp_pred = []
+        tmp_mask = []
+        # loop through all eval niis
+        idx = 1
+        for true_nii, pred_nii, mask_nii in zip(true_niis, pred_niis, mask_niis):
+            print("Cropping images to eval mask {} of {}...".format(idx, len(pred_niis)))
+            # defined cropped outnames
+            crop_true_nii = os.path.join(out_dir,
+                                         os.path.basename(true_nii).split('.nii.gz')[0] + '_' + mask + '.nii.gz')
+            crop_pred_nii = os.path.join(out_dir,
+                                         os.path.basename(pred_nii).split('.nii.gz')[0] + '_' + mask + '.nii.gz')
+            crop_mask_nii = os.path.join(out_dir,
+                                         os.path.basename(mask_nii).split('.nii.gz')[0] + '_crop.nii.gz')
+            # crop if not already done
+            # true nii
+            if not os.path.isfile(crop_true_nii) or redo:
+                cmd = "ExtractRegionFromImageByMask 3 {} {} {} 1 0".format(true_nii, crop_true_nii, mask_nii)
+                if verbose:
+                    print(cmd)
+                subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            else:
+                print("Cropped true image already exists at {} and will not be overwritten".format(crop_true_nii))
+            # pred nii
+            if not os.path.isfile(crop_pred_nii) or redo:
+                cmd = "ExtractRegionFromImageByMask 3 {} {} {} 1 0".format(pred_nii, crop_pred_nii, mask_nii)
+                if verbose:
+                    print(cmd)
+                subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            else:
+                print("Cropped predicted image already exists at {} and will not be overwritten".format(crop_pred_nii))
+            # mask nii
+            if not os.path.isfile(crop_mask_nii) or redo:
+                cmd = "ExtractRegionFromImageByMask 3 {} {} {} 1 0".format(mask_nii, crop_mask_nii, mask_nii)
+                if verbose:
+                    print(cmd)
+                subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            else:
+                print("Cropped mask already exists at {} and will not be overwritten".format(crop_mask_nii))
+            # add cropped niis to output lists
+            tmp_true.append(str(crop_true_nii))
+            tmp_pred.append(str(crop_pred_nii))
+            tmp_mask.append(str(crop_mask_nii))
+            # increment index
+            idx += 1
+        # at end of loop, replace nii lists with new cropped lists
+        true_niis = tmp_true
+        pred_niis = tmp_pred
+        mask_niis = tmp_mask
 
     # set up metrics variables for collecting results
     metrics_dict = {}
@@ -82,8 +140,22 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
         sim.inputs.metric = 'MeanSquares'
         ms = np.abs(sim.run().outputs.similarity)
 
+        # MAPE
+        # load images
+        true_img = nib.load(true_nii).get_fdata()
+        pred_img = nib.load(pred_nii).get_fdata()
+        if mask:
+            mask_img = nib.load(mask_niis[ind]).get_fdata().astype(bool)
+        else:
+            mask_img = np.ones_like(true_img, dtype=bool)
+        # scale to 12 bit range
+        true_img = true_img * (4095 / np.max(true_img))
+        pred_img = pred_img * (4095 / np.max(pred_img))
+        # calculate mape
+        mape = np.mean((np.fabs((true_img - pred_img))/(np.fabs(true_img) + EPSILON))[mask_img])
+
         # build dict
-        tmp = {pred_nii: {'CC': cc, 'MI' : mi, 'MSE' : ms}}
+        tmp = {pred_nii: {'CC': cc, 'MI': mi, 'MSE': ms, 'MAPE': mape}}
 
         # update metrics dict
         metrics_dict.update(tmp)
@@ -92,8 +164,9 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
     cc_avg = np.mean([metrics_dict[item]['CC'] for item in metrics_dict.keys()])
     mi_avg = np.mean([metrics_dict[item]['MI'] for item in metrics_dict.keys()])
     ms_avg = np.mean([metrics_dict[item]['MSE'] for item in metrics_dict.keys()])
-    metrics_dict.update({"Averages": {"CC": cc_avg, "MI": mi_avg, "MSE": ms_avg}})
-    metrics = [cc_avg, mi_avg, ms_avg]
+    mape_avg = np.mean([metrics_dict[item]['MAPE'] for item in metrics_dict.keys()])
+    metrics_dict.update({'Averages': {'CC': cc_avg, 'MI': mi_avg, 'MSE': ms_avg, 'MAPE': mape_avg}})
+    metrics = [cc_avg, mi_avg, ms_avg, mape_avg]
 
     # save metrics
     # use prefix string to ID which mask was used for evaluation
@@ -101,7 +174,12 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False):
         mask_str = mask
     else:
         mask_str = 'no_mask'
-    metrics_filepath = os.path.join(out_dir, mask_str + '_eval_metrics.json')
+    # handle extra suffix option
+    if suffix:
+        metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask, suffix))
+    else:
+        metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask, suffix))
+    # write output json
     with open(metrics_filepath, 'w+', encoding='utf-8') as fi:
         json.dump(metrics_dict, fi, ensure_ascii=False, indent=4)
 
@@ -125,6 +203,8 @@ if __name__ == '__main__':
                         help="Verbose terminal output flag")
     parser.add_argument('-x', '--overwrite', default=False, action="store_true",
                         help="Use this flag to overwrite existing data")
+    parser.add_argument('-b', '--baseline', default=None,
+                        help="Prefix for image contrast to use in place of predictions")
 
     # handle param argument
     args = parser.parse_args()
@@ -176,6 +256,13 @@ if __name__ == '__main__':
             print("Prediction {} already exists and will not be overwritten".format(pred_out))
         niis_pred.append(pred_out)
 
+    # handle baseline predictions
+    if args.baseline:
+        niis_pred = [glob("{}/*{}.nii.gz".format(eval_dir, args.baseline))[0] for eval_dir in my_eval_dirs if
+                     os.path.isfile(glob("{}/*{}.nii.gz".format(eval_dir, args.baseline))[0])]
+
     # evaluate
-    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.eval_mask, verbose=args.verbose)
-    print("Mean error: CC = {}, MI = {}, MSE = {}".format(my_metrics[0], my_metrics[1], my_metrics[2]))
+    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.eval_mask, verbose=args.verbose,
+                           redo=args.overwrite, suffix=args.baseline)
+    print("Mean error: CC = {}, MI = {}, MSE = {}, MAPE = {}".format(my_metrics[0], my_metrics[1], my_metrics[2],
+                                                                     my_metrics[3]))
