@@ -93,7 +93,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
     for ind, pred_nii in enumerate(pred_niis):
         print("Evaluating directory {} of {}...".format(ind+1, len(pred_niis)))
 
-        # if normalization is specified, then normalize the true nii
+        # if normalization is specified in params, then normalize the true nii and save result to eval directory
         if params.norm_labels:
             # load true image
             true_nii = nib.load(true_niis[ind])
@@ -112,7 +112,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
         else:
             true_nii = true_niis[ind]
 
-        # handle mask
+        # handle optional mask argument
         if mask:
             mask_nii = mask_niis[ind]
         else:
@@ -130,7 +130,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
     # get metric averages
     metrics_dict.update({'Averages': {}})
     for metric in metrics:
-        metric_avg = np.mean([metrics_dict[item][metric] for item in metrics_dict.keys()])
+        metric_avg = np.mean([metrics_dict[item][metric] for item in metrics_dict.keys() if not item == 'Averages'])
         metrics_dict['Averages'].update({metric: metric_avg})
 
     # save metrics

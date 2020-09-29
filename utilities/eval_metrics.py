@@ -18,7 +18,7 @@ def cc(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
         sim.inputs.fixed_image = true_nii
         sim.inputs.moving_image = pred_nii
         sim.inputs.metric_weight = 1.0
-        sim.inputs.radius_or_number_of_bins = 4
+        sim.inputs.radius_or_number_of_bins = 5
         sim.inputs.sampling_strategy = 'None'  # None = dense sampling
         sim.inputs.sampling_percentage = 1.0
         if mask:
@@ -40,7 +40,7 @@ def mi(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
         sim.inputs.fixed_image = true_nii
         sim.inputs.moving_image = pred_nii
         sim.inputs.metric_weight = 1.0
-        sim.inputs.radius_or_number_of_bins = 32
+        sim.inputs.radius_or_number_of_bins = 64
         sim.inputs.sampling_strategy = 'None'  # None = dense sampling
         sim.inputs.sampling_percentage = 1.0
         if mask:
@@ -62,7 +62,7 @@ def mse(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
     sim.inputs.fixed_image = true_nii
     sim.inputs.moving_image = pred_nii
     sim.inputs.metric_weight = 1.0
-    sim.inputs.radius_or_number_of_bins = 32
+    sim.inputs.radius_or_number_of_bins = 32  # not used
     sim.inputs.sampling_strategy = 'None'  # None = dense sampling
     sim.inputs.sampling_percentage = 1.0
     if mask:
@@ -100,15 +100,17 @@ def ssim(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
     # load images
     true_img = nib.load(true_nii).get_fdata()
     pred_img = nib.load(pred_nii).get_fdata()
-    if mask:
+    if mask:  # crop image to mask to avoid black space counting as similarity - cant vectorize this operation?
+        # tight cropping to mask should already be done as part of evaluate.py, but including here for compatibility
         mask_img = nib.load(mask_nii).get_fdata().astype(bool)
-        true_img = true_img * mask_img
-        pred_img = pred_img * mask_img
+        nzi = np.nonzero(mask_img)
+        true_img = true_img[nzi[0].min():nzi[0].max(), nzi[1].min():nzi[1].max(), nzi[2].min():nzi[2].max()]
+        pred_img = pred_img[nzi[0].min():nzi[0].max(), nzi[1].min():nzi[1].max(), nzi[2].min():nzi[2].max()]
     # verbosity
     if verbose:
         print("Calculating structural similarity index")
 
-    return struct_sim(true_img, pred_img, data_range=true_img.max() - true_img.min())
+    return struct_sim(true_img, pred_img, win_size=9, data_range=true_img.max() - true_img.min())
 
 
 def metric_picker(metric, true_nii, pred_nii, mask_nii, mask=False, verbose=False):
