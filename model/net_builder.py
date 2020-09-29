@@ -170,6 +170,161 @@ def unet_3d_bneck(params):
     return Model(inputs=inputs, outputs=x)
 
 
+# 3D unet with bottleneck residual blocks, conv downsample, conv transpose upsample
+# long range concat skips, batch norm, dropout
+def unet_3d_bneck2(params):
+
+    # define fixed params
+    layer_layout = params.layer_layout
+    filt = params.base_filters
+    dfmt = params.data_format
+    dropout = params.dropout_rate
+    ksize = params.kernel_size
+    act = params.activation
+    chan = len(params.data_prefix)
+    train_dims = params.train_dims + [chan] if dfmt == 'channels_last' else [chan] + params.train_dims
+    batch_size = params.batch_size
+    output_filt = params.output_filters
+    policy = params.policy
+
+    # additional setup for network construction
+    skips = []
+
+    # input layer
+    inputs = Input(shape=train_dims, batch_size=batch_size, dtype='float32')
+    x = inputs
+
+    # unet encoder limb with residual bottleneck blocks
+    for level in layer_layout:
+        for block in range(level): # remove one for first layer that takes inputs
+            x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
+
+        # if not the bottom level, create skip connection and then downsample
+        if not level == layer_layout[-1]:
+            # create long range skip
+            skips.append(x)
+
+            # downsample block
+            filt = filt * 2  # double filters before strided conv downsampling
+            x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
+
+    # reverse layout and skip connections for decoder limb
+    skips.reverse()
+    layer_layout.reverse()
+
+    # unet decoder limb with residual bottleneck blocks
+    for n, level in enumerate(layer_layout[1:]):  # bottom level of layer layout is not repeated
+
+        # upsample block
+        filt = int(round(filt/2))  # half filters before upsampling
+        x = Conv3DTranspose(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
+
+        # fuse skip connections with concatenation of features
+        x = tf.concat([x, skips[n]], axis=-1 if dfmt == 'channels_last' else 1)
+
+        # horizontal blocks
+        for block in range(level):
+            x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
+
+    # output layer - no mixed precision data policy
+    if params.final_layer == "conv":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+    elif params.final_layer == "sigmoid":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.sigmoid(x)
+    elif params.final_layer == "softmax":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+    else:
+        assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
+
+    return Model(inputs=inputs, outputs=x)
+
+
+# 3D unet with bottleneck residual blocks, conv downsample, conv transpose upsample
+# long range concat skips, batch norm, dropout
+def unet_3d_bneck_dilated(params):
+
+    # define fixed params
+    layer_layout = params.layer_layout
+    filt = params.base_filters
+    dfmt = params.data_format
+    dropout = params.dropout_rate
+    ksize = params.kernel_size
+    act = params.activation
+    chan = len(params.data_prefix)
+    train_dims = params.train_dims + [chan] if dfmt == 'channels_last' else [chan] + params.train_dims
+    batch_size = params.batch_size
+    output_filt = params.output_filters
+    policy = params.policy
+
+    # additional setup for network construction
+    skips = []
+
+    # input layer
+    inputs = Input(shape=train_dims, batch_size=batch_size, dtype='float32')
+    x = inputs
+
+    # unet encoder limb with residual bottleneck blocks
+    for level in layer_layout[:-1]:  # bottom level is reserved for dilated convs
+        for block in range(level): # remove one for first layer that takes inputs
+            x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
+
+        # create long range skip
+        skips.append(x)
+
+        # downsample block
+        filt = filt * 2  # double filters before strided conv downsampling
+        x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
+
+    # dilated bottom level
+    dil_out = []
+    for dil_block in range(layer_layout[-1]):
+        # dilation sequence is 1, 2, 4, 6, 8 etc
+        if dil_block == 0:
+            dil = [1] * 3
+        else:
+            dil = [2 * dil_block] * 3
+        # dilated blocks
+        x = Conv3D(filt, ksize, dilation_rate=dil, padding='same', data_format=dfmt, dtype=policy)(x)
+        # concatenate all outputs
+        dil_out.append(x)
+    # concatenate outputs
+    x = tf.concat(dil_out, axis=-1 if dfmt == 'channels_last' else 1)
+
+    # reverse layout and skip connections for decoder limb
+    skips.reverse()
+    layer_layout.reverse()
+
+    # unet decoder limb with residual bottleneck blocks
+    for n, level in enumerate(layer_layout[1:]):  # bottom level of layer layout is not repeated
+
+        # upsample block
+        filt = int(round(filt/2))  # half filters before upsampling
+        x = Conv3DTranspose(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
+
+        # fuse skip connections with concatenation of features
+        x = tf.concat([x, skips[n]], axis=-1 if dfmt == 'channels_last' else 1)
+
+        # horizontal blocks
+        for block in range(level):
+            x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
+
+    # output layer - no mixed precision data policy
+    if params.final_layer == "conv":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+    elif params.final_layer == "sigmoid":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.sigmoid(x)
+    elif params.final_layer == "softmax":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+    else:
+        assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
+
+    return Model(inputs=inputs, outputs=x)
+
+
 # 2.5D unet with bottleneck residual blocks, conv downsample, conv transpose upsample
 # long range concat skips, batch norm, dropout
 def unet_25d_bneck(params):

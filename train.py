@@ -144,7 +144,7 @@ def train(param_file):
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--param_file', default=None,
+    parser.add_argument('-p', '--param_file', default=None,
                         help="Path to params.json")
 
     # Load the parameters from the experiment params.json file in model_dir
