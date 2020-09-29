@@ -85,6 +85,8 @@
     The name of the learning rate decay function to use. This must be specified in utils.py learning_rate_picker.
 "loss": "MSE",
     The name of the loss function to use. This must be specified in losses.py loss_picker.
+"optimizer": "adam"
+    The name of the optimizer to use. This must be specified in optimizers.py by optimizer_picker.
 "num_epochs":1,
     The number of training epochs to use. I.e. the number of times to iterate through all of the training data.
 "dropout_rate": 0.3,

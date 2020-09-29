@@ -1,6 +1,6 @@
 from model.net_builder import net_builder
 from utilities.losses import loss_picker
-from tensorflow.keras.optimizers import Adam
+from utilities.optimizers import optimizer_picker
 import tensorflow as tf
 import os
 from contextlib import redirect_stdout
@@ -26,7 +26,8 @@ def model_fn(params):
     with params.strategy.scope():  # use distribution strategy scope
         model = net_builder(params)
         loss = loss_picker(params)
-        model.compile(optimizer=Adam(), loss=loss, metrics=metrics)
+        optimzer = optimizer_picker(params)
+        model.compile(optimizer=optimzer, loss=loss, metrics=metrics)
 
     # save text representation of graph
     model_sum = os.path.join(params.model_dir, 'model_summary.txt')

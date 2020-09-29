@@ -61,6 +61,7 @@ class Params:
     learning_rate = None
     learning_rate_decay = None
     loss = None
+    optimizer = None
     num_epochs = None
     dropout_rate = None
 
