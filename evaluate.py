@@ -11,8 +11,8 @@ import numpy as np
 from utilities.input_fn_util import normalize
 import json
 from predict import predict, predictions_2_nii
-from nipype.interfaces.ants import MeasureImageSimilarity
 import subprocess
+from utilities.eval_metrics import metric_picker
 
 
 # globals
@@ -20,7 +20,7 @@ EPSILON = 1e-10  # small number to avoid divide by zero errors
 
 
 # define funiction to predict and evaluate one directory
-def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False, redo=False, suffix=None):
+def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=False, redo=False, suffix=None):
     # get sorted lists of true niis, predicted niis, and masks
     true_niis = sorted([glob(eval_d + '/*' + params.label_prefix[0] + '.nii.gz')[0] for eval_d in eval_dirs])
     pred_niis = sorted(pred_niis)
@@ -112,61 +112,26 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False, redo=F
         else:
             true_nii = true_niis[ind]
 
-        # perform image comparrison using CC
-        sim = MeasureImageSimilarity()
-        if not verbose:
-            sim.terminal_output = 'allatonce'
-        sim.inputs.dimension = 3
-        sim.inputs.metric = 'CC'
-        sim.inputs.fixed_image = true_nii
-        sim.inputs.moving_image = pred_nii
-        sim.inputs.metric_weight = 1.0
-        sim.inputs.radius_or_number_of_bins = 4
-        sim.inputs.sampling_strategy = 'None'  # None = dense sampling
-        sim.inputs.sampling_percentage = 1.0
+        # handle mask
         if mask:
-            sim.inputs.fixed_image_mask = mask_niis[ind]
-            sim.inputs.moving_image_mask = mask_niis[ind]
-        if verbose:
-            print(sim.cmdline)
-        cc = np.abs(sim.run().outputs.similarity)
-
-        # MI
-        sim.inputs.metric = 'MI'
-        sim.inputs.radius_or_number_of_bins = 32
-        mi = np.abs(sim.run().outputs.similarity)
-
-        # MSE
-        sim.inputs.metric = 'MeanSquares'
-        ms = np.abs(sim.run().outputs.similarity)
-
-        # MAPE
-        # load images
-        true_img = nib.load(true_nii).get_fdata()
-        pred_img = nib.load(pred_nii).get_fdata()
-        if mask:
-            mask_img = nib.load(mask_niis[ind]).get_fdata().astype(bool)
+            mask_nii = mask_niis[ind]
         else:
-            mask_img = np.ones_like(true_img, dtype=bool)
-        # scale to 12 bit range
-        true_img = true_img * (4095 / np.max(true_img))
-        pred_img = pred_img * (4095 / np.max(pred_img))
-        # calculate mape
-        mape = np.mean((np.fabs((true_img - pred_img))/(np.fabs(true_img) + EPSILON))[mask_img])
+            mask_nii = None
 
-        # build dict
-        tmp = {pred_nii: {'CC': cc, 'MI': mi, 'MSE': ms, 'MAPE': mape}}
+        # get metric values
+        tmp = {pred_nii: {}}
+        for metric in metrics:
+            metric_val = metric_picker(metric, true_nii, pred_nii, mask_nii, mask=mask, verbose=verbose)
+            tmp[pred_nii].update({metric: metric_val})
 
         # update metrics dict
         metrics_dict.update(tmp)
 
     # get metric averages
-    cc_avg = np.mean([metrics_dict[item]['CC'] for item in metrics_dict.keys()])
-    mi_avg = np.mean([metrics_dict[item]['MI'] for item in metrics_dict.keys()])
-    ms_avg = np.mean([metrics_dict[item]['MSE'] for item in metrics_dict.keys()])
-    mape_avg = np.mean([metrics_dict[item]['MAPE'] for item in metrics_dict.keys()])
-    metrics_dict.update({'Averages': {'CC': cc_avg, 'MI': mi_avg, 'MSE': ms_avg, 'MAPE': mape_avg}})
-    metrics = [cc_avg, mi_avg, ms_avg, mape_avg]
+    metrics_dict.update({'Averages': {}})
+    for metric in metrics:
+        metric_avg = np.mean([metrics_dict[item][metric] for item in metrics_dict.keys()])
+        metrics_dict['Averages'].update({metric: metric_avg})
 
     # save metrics
     # use prefix string to ID which mask was used for evaluation
@@ -176,14 +141,14 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, verbose=False, redo=F
         mask_str = 'no_mask'
     # handle extra suffix option
     if suffix:
-        metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask, suffix))
+        metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask_str, suffix))
     else:
-        metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask, suffix))
+        metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask_str, suffix))
     # write output json
     with open(metrics_filepath, 'w+', encoding='utf-8') as fi:
         json.dump(metrics_dict, fi, ensure_ascii=False, indent=4)
 
-    return metrics
+    return metrics_dict
 
 
 # executed  as script
@@ -201,6 +166,8 @@ if __name__ == '__main__':
                         help="Optionally specify a mask nii prefix for evaluation. All values > 0 are included in mask")
     parser.add_argument('-v', '--verbose', default=False, action="store_true",
                         help="Verbose terminal output flag")
+    parser.add_argument('-c', '--metrics', default=['cc', 'mi', 'mse', 'mape', 'ssim'], nargs='+',
+                        help="Metric or metrics to be evaluated (can specify multiple)")
     parser.add_argument('-x', '--overwrite', default=False, action="store_true",
                         help="Use this flag to overwrite existing data")
     parser.add_argument('-b', '--baseline', default=None,
@@ -262,7 +229,9 @@ if __name__ == '__main__':
                      os.path.isfile(glob("{}/*{}.nii.gz".format(eval_dir, args.baseline))[0])]
 
     # evaluate
-    my_metrics = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.eval_mask, verbose=args.verbose,
-                           redo=args.overwrite, suffix=args.baseline)
-    print("Mean error: CC = {}, MI = {}, MSE = {}, MAPE = {}".format(my_metrics[0], my_metrics[1], my_metrics[2],
-                                                                     my_metrics[3]))
+    my_metrics_dict = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.eval_mask, args.metrics,
+                                verbose=args.verbose, redo=args.overwrite, suffix=args.baseline)
+
+    # print
+    for my_metric in my_metrics_dict['Averages'].keys():
+        print("Average {} = {}".format(my_metric, my_metrics_dict['Averages'][my_metric]))
