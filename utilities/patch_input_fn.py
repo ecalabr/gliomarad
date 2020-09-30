@@ -9,7 +9,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # train mode - uses patches, patch filtering, batching, data augmentation, and shuffling - works on train_dirs
     if mode == 'train':
         # variable setup
-        data_dirs = train_dirs
+        data_dirs = tf.constant(train_dirs)
         data_chan = len(params.data_prefix)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
@@ -56,7 +56,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # eval mode - uses patches and batches but no patch filtering, data augmentation, or shuffling, works on eval_dirs
     elif mode == 'eval':
         # variable setup
-        data_dirs = eval_dirs
+        data_dirs = tf.constant(eval_dirs)
         data_chan = len(params.data_prefix)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
@@ -94,7 +94,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     elif mode == 'infer':
         if not infer_dir:
             assert ValueError("Must specify inference directory for inference mode")
-        dirs = infer_dir
+        dirs = tf.constant(infer_dir)
         # define dims of inference
         data_dims = list(params.infer_dims)
         chan_size = len(params.data_prefix)
@@ -132,7 +132,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # train mode - uses patches, patch filtering, batching, data augmentation, and shuffling - works on train_dirs
     if mode == 'train':
         # variable setup
-        data_dirs = train_dirs
+        data_dirs = tf.constant(train_dirs)
         data_chan = len(params.data_prefix)
         weighted = False if isinstance(params.mask_weights, np.bool) and not params.mask_weights else True
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
@@ -182,7 +182,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     # eval mode - uses patches and batches but no patch filtering, data augmentation, or shuffling, works on eval_dirs
     elif mode == 'eval':
         # variable setup
-        data_dirs = eval_dirs
+        data_dirs = tf.constant(eval_dirs)
         data_chan = len(params.data_prefix)
         weighted = False if isinstance(params.mask_weights, np.bool) and not params.mask_weights else True
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
@@ -223,7 +223,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     elif mode == 'infer':
         if not infer_dir:
             assert ValueError("Must specify inference directory for inference mode")
-        dirs = infer_dir
+        dirs = tf.constant(infer_dir)
         # define dims of inference
         data_dims = list(params.infer_dims)
         chan_size = len(params.data_prefix)
@@ -256,6 +256,31 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     return dataset
 
 
+# utility function to get all study subdirectories in a given parent data directory
+# returns shuffled directory list using user defined randomization seed
+def get_study_dirs(params):
+    # get all subdirectories in data_dir
+    study_dirs = [item for item in glob(params.data_dir + '/*/') if os.path.isdir(item)]
+    # make sure all necessary files are present in each folder
+    study_dirs = [study for study in study_dirs if all(
+        [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
+         for item in params.data_prefix + params.label_prefix])]
+    # study dirs sorted in alphabetical order for reproducible results
+    study_dirs.sort()
+    # randomly shuffle input directories for training using a user defined randomization seed
+    random.Random(params.random_state).shuffle(study_dirs)
+
+    return  study_dirs
+
+
+# split list of all valid study directories into a train and test batch based on train fraction
+def train_test_split(study_dirs, params):
+    train_dirs = study_dirs[0:int(round(params.train_fract * len(study_dirs)))]
+    eval_dirs = study_dirs[int(round(params.train_fract * len(study_dirs))):]
+
+    return train_dirs, eval_dirs
+
+
 # patch input function for 2d or 3d
 def patch_input_fn(params, mode, infer_dir=None):
     # set global random seed for tensorflow
@@ -266,21 +291,14 @@ def patch_input_fn(params, mode, infer_dir=None):
         with open(study_dirs_filepath) as f:
             study_dirs = json.load(f)
     else:
-        # get all subdirectories in data_dir
-        study_dirs = [item for item in glob(params.data_dir + '/*/') if os.path.isdir(item)]
-        # make sure all necessary files are present in each folder
-        study_dirs = [study for study in study_dirs if all(
-            [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
-             for item in params.data_prefix + params.label_prefix])]
-        # study dirs sorted in alphabetical order for reproducible results
-        study_dirs.sort()
-        # randomly shuffle input directories for training using a user defined randomization seed
-        random.Random(params.random_state).shuffle(study_dirs)
-        # directory list json is saved AFTER randomization
+        # get all valid subdirectories in data_dir
+        study_dirs = get_study_dirs(params)
+        # save directory list to json file so it can be loaded in future
         with open(study_dirs_filepath, 'w+', encoding='utf-8') as f:
             json.dump(study_dirs, f, ensure_ascii=False, indent=4)  # save study dir list for consistency
-    train_dirs = tf.constant(study_dirs[0:int(round(params.train_fract * len(study_dirs)))])
-    eval_dirs = tf.constant(study_dirs[int(round(params.train_fract * len(study_dirs))):])
+
+    # split study directories into train and test sets
+    train_dirs, eval_dirs = train_test_split(study_dirs, params)
 
     # handle infer dir argument
     if infer_dir:

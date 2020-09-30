@@ -14,7 +14,6 @@ from utilities.utils import set_logger
 from utilities.patch_input_fn import patch_input_fn
 from utilities.learning_rates import learning_rate_picker
 from model.model_fn import model_fn
-import numpy as np
 
 
 # define functions
@@ -30,7 +29,10 @@ def train(param_file):
         raise ValueError("Specified model directory does not exist: {}".format(params.model_dir))
 
     # Set the logger, delete old log file if overwrite param is set to yes
-    log_path = os.path.join(params.model_dir, 'train.log')
+    train_dir = os.path.join(params.model_dir, 'train')
+    if not os.path.isdir(train_dir):
+        os.mkdir(train_dir)
+    log_path = os.path.join(train_dir, 'train.log')
     if os.path.isfile(log_path) and params.overwrite:
         os.remove(log_path)
     set_logger(log_path)
@@ -81,7 +83,7 @@ def train(param_file):
     # Check for existing model and load if exists, otherwise create from scratch
     if latest_ckpt and not params.overwrite:
         logging.info("Creating the model to resume checkpoint")
-        model = model_fn(params)  # recreating model may be neccesary if custom loss function is being used
+        model = model_fn(params)  # recreating model from scratech may be neccesary if custom loss function is used
         logging.info("Loading model weights checkpoint file {}".format(latest_ckpt))
         model.load_weights(latest_ckpt)
     else:

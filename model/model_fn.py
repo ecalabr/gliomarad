@@ -30,14 +30,17 @@ def model_fn(params):
         model.compile(optimizer=optimzer, loss=loss, metrics=metrics)
 
     # save text representation of graph
-    model_sum = os.path.join(params.model_dir, 'model_summary.txt')
+    model_info_dir = os.path.join(params.model_dir, 'model')
+    if not os.path.isdir(model_info_dir):
+        os.mkdir(model_info_dir)
+    model_sum = os.path.join(model_info_dir, 'model_summary.txt')
     if not os.path.isfile(model_sum):
         with open(model_sum, 'w+') as f:
             with redirect_stdout(f):
                 model.summary()
 
     # save graphical representation of graph
-    model_im = os.path.join(params.model_dir, 'model.png')
+    model_im = os.path.join(model_info_dir, 'model_graphic.png')
     if not os.path.isfile(model_im):
         tf.keras.utils.plot_model(
             model, to_file=model_im, show_shapes=False, show_layer_names=True,

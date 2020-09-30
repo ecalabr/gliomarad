@@ -4,15 +4,16 @@ import os
 # set tensorflow logging to FATAL before importing
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
-from utilities.utils import Params
-from glob import glob
 import nibabel as nib
 import numpy as np
-from utilities.input_fn_util import normalize
 import json
-from predict import predict, predictions_2_nii
 import subprocess
+from glob import glob
+from predict import predict
 from utilities.eval_metrics import metric_picker
+from utilities.patch_input_fn import get_study_dirs, train_test_split
+from utilities.utils import Params, set_logger
+from utilities.input_fn_util import normalize
 
 
 # globals
@@ -35,7 +36,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
     # Usage : ExtractRegionFromImageByMask ImageDimension inputImage outputImage labelMaskImage [label=1] [padRadius=0]
     if mask:
         # report
-        print("Eval mask specified - cropping files to mask")
+        logging.info("Eval mask specified - cropping files to mask")
         # temporary output vars
         tmp_true = []
         tmp_pred = []
@@ -43,7 +44,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
         # loop through all eval niis
         idx = 1
         for true_nii, pred_nii, mask_nii in zip(true_niis, pred_niis, mask_niis):
-            print("Cropping images to eval mask {} of {}...".format(idx, len(pred_niis)))
+            logging.info("Cropping images to eval mask {} of {}...".format(idx, len(pred_niis)))
             # defined cropped outnames
             crop_true_nii = os.path.join(out_dir,
                                          os.path.basename(true_nii).split('.nii.gz')[0] + '_' + mask + '.nii.gz')
@@ -56,26 +57,28 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
             if not os.path.isfile(crop_true_nii) or redo:
                 cmd = "ExtractRegionFromImageByMask 3 {} {} {} 1 0".format(true_nii, crop_true_nii, mask_nii)
                 if verbose:
-                    print(cmd)
+                    logging.debug(cmd)
                 subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             else:
-                print("Cropped true image already exists at {} and will not be overwritten".format(crop_true_nii))
+                logging.info(
+                    "Cropped true image already exists at {} and will not be overwritten".format(crop_true_nii))
             # pred nii
             if not os.path.isfile(crop_pred_nii) or redo:
                 cmd = "ExtractRegionFromImageByMask 3 {} {} {} 1 0".format(pred_nii, crop_pred_nii, mask_nii)
                 if verbose:
-                    print(cmd)
+                    logging.debug(cmd)
                 subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             else:
-                print("Cropped predicted image already exists at {} and will not be overwritten".format(crop_pred_nii))
+                logging.info(
+                    "Cropped predicted image already exists at {} and will not be overwritten".format(crop_pred_nii))
             # mask nii
             if not os.path.isfile(crop_mask_nii) or redo:
                 cmd = "ExtractRegionFromImageByMask 3 {} {} {} 1 0".format(mask_nii, crop_mask_nii, mask_nii)
                 if verbose:
-                    print(cmd)
+                    logging.debug(cmd)
                 subprocess.call(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             else:
-                print("Cropped mask already exists at {} and will not be overwritten".format(crop_mask_nii))
+                logging.info("Cropped mask already exists at {} and will not be overwritten".format(crop_mask_nii))
             # add cropped niis to output lists
             tmp_true.append(str(crop_true_nii))
             tmp_pred.append(str(crop_pred_nii))
@@ -91,7 +94,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
     metrics_dict = {}
     # loop through each pair of niis for comparissons
     for ind, pred_nii in enumerate(pred_niis):
-        print("Evaluating directory {} of {}...".format(ind+1, len(pred_niis)))
+        logging.info("Evaluating directory {} of {}...".format(ind+1, len(pred_niis)))
 
         # if normalization is specified in params, then normalize the true nii and save result to eval directory
         if params.norm_labels:
@@ -143,7 +146,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
     if suffix:
         metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask_str, suffix))
     else:
-        metrics_filepath = os.path.join(out_dir, "{}_{}_eval_metrics.json".format(mask_str, suffix))
+        metrics_filepath = os.path.join(out_dir, "{}_eval_metrics.json".format(mask_str))
     # write output json
     with open(metrics_filepath, 'w+', encoding='utf-8') as fi:
         json.dump(metrics_dict, fi, ensure_ascii=False, indent=4)
@@ -168,9 +171,11 @@ if __name__ == '__main__':
                         help="Verbose terminal output flag")
     parser.add_argument('-c', '--metrics', default=['cc', 'mi', 'mse', 'mape', 'ssim'], nargs='+',
                         help="Metric or metrics to be evaluated (can specify multiple)")
+    parser.add_argument('-b', '--best_last', default='best',
+                        help="'best' or 'last' - whether to use best or last weights for inference")
     parser.add_argument('-x', '--overwrite', default=False, action="store_true",
                         help="Use this flag to overwrite existing data")
-    parser.add_argument('-b', '--baseline', default=None,
+    parser.add_argument('-l', '--baseline', default=None,
                         help="Prefix for image contrast to use in place of predictions")
 
     # handle param argument
@@ -178,11 +183,9 @@ if __name__ == '__main__':
     assert args.param_file, "Must specify param file using --param_file"
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
     my_params = Params(args.param_file)
-
     # turn of distributed strategy and mixed precision
     my_params.dist_strat = None
     my_params.mixed_precision = False
-
     # determine model dir
     if my_params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
         my_params.model_dir = os.path.dirname(args.param_file)
@@ -197,31 +200,32 @@ if __name__ == '__main__':
         if not os.path.isdir(args.out_dir):
             os.mkdir(args.out_dir)
 
-    # get list of evaluation directories from model dir
+    # get list of study directories
+    # load study dirs json file if it exists in the model directory
     study_dirs_filepath = os.path.join(my_params.model_dir, 'study_dirs_list.json')
-    if os.path.isfile(study_dirs_filepath):  # load study dirs file if it exists
+    if os.path.isfile(study_dirs_filepath):
         with open(study_dirs_filepath) as f:
             study_dirs = json.load(f)
+    # otherwise try to recreate study dirs in same way as train.py
+    elif os.path.isdir(my_params.data_dir):
+        study_dirs = get_study_dirs(my_params)
+    # otherwise error, because there is no way to make sure we are using the correct directories for evaluation
     else:
-        raise ValueError("Study directory file does not exist at {}".format(study_dirs_filepath))
-    my_eval_dirs = study_dirs[int(round(my_params.train_fract * len(study_dirs))):]
+        raise ValueError("Study directory file does not exist at {} and study directory does not exist at {}".format(
+            study_dirs_filepath, my_params.data_dir))
 
-    # do work
-    # predit each output if it doesn't already exist
-    niis_pred = []
-    model_name = os.path.basename(my_params.model_dir)
-    for i, eval_dir in enumerate(my_eval_dirs):
-        if eval_dir[-1] == '/':
-            eval_dir = eval_dir[0:-1]  # remove possible trailing slash
-        name_prefix = os.path.basename(eval_dir)
-        pred_out = os.path.join(args.out_dir, name_prefix + '_predictions_' + model_name + '.nii.gz')
-        print("Predicting directory {} of {}...".format(int(i+1), len(my_eval_dirs)))
-        if not os.path.isfile(pred_out) or args.overwrite:
-            pred = predict(my_params, eval_dir)
-            _ = predictions_2_nii(pred, eval_dir, args.out_dir, my_params, mask=args.mask)
-        else:
-            print("Prediction {} already exists and will not be overwritten".format(pred_out))
-        niis_pred.append(pred_out)
+    # separate eval dirs from list of all study dirs using train fraction (same function used by train.py)
+    _, my_eval_dirs = train_test_split(study_dirs, my_params)
+
+    # set up logger, delete old log file if overwrite param is set to yes
+    log_path = os.path.join(args.out_dir, 'evaluate.log')
+    if os.path.isfile(log_path) and my_params.overwrite == 'yes':
+        os.remove(log_path)
+    set_logger(log_path)
+    logging.info("Log file created at " + log_path)
+
+    # predict output niis
+    niis_pred = predict(my_params, my_eval_dirs, args.out_dir, mask=args.mask, best_last=args.best_last)
 
     # handle baseline predictions
     if args.baseline:
@@ -232,6 +236,6 @@ if __name__ == '__main__':
     my_metrics_dict = eval_pred(my_params, my_eval_dirs, niis_pred, args.out_dir, args.eval_mask, args.metrics,
                                 verbose=args.verbose, redo=args.overwrite, suffix=args.baseline)
 
-    # print
+    # report
     for my_metric in my_metrics_dict['Averages'].keys():
-        print("Average {} = {}".format(my_metric, my_metrics_dict['Averages'][my_metric]))
+        logging.info("Average {} = {}".format(my_metric, my_metrics_dict['Averages'][my_metric]))
