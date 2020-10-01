@@ -1,6 +1,8 @@
 import random
 from utilities.input_fn_util import *
 import json
+import logging
+
 
 # COMPLETE 2D INPUT FUNCTIONS
 def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
@@ -275,6 +277,8 @@ def get_study_dirs(params):
 
 # split list of all valid study directories into a train and test batch based on train fraction
 def train_test_split(study_dirs, params):
+    # first train fraction is train dirs, last 1-train fract is test dirs
+    # assumes study dirs is already shuffled and/or stratified as wanted
     train_dirs = study_dirs[0:int(round(params.train_fract * len(study_dirs)))]
     eval_dirs = study_dirs[int(round(params.train_fract * len(study_dirs))):]
 
@@ -287,10 +291,14 @@ def patch_input_fn(params, mode, infer_dir=None):
     tf.random.set_seed(params.random_state)
     # Study dirs and prefixes setup
     study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.json')
-    if os.path.isfile(study_dirs_filepath):  # load study dirs file if it already exists for consistent training
+    # load study dirs file if it already exists for consistent training
+    if os.path.isfile(study_dirs_filepath):
+        logging.info("Loading existing study directories file for training: {}".format(study_dirs_filepath))
         with open(study_dirs_filepath) as f:
             study_dirs = json.load(f)
+    # if study dirs file does not exist, then create it
     else:
+        logging.info("Determining train/test split based on params and available study directories in data directory")
         # get all valid subdirectories in data_dir
         study_dirs = get_study_dirs(params)
         # save directory list to json file so it can be loaded in future
