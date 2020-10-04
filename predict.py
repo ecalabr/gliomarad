@@ -94,7 +94,7 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
 
 
 # predict a batch of input directories
-def predict(params, pred_dirs, out_dir, mask=None, best_last='last_weights'):
+def predict(params, pred_dirs, out_dir, mask=None, best_last='last'):
 
     # load latest checkpoint
     checkpoint_path = os.path.join(params.model_dir, 'checkpoints')
