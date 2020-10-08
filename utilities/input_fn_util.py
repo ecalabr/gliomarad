@@ -547,7 +547,10 @@ def normalize(input_img, mode='zero_mean'):
         return img
 
     # handle mean stdev
-    def mean_stdev(img, new_mean=1000., new_std=200.):
+    def mean_stdev(img):
+        # constants
+        new_mean = 1000.
+        new_std = 200.
         # perform normalization to specified mean, stdev
         nonzero_bool = img != 0.
         mean = np.mean(img[nonzero_bool], axis=None)

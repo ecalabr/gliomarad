@@ -2,9 +2,19 @@ from nipype.interfaces.ants import MeasureImageSimilarity
 import numpy as np
 import nibabel as nib
 from skimage.metrics import structural_similarity as struct_sim
+from sklearn.metrics import mean_squared_error
 
 
-# get built in locals
+# scale to 12 bit range
+def scale12bit(img):
+    # constants
+    new_mean = 2048.
+    new_std = 400.
+
+    return np.clip(((img - np.mean(img)) / (np.std(img) / new_std)) + new_mean, 1e-10, 4095)
+
+
+# get list of locals
 start_globals = list(globals().keys())
 
 
@@ -74,10 +84,25 @@ def mse(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
     return np.abs(sim.run().outputs.similarity)
 
 
+# normalized RMS error
+def nrmse(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
+    # load images
+    true_img = nib.load(true_nii).get_fdata()
+    pred_img = nib.load(pred_nii).get_fdata()
+    if mask:
+        mask_img = nib.load(mask_nii).get_fdata().astype(bool)
+    else:
+        mask_img = np.ones_like(true_img, dtype=bool)
+    # verbosity
+    if verbose:
+        print("Calculating nrmse")
+
+    return mean_squared_error(true_img[mask_img], pred_img[mask_img], squared=False) / (
+                np.max(true_img[mask_img]) - np.min(true_img[mask_img]))
+
+
 # mean absolute percentage error
 def mape(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
-    # divide by zero constant
-    EPSILON = 1e-10
     # load images
     true_img = nib.load(true_nii).get_fdata()
     pred_img = nib.load(pred_nii).get_fdata()
@@ -86,13 +111,70 @@ def mape(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
     else:
         mask_img = np.ones_like(true_img, dtype=bool)
     # scale to 12 bit range
-    true_img = true_img * (4095 / np.max(true_img))
-    pred_img = pred_img * (4095 / np.max(pred_img))
+    true_img = scale12bit(true_img[mask_img])
+    pred_img = scale12bit(pred_img[mask_img])
     # verbosity
     if verbose:
         print("Calculating MAPE on 12 bit range scaled images")
 
-    return np.mean((np.fabs((true_img - pred_img)) / (np.fabs(true_img) + EPSILON))[mask_img])
+    return np.mean(np.fabs((true_img - pred_img)) / (np.fabs(true_img)))
+
+
+# symmetric mean absolute percentage error
+def smape(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
+    # load images
+    true_img = nib.load(true_nii).get_fdata()
+    pred_img = nib.load(pred_nii).get_fdata()
+    if mask:
+        mask_img = nib.load(mask_nii).get_fdata().astype(bool)
+    else:
+        mask_img = np.ones_like(true_img, dtype=bool)
+    # scale to 12 bit range
+    true_img = scale12bit(true_img[mask_img])
+    pred_img = scale12bit(pred_img[mask_img])
+    # verbosity
+    if verbose:
+        print("Calculating sMAPE on 12 bit range scaled images")
+
+    return np.mean(np.fabs(pred_img - true_img) / (np.fabs(true_img) + np.fabs(pred_img)))
+
+
+# log of accuracy ratio
+def logac(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
+    # load images
+    true_img = nib.load(true_nii).get_fdata()
+    pred_img = nib.load(pred_nii).get_fdata()
+    if mask:
+        mask_img = nib.load(mask_nii).get_fdata().astype(bool)
+    else:
+        mask_img = np.ones_like(true_img, dtype=bool)
+    # scale to 12 bit range
+    true_img = scale12bit(true_img[mask_img])
+    pred_img = scale12bit(pred_img[mask_img])
+    # verbosity
+    if verbose:
+        print("Calculating logac on 12 bit range scaled images")
+
+    return np.mean(np.fabs((np.log(pred_img / true_img))))
+
+
+# median symmetric accuracy (cf. Morley, 2016)
+def medsymac(true_nii, pred_nii, mask_nii, mask=False, verbose=False):
+    # load images
+    true_img = nib.load(true_nii).get_fdata()
+    pred_img = nib.load(pred_nii).get_fdata()
+    if mask:
+        mask_img = nib.load(mask_nii).get_fdata().astype(bool)
+    else:
+        mask_img = np.ones_like(true_img, dtype=bool)
+    # scale to 12 bit range
+    true_img = scale12bit(true_img[mask_img])
+    pred_img = scale12bit(pred_img[mask_img])
+    # verbosity
+    if verbose:
+        print("Calculating medsymac on 12 bit range scaled images")
+
+    return np.exp(np.median(np.fabs(np.log(pred_img / true_img)))) - 1
 
 
 # structural similarity index

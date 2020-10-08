@@ -293,7 +293,8 @@ def patch_input_fn(params, mode, infer_dir=None):
     study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.json')
     # load study dirs file if it already exists for consistent training
     if os.path.isfile(study_dirs_filepath):
-        logging.info("Loading existing study directories file for training: {}".format(study_dirs_filepath))
+        if mode == 'train':
+            logging.info("Loading existing study directories file for training: {}".format(study_dirs_filepath))
         with open(study_dirs_filepath) as f:
             study_dirs = json.load(f)
     # if study dirs file does not exist, then create it

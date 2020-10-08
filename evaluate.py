@@ -169,14 +169,16 @@ if __name__ == '__main__':
                         help="Optionally specify a mask nii prefix for evaluation. All values > 0 are included in mask")
     parser.add_argument('-v', '--verbose', default=False, action="store_true",
                         help="Verbose terminal output flag")
-    parser.add_argument('-c', '--metrics', default=['cc', 'mi', 'mse', 'mape', 'ssim'], nargs='+',
-                        help="Metric or metrics to be evaluated (can specify multiple)")
+    parser.add_argument('-c', '--metrics', default=['cc', 'mi', 'ssim', 'mse', 'nrmse', 'smape', 'logac', 'medsymac'],
+                        nargs='+', help="Metric or metrics to be evaluated (can specify multiple)")
     parser.add_argument('-b', '--best_last', default='best',
                         help="'best' or 'last' - whether to use best or last weights for inference")
     parser.add_argument('-x', '--overwrite', default=False, action="store_true",
                         help="Use this flag to overwrite existing data")
     parser.add_argument('-l', '--baseline', default=None,
                         help="Prefix for image contrast to use in place of predictions")
+    parser.add_argument('-r', '--rename', default=None,
+                        help="Optionally rename the base folder for study dirs (useful when trained in production env)")
 
     # handle param argument
     args = parser.parse_args()
@@ -206,6 +208,19 @@ if __name__ == '__main__':
     if os.path.isfile(study_dirs_filepath):
         with open(study_dirs_filepath) as f:
             study_dirs = json.load(f)
+
+    # handle renaming argument
+    if args.rename:
+        assert os.path.isdir(args.rename), "Rename argument specified but directory not found: {}".format(args.rename)
+        study_dirs = [os.path.join(args.rename, os.path.basename(os.path.dirname(item))) for item in study_dirs]
+        # make sure new data directories actually exist
+        missing = []
+        for item in study_dirs:
+            if not os.path.isdir(item):
+                missing.append(item)
+        if missing:
+            raise FileNotFoundError("Missing the following data directories: {}".format(', '.join(missing)))
+
     # otherwise try to recreate study dirs in same way as train.py
     elif os.path.isdir(my_params.data_dir):
         study_dirs = get_study_dirs(my_params)
