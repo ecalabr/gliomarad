@@ -124,6 +124,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
         # get metric values
         tmp = {pred_nii: {}}
         for metric in metrics:
+            # calculate metric - if calculation fails return nan
             try:
                 metric_val = metric_picker(metric, true_nii, pred_nii, mask_nii, mask=mask, verbose=verbose)
             except:
