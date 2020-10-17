@@ -124,7 +124,11 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
         # get metric values
         tmp = {pred_nii: {}}
         for metric in metrics:
-            metric_val = metric_picker(metric, true_nii, pred_nii, mask_nii, mask=mask, verbose=verbose)
+            try:
+                metric_val = metric_picker(metric, true_nii, pred_nii, mask_nii, mask=mask, verbose=verbose)
+            except:
+                logging.warning("Unable to calculate metric {} for predicted image {}".format(metric, pred_nii))
+                metric_val  = float("nan")
             tmp[pred_nii].update({metric: metric_val})
 
         # update metrics dict
@@ -133,7 +137,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
     # get metric averages
     metrics_dict.update({'Averages': {}})
     for metric in metrics:
-        metric_avg = np.mean([metrics_dict[item][metric] for item in metrics_dict.keys() if not item == 'Averages'])
+        metric_avg = np.nanmean([metrics_dict[item][metric] for item in metrics_dict.keys() if not item == 'Averages'])
         metrics_dict['Averages'].update({metric: metric_avg})
 
     # save metrics
