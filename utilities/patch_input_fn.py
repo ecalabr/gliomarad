@@ -34,12 +34,12 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             lambda x: tf.numpy_function(load_roi_multicon_and_labels,
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
-                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches
         dataset = dataset.map(
             lambda x, y: tf_patches(x, y, params.train_dims, data_chan, params.data_format,
                                     overlap=params.train_patch_overlap),
-                                    num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
@@ -67,7 +67,7 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
                           params.mask_dilate,
                           params.data_plane,
                           params.data_format,
-                          False, # do not do data augmentation on eval data
+                          False,  # do not do data augmentation on eval data
                           params.label_interp,
                           params.norm_data,
                           params.norm_labels,
@@ -79,12 +79,12 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             lambda x: tf.numpy_function(load_roi_multicon_and_labels,
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
-            num_parallel_calls=params.num_threads) # tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches - USE SAME DATA DIMS AS TRAINING
         dataset = dataset.map(
             lambda x, y: tf_patches(x, y, params.train_dims, data_chan, params.data_format,
                                     overlap=params.train_patch_overlap),
-            num_parallel_calls=params.num_threads) # tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # generate batch data
@@ -109,15 +109,16 @@ def _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             lambda x: tf.numpy_function(load_multicon_preserve_size,
                                         [x] + py_func_params,
                                         tf.float32),
-                                        num_parallel_calls=params.num_threads) # tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x: tf_patches_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
-                                       num_parallel_calls=params.num_threads) # tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
-        dataset = dataset.batch(batch_size=1, drop_remainder=False) # force batch size 1 to ensure all data is processed
+        dataset = dataset.batch(batch_size=1,
+                                drop_remainder=False)  # force batch size 1 to ensure all data is processed
         # automatic prefetching to improve efficiency
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
@@ -159,13 +160,13 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             lambda x: tf.numpy_function(load_roi_multicon_and_labels_3d,
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
-                                        num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches
         dataset = dataset.map(
             lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
                                        weighted=weighted,
                                        overlap=params.train_patch_overlap),
-                                       num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # flatten out dataset so that each entry is a single patch and associated label
         dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
@@ -194,7 +195,7 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
                           params.mask_dilate,
                           params.data_plane,
                           params.data_format,
-                          False, # no data augmentation for eval mode
+                          False,  # no data augmentation for eval mode
                           params.label_interp,
                           params.norm_data,
                           params.norm_labels,
@@ -239,11 +240,11 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
             lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
                                         [x] + py_func_params,
                                         tf.float32),
-                                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # map each dataset to a series of patches based on infer inputs
         dataset = dataset.map(
             lambda x: tf_patches_3d_infer(x, data_dims, chan_size, params.data_format, params.infer_patch_overlap),
-                                          num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # flat map so that each tensor is a single slice
         dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
@@ -260,19 +261,72 @@ def _patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
 
 # utility function to get all study subdirectories in a given parent data directory
 # returns shuffled directory list using user defined randomization seed
-def get_study_dirs(params):
-    # get all subdirectories in data_dir
-    study_dirs = [item for item in glob(params.data_dir + '/*/') if os.path.isdir(item)]
-    # make sure all necessary files are present in each folder
-    study_dirs = [study for study in study_dirs if all(
-        [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
-         for item in params.data_prefix + params.label_prefix])]
-    # study dirs sorted in alphabetical order for reproducible results
-    study_dirs.sort()
-    # randomly shuffle input directories for training using a user defined randomization seed
-    random.Random(params.random_state).shuffle(study_dirs)
+# saves a copy of output to study_dirs_list.json in study directory
+def get_study_dirs(params, change_basedir=None):
 
-    return  study_dirs
+    # Study dirs json filename setup
+    study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.json')
+
+    # load study dirs file if it already exists for consistent training
+    if os.path.isfile(study_dirs_filepath):
+        logging.info("Loading existing study directories file: {}".format(study_dirs_filepath))
+        with open(study_dirs_filepath) as f:
+            study_dirs = json.load(f)
+
+        # handle change_basedir argument
+        if change_basedir:
+            # get rename list of directories
+            study_dirs = [os.path.join(change_basedir, os.path.basename(os.path.dirname(item))) for item in study_dirs]
+            if not all([os.path.isdir(d) for d in study_dirs]):
+                logging.error("Using change basedir argument in get_study_dirs but not all study directories exist")
+                # get list of missing files
+                missing = []
+                for item in study_dirs:
+                    if not os.path.isdir(item):
+                        missing.append(item)
+                raise FileNotFoundError("Missing the following data directories: {}".format(', '.join(missing)))
+
+        # make sure that study directories loaded from file actually exist and warn/error if some/all do not
+        valid_study_dirs = []
+        for study in study_dirs:
+            # get list of all expected files via glob
+            files = [glob("{}/*{}.nii.gz".format(study, item)) for item in params.data_prefix + params.label_prefix]
+            # check that a file was found and that file exists in each case
+            if all(files) and all([os.path.isfile(f[0]) for f in files]):
+                valid_study_dirs.append(study)
+        # case, no valid study dirs
+        if not valid_study_dirs:
+            logging.error("study_dirs_list.json exists in the model directory but does not contain valid directories")
+            raise ValueError("No valid study directories in study_dirs_list.json")
+        # case, less valid study dirs than found in study dirs file
+        elif len(valid_study_dirs) < len(study_dirs):
+            logging.warning("Some study directories listed in study_dirs_list.json are missing or incomplete")
+        # case, all study dirs in study dirs file are valid
+        else:
+            logging.info("All directories listed in study_dirs_list.json are present and complete")
+        study_dirs = valid_study_dirs
+
+    # if study dirs file does not exist, then determine study directories and create study_dirs_list.json
+    else:
+        logging.info("Determining train/test split based on params and available study directories in data directory")
+        # get all valid subdirectories in data_dir
+        study_dirs = [item for item in glob(params.data_dir + '/*/') if os.path.isdir(item)]
+        # make sure all necessary files are present in each folder
+        study_dirs = [study for study in study_dirs if all(
+            [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
+             for item in params.data_prefix + params.label_prefix])]
+
+        # study dirs sorted in alphabetical order for reproducible results
+        study_dirs.sort()
+
+        # randomly shuffle input directories for training using a user defined randomization seed
+        random.Random(params.random_state).shuffle(study_dirs)
+
+        # save directory list to json file so it can be loaded in future
+        with open(study_dirs_filepath, 'w+', encoding='utf-8') as f:
+            json.dump(study_dirs, f, ensure_ascii=False, indent=4)  # save study dir list for consistency
+
+    return study_dirs
 
 
 # split list of all valid study directories into a train and test batch based on train fraction
@@ -287,31 +341,23 @@ def train_test_split(study_dirs, params):
 
 # patch input function for 2d or 3d
 def patch_input_fn(params, mode, infer_dir=None):
+
     # set global random seed for tensorflow
     tf.random.set_seed(params.random_state)
-    # Study dirs and prefixes setup
-    study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.json')
-    # load study dirs file if it already exists for consistent training
-    if os.path.isfile(study_dirs_filepath):
-        if mode == 'train':
-            logging.info("Loading existing study directories file for training: {}".format(study_dirs_filepath))
-        with open(study_dirs_filepath) as f:
-            study_dirs = json.load(f)
-    # if study dirs file does not exist, then create it
-    else:
-        logging.info("Determining train/test split based on params and available study directories in data directory")
-        # get all valid subdirectories in data_dir
-        study_dirs = get_study_dirs(params)
-        # save directory list to json file so it can be loaded in future
-        with open(study_dirs_filepath, 'w+', encoding='utf-8') as f:
-            json.dump(study_dirs, f, ensure_ascii=False, indent=4)  # save study dir list for consistency
 
-    # split study directories into train and test sets
-    train_dirs, eval_dirs = train_test_split(study_dirs, params)
-
-    # handle infer dir argument
-    if infer_dir:
+    # handle inference mode
+    if mode == 'infer':
         infer_dir = tf.constant([infer_dir])
+        train_dirs = []
+        eval_dirs = []
+
+    # handle train and eval modes
+    else:
+        # get valid study directories
+        study_dirs = get_study_dirs(params)
+
+        # split study directories into train and test sets
+        train_dirs, eval_dirs = train_test_split(study_dirs, params)
 
     # handle 2D vs 3D
     if params.dimension_mode == '2D':  # handle 2d inputs

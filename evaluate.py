@@ -129,7 +129,7 @@ def eval_pred(params, eval_dirs, pred_niis, out_dir, mask, metrics, verbose=Fals
                 metric_val = metric_picker(metric, true_nii, pred_nii, mask_nii, mask=mask, verbose=verbose)
             except:
                 logging.warning("Unable to calculate metric {} for predicted image {}".format(metric, pred_nii))
-                metric_val  = float("nan")
+                metric_val = float("nan")
             tmp[pred_nii].update({metric: metric_val})
 
         # update metrics dict
@@ -193,6 +193,7 @@ if __name__ == '__main__':
     # turn of distributed strategy and mixed precision
     my_params.dist_strat = None
     my_params.mixed_precision = False
+
     # determine model dir
     if my_params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
         my_params.model_dir = os.path.dirname(args.param_file)
@@ -207,42 +208,18 @@ if __name__ == '__main__':
         if not os.path.isdir(args.out_dir):
             os.mkdir(args.out_dir)
 
-    # get list of study directories
-    # load study dirs json file if it exists in the model directory
-    study_dirs_filepath = os.path.join(my_params.model_dir, 'study_dirs_list.json')
-    if os.path.isfile(study_dirs_filepath):
-        with open(study_dirs_filepath) as f:
-            study_dirs = json.load(f)
-
-    # handle renaming argument
-    if args.rename:
-        assert os.path.isdir(args.rename), "Rename argument specified but directory not found: {}".format(args.rename)
-        study_dirs = [os.path.join(args.rename, os.path.basename(os.path.dirname(item))) for item in study_dirs]
-        # make sure new data directories actually exist
-        missing = []
-        for item in study_dirs:
-            if not os.path.isdir(item):
-                missing.append(item)
-        if missing:
-            raise FileNotFoundError("Missing the following data directories: {}".format(', '.join(missing)))
-
-    # otherwise try to recreate study dirs in same way as train.py
-    elif os.path.isdir(my_params.data_dir):
-        study_dirs = get_study_dirs(my_params)
-    # otherwise error, because there is no way to make sure we are using the correct directories for evaluation
-    else:
-        raise ValueError("Study directory file does not exist at {} and study directory does not exist at {}".format(
-            study_dirs_filepath, my_params.data_dir))
-
-    # separate eval dirs from list of all study dirs using train fraction (same function used by train.py)
-    _, my_eval_dirs = train_test_split(study_dirs, my_params)
-
     # set up logger, delete old log file if overwrite param is set to yes
     log_path = os.path.join(args.out_dir, 'evaluate.log')
     if os.path.isfile(log_path) and my_params.overwrite == 'yes':
         os.remove(log_path)
     set_logger(log_path)
     logging.info("Log file created at " + log_path)
+
+    # get list of study valid study directories - optionally change base directory name
+    study_dirs = get_study_dirs(my_params, change_basedir=args.rename)
+
+    # separate eval dirs from list of all study dirs using train fraction (same function used by train.py)
+    _, my_eval_dirs = train_test_split(study_dirs, my_params)
 
     # predict output niis
     niis_pred = predict(my_params, my_eval_dirs, args.out_dir, mask=args.mask, best_last=args.best_last)
