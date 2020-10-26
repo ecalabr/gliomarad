@@ -199,7 +199,7 @@ def filter_zero_patches(labels, data_format, mode, thresh=0.05):
     if data_format == 'channels_last':
         # handle channels last - use entire slice if 2D, use entire slab if 3D or 2.5D
         if mode == '2.5D':  # [x, y, z, c]
-            labels = labels[:, :, int(round(labels.get_shape()[2]/2.)), 0]
+            labels = labels[:, :, int(round(labels.get_shape()[2] / 2.)), 0]
         elif mode == '2D':  # [x, y, c]
             labels = labels[:, :, 0]
         elif mode == '3D':  # [x, y, z, c]
@@ -209,7 +209,7 @@ def filter_zero_patches(labels, data_format, mode, thresh=0.05):
     else:
         # handle channels first - use entire slice if 2D, use entire slab if 3D or 2.5D
         if mode == '2.5D':  # [c, x, y, z]
-            labels = labels[0, :, :, int(round(labels.get_shape()[2]/2.))]
+            labels = labels[0, :, :, int(round(labels.get_shape()[2] / 2.))]
         elif mode == '2D':  # [c, x, y]
             labels = labels[0, :, :]
         elif mode == '3D':  # [c, x, y, z]
@@ -303,7 +303,7 @@ def expand_region(input_dims, region_bbox, delta):
         return region_bbox
 
     # determine how much to add on each side of the bounding box
-    deltas = np.array([-int(np.floor(delta/2.)), int(np.ceil(delta/2.))] * 3)
+    deltas = np.array([-int(np.floor(delta / 2.)), int(np.ceil(delta / 2.))] * 3)
 
     # use deltas to get a new bounding box
     tmp_bbox = np.array(region_bbox) + deltas
@@ -315,8 +315,8 @@ def expand_region(input_dims, region_bbox, delta):
             if item < 0:
                 item = 0
         else:  # for odd indices, make sure they do not exceed original dims
-            if item > input_dims[int(round((i-1)/2))]:
-                item = input_dims[int(round((i-1)/2))]
+            if item > input_dims[int(round((i - 1) / 2))]:
+                item = input_dims[int(round((i - 1) / 2))]
         new_bbox.append(item)
 
     return new_bbox
@@ -340,8 +340,8 @@ def expand_region_dims(input_dims, region_bbox, out_dims):
     deltas = [0 if d < 0 else d for d in deltas]
 
     # determine how much to add on each side of the bounding box
-    pre_inds = np.array([-int(np.floor(d/2.)) for d in deltas])
-    post_inds = np.array([int(np.ceil(d/2.)) for d in deltas])
+    pre_inds = np.array([-int(np.floor(d / 2.)) for d in deltas])
+    post_inds = np.array([int(np.ceil(d / 2.)) for d in deltas])
     deltas = np.empty((pre_inds.size + post_inds.size,), dtype=pre_inds.dtype)
     deltas[0::2] = pre_inds
     deltas[1::2] = post_inds
@@ -356,8 +356,8 @@ def expand_region_dims(input_dims, region_bbox, out_dims):
             if item < 0:
                 item = 0
         else:  # for odd indices, make sure they do not exceed original dims
-            if item > input_dims[int(round((i-1)/2))]:
-                item = input_dims[int(round((i-1)/2))]
+            if item > input_dims[int(round((i - 1) / 2))]:
+                item = input_dims[int(round((i - 1) / 2))]
         new_bbox.append(item)
 
     return new_bbox
@@ -489,7 +489,7 @@ def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, orde
     # Apply affine to labels if given
     if labels is not None:
         labels = ndi.interpolation.affine_transform(labels, affine, offset=offset, order=order, output=np.float32,
-                                                   output_shape=out_shape)
+                                                    output_shape=out_shape)
     # Apply affine to image, accouting for possible 4d image
     if len(image.shape) > 3:
         # make 4d identity matrix and replace xyz component with 3d affine
@@ -498,7 +498,7 @@ def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, orde
         offset4d = np.append(offset, 0.)
         out_shape4d = np.append(out_shape, image.shape[-1])
         image = ndi.interpolation.affine_transform(image, affine4d, offset=offset4d, order=1, output=np.float32,
-                                             output_shape=out_shape4d)
+                                                   output_shape=out_shape4d)
     else:
         image = ndi.interpolation.affine_transform(image, affine, offset=offset, order=1, output=np.float32,
                                                    output_shape=out_shape)
@@ -529,12 +529,12 @@ def normalize(input_img, mode='zero_mean'):
         raise TypeError("Input image should be np.ndarray but is: " + str(type(input_img)))
 
     # define epsilon for divide by zero errors
-    EPSILON = 1e-10
+    epsilon = 1e-10
 
     # handle unit mode
     def unit(img):
         # perform normalization to [0, 1]
-        img *= 1.0 / (np.max(img) + EPSILON)
+        img *= 1.0 / (np.max(img) + epsilon)
         return img
 
     # handle mean zscore
@@ -542,7 +542,7 @@ def normalize(input_img, mode='zero_mean'):
         # perform z score normalization to 0 mean, unit std
         nonzero_bool = img != 0.
         mean = np.mean(img[nonzero_bool], axis=None)
-        std = np.std(img[nonzero_bool], axis=None) + EPSILON
+        std = np.std(img[nonzero_bool], axis=None) + epsilon
         img = np.where(nonzero_bool, ((img - mean) / std), 0.)
         return img
 
@@ -554,8 +554,8 @@ def normalize(input_img, mode='zero_mean'):
         # perform normalization to specified mean, stdev
         nonzero_bool = img != 0.
         mean = np.mean(img[nonzero_bool], axis=None)
-        std = np.std(img[nonzero_bool], axis=None) + EPSILON
-        img = np.where(nonzero_bool, ((img - mean) / (std/new_std)) + new_mean, 0.)
+        std = np.std(img[nonzero_bool], axis=None) + epsilon
+        img = np.where(nonzero_bool, ((img - mean) / (std / new_std)) + new_mean, 0.)
         return img
 
     # handle median interquartile range
@@ -564,7 +564,7 @@ def normalize(input_img, mode='zero_mean'):
         # uses factor of 0.7413 to normalize interquartile range to standard deviation
         nonzero_bool = img != 0.
         med = np.median(img[nonzero_bool], axis=None)
-        niqr = stats.iqr(img[nonzero_bool], axis=None) * 0.7413 + EPSILON
+        niqr = stats.iqr(img[nonzero_bool], axis=None) * 0.7413 + epsilon
         img = np.where(nonzero_bool, ((img - med) / (niqr / new_stdev)) + new_med, 0.)
         return img
 
@@ -573,7 +573,7 @@ def normalize(input_img, mode='zero_mean'):
         input_img = locals()[mode](input_img)
     else:
         # get list of available normalization modes
-        norm_modes = [k for k in locals().keys() if k not in ["input_img", "mode", "EPSILON"]]
+        norm_modes = [k for k in locals().keys() if k not in ["input_img", "mode", "epsilon"]]
         raise NotImplementedError(
             "Specified normalization mode: '{}' is not one of the available modes: {}".format(mode, norm_modes))
 
@@ -639,7 +639,7 @@ def zero_pad_image(input_data, out_dims, axes):
         pad = [0, 0]
         if dim in axes:
             total_pad = out_dims[axes.index(dim)] - input_data.shape[dim]
-            pad = [int(math.ceil(total_pad/2.)), int(math.floor(total_pad/2.))]
+            pad = [int(math.ceil(total_pad / 2.)), int(math.floor(total_pad / 2.))]
         pads.append(pad)
 
     # pad array with zeros (default)
@@ -654,10 +654,14 @@ def zero_pad_image(input_data, out_dims, axes):
 
 
 def byte_convert(byte_data):
-    if isinstance(byte_data, bytes):  return byte_data.decode()
-    if isinstance(byte_data, dict):   return dict(map(byte_convert, byte_data.items()))
-    if isinstance(byte_data, tuple):  return map(byte_convert, byte_data)
-    if isinstance(byte_data, (np.ndarray, list)):   return list(map(byte_convert, byte_data))
+    if isinstance(byte_data, bytes):
+        return byte_data.decode()
+    if isinstance(byte_data, dict):
+        return dict(map(byte_convert, byte_data.items()))
+    if isinstance(byte_data, tuple):
+        return map(byte_convert, byte_data)
+    if isinstance(byte_data, (np.ndarray, list)):
+        return list(map(byte_convert, byte_data))
 
     return byte_data
 
@@ -691,7 +695,7 @@ def load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane, norm=
 
     # load multi-contrast data and normalize, no slice trimming for infer data
     data = load_single_study(study_dir, feature_prefx, data_format=data_fmt, plane=plane,
-                                   norm=norm, norm_mode=norm_mode)
+                             norm=norm, norm_mode=norm_mode)
 
     # transpose slices to batch dimension format such that format is [z, x, y, c] or [z, c, x, y]
     axes = (3, 0, 1, 2) if data_fmt == 'channels_first' else (2, 0, 1, 3)
@@ -701,8 +705,8 @@ def load_multicon_preserve_size(study_dir, feature_prefx, data_fmt, plane, norm=
 
 
 def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
-                                  data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
-                                  norm_mode='zero_mean'):
+                                 data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
+                                 norm_mode='zero_mean'):
     """
     Patch loader generates 2D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -827,8 +831,8 @@ def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pre
 
 
 def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
-                                     data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
-                                     norm_mode='zero_mean', return_mask=False):
+                                    data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
+                                    norm_mode='zero_mean', return_mask=False):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -920,9 +924,9 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
 
     # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
-    labels = np.expand_dims(labels, axis=(0,4))  # add a batch and channel dimension of 1
+    labels = np.expand_dims(labels, axis=(0, 4))  # add a batch and channel dimension of 1
     if return_mask is not None:
-        mask = np.expand_dims(mask, axis=(0,4))  # add a batch and channel dimension of 1
+        mask = np.expand_dims(mask, axis=(0, 4))  # add a batch and channel dimension of 1
 
     # handle different planes
     if plane == 'ax':
