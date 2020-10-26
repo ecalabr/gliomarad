@@ -1,14 +1,16 @@
+"""Evaluate a trained model"""
+
 import argparse
 import logging
 import os
-# set tensorflow logging to FATAL before importing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
-logging.getLogger('tensorflow').setLevel(logging.FATAL)
 import nibabel as nib
 import numpy as np
 import json
 import subprocess
 from glob import glob
+# set tensorflow logging to FATAL before importing things that contain tensorflow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
 from predict import predict
 from utilities.eval_metrics import metric_picker
 from utilities.patch_input_fn import get_study_dirs, train_test_split

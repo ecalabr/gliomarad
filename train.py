@@ -4,9 +4,9 @@ import argparse
 from glob import glob
 import logging
 import os
-# set tensorflow logging level before importing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
-logging.getLogger('tensorflow').setLevel(logging.INFO)
+# set tensorflow logging level before importing things that contain tensorflow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
 import tensorflow as tf
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, TensorBoard
 from utilities.utils import Params

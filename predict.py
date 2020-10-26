@@ -1,18 +1,18 @@
+"""Use trained model for prediction"""
+
 import argparse
 import logging
 import os
-from utilities.utils import Params, set_logger
-from utilities.patch_input_fn import patch_input_fn
-from model.model_fn import model_fn
 from glob import glob
 import nibabel as nib
 import numpy as np
+# set tensorflow logging to FATAL before importing things with tensorflow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
 from utilities.input_fn_util import reconstruct_infer_patches, reconstruct_infer_patches_3d
-
-
-# set tensorflow logging to FATAL before importing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
-logging.getLogger('tensorflow').setLevel(logging.FATAL)
+from utilities.utils import Params, set_logger
+from utilities.patch_input_fn import patch_input_fn
+from model.model_fn import model_fn
 
 
 # take raw predictions and convert to nifti file
@@ -138,6 +138,8 @@ def predict(params, pred_dirs, out_dir, mask=None, best_last='last'):
             predictions = model.predict(infer_inputs)
             # save nii
             pred_out = predictions_2_nii(predictions, pred_dir, out_dir, params, mask=mask)
+        else:
+            logging.info("Predictions already exist and will not be overwritten: {}".format(pred_out))
         # update list of output niis
         niis_out.append(pred_out)
 
@@ -159,6 +161,8 @@ if __name__ == '__main__':
                         help="Optionally specify a filename prefix for a mask to mask the predictions")
     parser.add_argument('-o', '--out_dir', default=None,
                         help="Optionally specify output directory")
+    parser.add_argument('-s', '--spec_direc', default=None,
+                        help="Optionally specify a specifing single directory for inference (overrides -d)")
 
     # handle param argument
     args = parser.parse_args()
@@ -174,26 +178,6 @@ if __name__ == '__main__':
     if not os.path.isdir(my_params.model_dir):
         raise ValueError("Specified model directory does not exist")
 
-    # handle data_dir argument
-    # get all subdirectories in data_dir
-    study_dirs = [item for item in glob(args.data_dir + '/*/') if os.path.isdir(item)]
-    # make sure all necessary files are present in each folder
-    study_dirs = [study for study in study_dirs if all(
-        [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
-         for item in args.data_prefix + args.label_prefix])]
-    # study dirs sorted in alphabetical order for reproducible results
-    study_dirs.sort()
-
-    # handle best_last argument
-    if args.best_last not in ['best', 'last']:
-        raise ValueError("Did not understand best_last value: {}".format(args.best_last))
-
-    # handle mask argument
-    if args.mask:
-        mask_niis = [glob(study_dir + '/*' + args.mask + '.nii.gz')[0] for study_dir in study_dirs]
-        if not all(os.path.isfile(item) for item in mask_niis):
-            raise ValueError("Specified mask prefix is not present for all studies in data_dir: {}".format(args.mask))
-
     # handle out_dir argument
     if args.out_dir:
         assert os.path.isdir(args.out_dir), "Specified output directory does not exist: {}".format(args.out_dir)
@@ -208,6 +192,44 @@ if __name__ == '__main__':
         os.remove(log_path)
     set_logger(log_path)
     logging.info("Log file created at " + log_path)
+
+    # determine directories for inference
+    if not any([args.data_dir, args.spec_direc]):
+        raise ValueError("Must specify directory for inference with -d (parent directory) or -s (single directory)")
+    study_dirs = []
+    # handle specific directory argument
+    if args.spec_direc:
+        if os.path.isdir(args.spec_direc) and all([glob(args.spec_direc + '/*{}.nii.gz'.format(item)) for item in
+                                                   my_params.data_prefix]):
+            study_dirs = [args.spec_direc]
+            logging.info("Generating predictions for single directory: {}".format(args.spec_direc))
+        else:
+            logging.error("Specified directory does not have the required files: {}".format(args.spec_direc))
+            exit()
+    # if specific directory is not specified, then use data_dir argument
+    else:
+        # get all subdirectories in data_dir
+        study_dirs = [item for item in glob(args.data_dir + '/*/') if os.path.isdir(item)]
+    # make sure all necessary files are present in each folder
+    study_dirs = [study for study in study_dirs if all(
+        [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
+         for item in my_params.data_prefix])]
+    # study dirs sorted in alphabetical order for reproducible results
+    study_dirs.sort()
+    # make sure there are study dirs found
+    if not study_dirs:
+        logging.error("No valid study directories found in parent data directory {}".format(args.data_dir))
+        exit()
+
+    # handle best_last argument
+    if args.best_last not in ['best', 'last']:
+        raise ValueError("Did not understand best_last value: {}".format(args.best_last))
+
+    # handle mask argument
+    if args.mask:
+        mask_niis = [glob(study_dir + '/*' + args.mask + '.nii.gz')[0] for study_dir in study_dirs]
+        if not all(os.path.isfile(item) for item in mask_niis):
+            raise ValueError("Specified mask prefix is not present for all studies in data_dir: {}".format(args.mask))
 
     # make predictions
     pred = predict(my_params, study_dirs, args.out_dir, mask=args.mask, best_last=args.best_last)
