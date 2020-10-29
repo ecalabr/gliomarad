@@ -176,9 +176,9 @@ if __name__ == '__main__':
                         help="Optionally specify a mask nii prefix for evaluation. All values > 0 are included in mask")
     parser.add_argument('-v', '--verbose', default=False, action="store_true",
                         help="Verbose terminal output flag")
-    parser.add_argument('-c', '--metrics', default=['cc', 'mi', 'ssim', 'mse', 'nrmse', 'smape', 'logac', 'medsymac'],
+    parser.add_argument('-t', '--metrics', default=['cc', 'mi', 'ssim', 'mse', 'nrmse', 'smape', 'logac', 'medsymac'],
                         nargs='+', help="Metric or metrics to be evaluated (can specify multiple)")
-    parser.add_argument('-b', '--best_last', default='best',
+    parser.add_argument('-c', '--checkpoint', default='best',
                         help="'best' or 'last' - whether to use best or last weights for inference")
     parser.add_argument('-x', '--overwrite', default=False, action="store_true",
                         help="Use this flag to overwrite existing data")
@@ -224,7 +224,7 @@ if __name__ == '__main__':
     _, my_eval_dirs = train_test_split(study_dirs, my_params)
 
     # predict output niis
-    niis_pred = predict(my_params, my_eval_dirs, args.out_dir, mask=args.mask, best_last=args.best_last)
+    niis_pred = predict(my_params, my_eval_dirs, args.out_dir, mask=args.mask, checkpoint=args.checkpoint)
 
     # handle baseline predictions
     if args.baseline:

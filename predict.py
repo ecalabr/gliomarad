@@ -94,7 +94,7 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
 
 
 # predict a batch of input directories
-def predict(params, pred_dirs, out_dir, mask=None, best_last='last'):
+def predict(params, pred_dirs, out_dir, mask=None, checkpoint='last'):
 
     # load latest checkpoint
     checkpoint_path = os.path.join(params.model_dir, 'checkpoints')
@@ -102,14 +102,22 @@ def predict(params, pred_dirs, out_dir, mask=None, best_last='last'):
     if checkpoints:
         # load best or last checkpoint
         # determine last by timestamp
-        if best_last == 'last':
+        if checkpoint == 'last':
             ckpt = max(checkpoints, key=os.path.getctime)
         # determine best by minimum loss value in filename
-        elif best_last == 'best':
-            vals = [float(item[0:-5].split('_')[-1]) for item in checkpoints]
-            ckpt = checkpoints[np.argmin(vals)]
+        elif checkpoint == 'best':
+            try:
+                vals = [float(item[0:-5].split('_')[-1]) for item in checkpoints]
+                ckpt = checkpoints[np.argmin(vals)]
+            except:
+                line1 = "Could not determine 'best' checkpoint based on checkpoint filenames. "
+                line2 = "Use 'last' or pass a specific checkpoint filename to the checkpoint argument."
+                logging.error(line1 + line2)
+                raise ValueError(line1 + line2)
+        elif os.path.isfile(os.path.join(my_params.model_dir, "checkpoints/{}.hdf5".format(checkpoint))):
+            ckpt = os.path.join(my_params.model_dir, "checkpoints/{}.hdf5".format(checkpoint))
         else:
-            raise ValueError("Did not understand best_last value: {}".format(args.best_last))
+            raise ValueError("Did not understand checkpoint value: {}".format(args.checkpoint))
         # net_builder input layer uses train_dims, so set these to infer dims to allow different size inference
         params.train_dims = params.infer_dims
         # batch size for inference is hard-coded to 1
@@ -118,7 +126,7 @@ def predict(params, pred_dirs, out_dir, mask=None, best_last='last'):
         logging.info("Creating the model...")
         model = model_fn(params)
         # load weights from last checkpoint
-        logging.info("Loading {} checkpoint from {}...".format(best_last, ckpt))
+        logging.info("Loading '{}' checkpoint from {}...".format(checkpoint, ckpt))
         model.load_weights(ckpt)
     else:
         raise ValueError("No model checkpoints found at {}".format(checkpoint_path))
@@ -155,8 +163,8 @@ if __name__ == '__main__':
                         help="Path to params.json")
     parser.add_argument('-d', '--data_dir', default=None,
                         help="Path to directory to generate inference from")
-    parser.add_argument('-b', '--best_last', default='last',
-                        help="'best' or 'last' - whether to use best or last weights for inference")
+    parser.add_argument('-c', '--checkpoint', default='last',
+                        help="Can be 'best', 'last', or an hdf5 filename in the checkpoints subdirectory of model_dir")
     parser.add_argument('-m', '--mask', default=None,
                         help="Optionally specify a filename prefix for a mask to mask the predictions")
     parser.add_argument('-o', '--out_dir', default=None,
@@ -221,9 +229,13 @@ if __name__ == '__main__':
         logging.error("No valid study directories found in parent data directory {}".format(args.data_dir))
         exit()
 
-    # handle best_last argument
-    if args.best_last not in ['best', 'last']:
-        raise ValueError("Did not understand best_last value: {}".format(args.best_last))
+    # handle checkpoint argument
+    if args.checkpoint not in ['best', 'last']:  # checks if user wants to use the best or last checkpoint
+        # strip hdf5 extension if present
+        args.checkpoint = args.checkpoint.split('.hdf5')[0] if args.checkpoint.endswith('.hdf5') else args.checkpoint
+        # check for existing checkpoint corresponding to user specified checkpoint argument string
+        if not os.path.isfile(os.path.join(my_params.model_dir, "checkpoints/{}.hdf5".format(args.checkpoint))):
+            raise ValueError("Did not understand checkpoint value: {}".format(args.checkpoint))
 
     # handle mask argument
     if args.mask:
@@ -232,4 +244,4 @@ if __name__ == '__main__':
             raise ValueError("Specified mask prefix is not present for all studies in data_dir: {}".format(args.mask))
 
     # make predictions
-    pred = predict(my_params, study_dirs, args.out_dir, mask=args.mask, best_last=args.best_last)
+    pred = predict(my_params, study_dirs, args.out_dir, mask=args.mask, checkpoint=args.checkpoint)

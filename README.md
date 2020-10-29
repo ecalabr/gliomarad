@@ -27,34 +27,38 @@ This is an example of a single patient image. The image file name must start wit
 
 # Usage
 ## Train
-The following command will train the network using the parameters specified in params.json:
+The following command will train the network using the parameters specified in the param file (-p):
 ```bash
-python train.py -p params/params.json
+python train.py -p gadnet/gadnet_params.json
 ```
-For help with parameter files, please refer to a separate markdown file in the "params" directory of this project.
+For help with parameter files, please refer to a separate markdown file in the "gadnet" subdirectory of this project.
 
 Training outputs will be located in the model directory as specified in the param file.
  
 ## Predict
-The following command will use trained model weights to predict one image for patient ID 123456:
+The following command will use the trained "full model" weights checkpoint (-c) to predict for a single patient (-s) with ID 123456:
 ```bash
-python predict.py -p params/params.json -d data_dir/123456
+python predict.py -p gadnet/gadnet_full_params.json -s data_dir/123456 -c full_model
+```
+To predict using the "reduced model", use the following command. Note that the specified paramter file (-p) must match the model checkpoint:
+```bash
+python predict.py -p gadnet/gadnet_reduced_params.json -s data_dir/123456 -c reduced_model
 ```
 By default, the predicted output will be placed in the model directory in a subdirectory named "prediction"; however, the user can specify a different output directory using "-o":
 ```bash
-python predict.py -p params/params.json -d data_dir/123456 -o outputs/
+python predict.py -p gadnet/gadnet_full_params.json -s data_dir/123456 -c full_model -o outputs/
 ```
 
 ## Evaluate
-The following command will evaluate the trained network using the testing portion of the data as specified in the params.json file:
+The following command will evaluate the trained network using the testing portion of the data as specified in the params file (-p) using the full model weights checkpoint (-c):
 ```bash
-python evaluate.py -p params/params.json
+python evaluate.py -p gadnet/gadnet_full_params.json -c full_model
 ```
 By default, the evaluation output will be placed in the model directory in a subdirectory named "evaluation"; however, the user can specify a different output directory using "-o":
 ```bash
-python evaluate.py -p params/params.json -o eval_outputs/
+python evaluate.py -p gadnet/gadnet_full_params.json -c full_model -o eval_outputs/
 ```
-Evaluation metrics can be manually specified using "-c":
+Evaluation metrics can be manually specified using "-t":
 ```bash
-python evaluate.py -p params/params.json -c smape ssim logac
+python evaluate.py -p gadnet/gadnet_full_params.json -c full_model -t smape ssim logac
 ```
