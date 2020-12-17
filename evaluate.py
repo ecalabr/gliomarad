@@ -186,6 +186,9 @@ if __name__ == '__main__':
                         help="Prefix for image contrast to use in place of predictions")
     parser.add_argument('-r', '--rename', default=None,
                         help="Optionally rename the base folder for study dirs (useful when trained in production env)")
+    parser.add_argument('-f', '--force_cpu', default=False,
+                        help="Disable GPU and force all computation to be done on CPU",
+                        action='store_true')
 
     # handle param argument
     args = parser.parse_args()
@@ -222,6 +225,11 @@ if __name__ == '__main__':
 
     # separate eval dirs from list of all study dirs using train fraction (same function used by train.py)
     _, my_eval_dirs = train_test_split(study_dirs, my_params)
+
+    # handle force cpu argument
+    if args.force_cpu:
+        logging.info("Forcing CPU (GPU disabled)")
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     # predict output niis
     niis_pred = predict(my_params, my_eval_dirs, args.out_dir, mask=args.mask, checkpoint=args.checkpoint)

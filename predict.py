@@ -171,6 +171,9 @@ if __name__ == '__main__':
                         help="Optionally specify output directory")
     parser.add_argument('-s', '--spec_direc', default=None,
                         help="Optionally specify a specifing single directory for inference (overrides -d)")
+    parser.add_argument('-f', '--force_cpu', default=False,
+                        help="Disable GPU and force all computation to be done on CPU",
+                        action='store_true')
 
     # handle param argument
     args = parser.parse_args()
@@ -242,6 +245,11 @@ if __name__ == '__main__':
         mask_niis = [glob(study_dir + '/*' + args.mask + '.nii.gz')[0] for study_dir in study_dirs]
         if not all(os.path.isfile(item) for item in mask_niis):
             raise ValueError("Specified mask prefix is not present for all studies in data_dir: {}".format(args.mask))
+
+    # handle force cpu argument
+    if args.force_cpu:
+        logging.info("Forcing CPU (GPU disabled)")
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     # make predictions
     pred = predict(my_params, study_dirs, args.out_dir, mask=args.mask, checkpoint=args.checkpoint)
