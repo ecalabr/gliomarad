@@ -43,6 +43,7 @@ def tf_patches(data, labels, patch_size, chan_dim, data_format, overlap=1):
     # make patches
     ksizes = [1] + patch_size + [1]
     strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], 1]
+    strides = [int(round(item)) for item in strides]
     rates = [1, 1, 1, 1]
     data = tf.image.extract_patches(data, sizes=ksizes, strides=strides, rates=rates, padding='SAME')
     data = tf.reshape(data, [-1] + patch_size + [chan_dim])
@@ -85,6 +86,7 @@ def tf_patches_infer(data, patch_size, chan_dim, data_format, overlap=1):
     # make patches
     ksizes = [1] + patch_size + [1]
     strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], 1]
+    strides = [int(round(item)) for item in strides]
     rates = [1, 1, 1, 1]
     data = tf.image.extract_patches(data, sizes=ksizes, strides=strides, rates=rates, padding='SAME')
     data = tf.reshape(data, [-1] + patch_size + [chan_dim])
@@ -128,6 +130,7 @@ def tf_patches_3d(data, labels, patch_size, data_format, data_chan, label_chan=1
     # for sliding window 3d slabs
     ksizes = [1] + patch_size + [1]
     strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], patch_size[2] / overlap[2], 1]
+    strides = [int(round(item)) for item in strides]
 
     # make patches
     data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='VALID')
@@ -172,6 +175,7 @@ def tf_patches_3d_infer(data, patch_size, chan_dim, data_format, overlap=1):
     # for sliding window 3d slabs
     ksizes = [1] + patch_size + [1]
     strides = [1, patch_size[0] / overlap[0], patch_size[1] / overlap[1], patch_size[2] / overlap[2], 1]
+    strides = [int(round(item)) for item in strides]
 
     # make patches
     data = tf.extract_volume_patches(data, ksizes=ksizes, strides=strides, padding='SAME')
