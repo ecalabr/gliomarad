@@ -340,7 +340,7 @@ def train_test_split(study_dirs, params):
 
 
 # patch input function for 2d or 3d
-def patch_input_fn(params, mode, infer_dir=None):
+def get_input_fn(params, mode, infer_dir=None):
 
     # set global random seed for tensorflow
     tf.random.set_seed(params.random_state)
@@ -359,7 +359,17 @@ def patch_input_fn(params, mode, infer_dir=None):
         # split study directories into train and test sets
         train_dirs, eval_dirs = train_test_split(study_dirs, params)
 
-    # handle 2D vs 3D
+    # handle custom data loader
+    if params.custom_data_loader.lower() != "none":
+        if not params.custom_data_loader in globals():
+            raise NotImplementedError(
+                "Specified custom data loader parameter <{}> is not an available global method. " +
+                "This param must be the name of a function specified in input_fn_util.py or " +
+                "'none' if a custom data loader is not being used.".format(params.custom_data_loader))
+        else:
+            return globals()[params.custom_data_loader](params, mode, train_dirs, eval_dirs, infer_dir)
+
+    # handle 2D vs 3D patch input function (if custom data loader is not being used)
     if params.dimension_mode == '2D':  # handle 2d inputs
         return _patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir)
     elif params.dimension_mode in ['2.5D', '3D']:  # handle 3d inputs

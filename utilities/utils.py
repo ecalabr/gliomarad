@@ -4,6 +4,7 @@ import json
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
+import nibabel as nib
 
 
 class Params:
@@ -27,6 +28,7 @@ class Params:
     mask_dilate = None  # must have same number of dims as mask
     filter_zero = None  # set the threshold for filtering out patches where labels is mostly zero
 
+    custom_data_loader = None
     dimension_mode = None  # must be 2D, 2.5D, 3D
     data_plane = None
     train_dims = None
@@ -257,3 +259,10 @@ def display_tf_dataset(dataset_data, data_format, data_dims, weighted=False):
     plt.show()
 
     return
+
+
+def save_tf_dataset(dataset_data, data_format, data_dims, out_file, weighted=False):
+    nii = nib.Nifti1Image(dataset_data.astype(np.float32), np.eye(4))
+    nib.save(nii, out_file)
+
+    return data_format, data_dims, weighted

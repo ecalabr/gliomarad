@@ -1115,3 +1115,7 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
     output = np.squeeze(reconstructed.numpy())
 
     return output
+
+
+def scaled_whole_tumor_loader(params, mode, train_dirs, eval_dirs, infer_dir):
+    return params, mode, train_dirs, eval_dirs, infer_dir

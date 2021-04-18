@@ -61,6 +61,7 @@ Filters out patches where labels == 0 in most of the patch. filter_zero is a flo
 ## Training parameters
 The following parameters pertain to training and inference inputs:
 ```json
+"custom_data_loader": null,
 "dimension_mode": "3D",
 "data_plane": "ax",
 "train_dims": [80, 80, 80],
@@ -73,6 +74,10 @@ The following parameters pertain to training and inference inputs:
 "metrics": ["mae"],
 ```
 ### Explanations
+```json
+"custom_data_loader": "none",
+```
+If "none", this does nothing. If not "none", must be the name of a custom data loader function specified in input_fn_util.py, which completely replaces the normal patch input function. When specified, this may override other parameters depending on the implementation of the custom data loader.
 ```json
 "dimension_mode": "2.5D",
 ```

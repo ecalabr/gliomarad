@@ -11,7 +11,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = F
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 from utilities.input_fn_util import reconstruct_infer_patches, reconstruct_infer_patches_3d
 from utilities.utils import Params, set_logger
-from utilities.patch_input_fn import patch_input_fn
+from utilities.patch_input_fn import get_input_fn
 from model.model_fn import model_fn
 
 
@@ -141,7 +141,7 @@ def predict(params, pred_dirs, out_dir, mask=None, checkpoint='last'):
         # if output doesn't already exist, then predict and make nii
         if not os.path.isfile(pred_out):
             # Create the inference dataset structure
-            infer_inputs = patch_input_fn(params=params, mode='infer', infer_dir=pred_dir)
+            infer_inputs = get_input_fn(params=params, mode='infer', infer_dir=pred_dir)
             # predict
             predictions = model.predict(infer_inputs)
             # save nii

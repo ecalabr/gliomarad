@@ -5,13 +5,13 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 import tensorflow as tf
-from utilities.utils import Params, display_tf_dataset
-from utilities.patch_input_fn import patch_input_fn
+from utilities.utils import Params, display_tf_dataset, save_tf_dataset
+from utilities.patch_input_fn import get_input_fn
 import numpy as np
 
 
 # define functions
-def test_input_fn(param_file):
+def test_input_fn(param_file, output, n=10, display=True, nii=False, skip=10):
 
     # get params
     params = Params(param_file)
@@ -23,39 +23,66 @@ def test_input_fn(param_file):
         raise ValueError("Specified model directory does not exist")
 
     # load inputs with input function
-    inputs = patch_input_fn(params, mode='train').as_numpy_iterator()
+    inputs = get_input_fn(params, mode='train').as_numpy_iterator()
 
     # determine if weighted
     weighted = False if isinstance(params.mask_weights, np.bool) and not params.mask_weights else True
 
     # run tensorflow session
-    n = 0
-    for i in range(params.num_epochs):  # multiple epochs
-        while True:
-            # iterate through entire iterator
-            try:
-                data_slice = next(inputs)
-            except tf.errors.OutOfRangeError:
-                break
+    s = 0  # the overall slice count
+    i = 0  # the output count
+    e = 1  # the epoch count
+    # iterate until display/saved count is equal to total count
+    while i < n:
+        try:
+            data_slice = next(inputs)
+            s += 1  # increment overall counter when slice is generated
+            print("Generated input slice {}, epoch {}" .format(s, e + 1))
+        except tf.errors.OutOfRangeError:
+            # increment epoch counter when input is exhausted and refresh generator
+            e += 1
+            inputs = get_input_fn(params, mode='train').as_numpy_iterator()
+            data_slice = next(inputs)
 
-            # increment counter and show images
-            n = n + 1
-            print("Processing slice " + str(n) + " epoch " + str(i + 1))
-            if n % 5 == 0:
+        # increment counter at ever skip number of input slices
+        if i % skip == 0:
+            i += 1
+            print("Processing input slice {} [{:03d} of {:03d}]".format(s, i, n))
+            if display:
                 display_tf_dataset(data_slice, params.data_format, params.train_dims, weighted=weighted)
+            if nii:
+                outname = os.path.join(output, "slice_{:03d}_epoch_{:02d}.nii.gz".format(s, e))
+                save_tf_dataset(data_slice, params.data_format, params.train_dims, outname, weighted=weighted)
 
 
 # executed  as script
 if __name__ == '__main__':
     # parse input arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--param_file', default=None,
+    parser.add_argument('-p', '--param_file', default=None,
                         help="Path to params.json")
+    parser.add_argument('-o', '--output', default=None,
+                        help="Path to output directory")
+    parser.add_argument('-i', '--nii', default=False, action="store_true",
+                        help="Write output to nifti volumes")
+    parser.add_argument('-d', '--display', default=False, action="store_true",
+                        help="Display output as a plot")
+    parser.add_argument('-n', '--number', default=10,
+                        help="Number of input iterations to consider")
+    parser.add_argument('-s', '--skip', default=10,
+                        help="Number of input iterations to skip between display/saving")
 
     # Load the parameters from the experiment params.json file in model_dir
     args = parser.parse_args()
     assert args.param_file, "Must specify param file with --param_file"
     assert os.path.isfile(args.param_file), "No json configuration file found at {}".format(args.param_file)
 
+    # handle arguments
+    try:
+        args.number = int(args.number)
+    except:
+        raise ValueError("Number argument (-n/--number) must be castable to int but is {}".format(args.number))
+    assert os.path.isdir(args.output), "Specified output directory does not exist: {}".format(args.output)
+
     # do work
-    test_input_fn(args.param_file)
+    test_input_fn(args.param_file, args.output, n=args.number, display=args.display, nii=args.nii, skip=args.skip)

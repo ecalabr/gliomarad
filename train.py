@@ -11,7 +11,7 @@ import tensorflow as tf
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, TensorBoard
 from utilities.utils import Params
 from utilities.utils import set_logger
-from utilities.patch_input_fn import patch_input_fn
+from utilities.patch_input_fn import get_input_fn
 from utilities.learning_rates import learning_rate_picker
 from model.model_fn import model_fn
 
@@ -77,8 +77,8 @@ def train(param_file):
         completed_epochs = 0
 
     # generate dataset objects for model inputs
-    train_inputs = patch_input_fn(params, mode='train')
-    eval_inputs = patch_input_fn(params, mode='eval')
+    train_inputs = get_input_fn(params, mode='train')
+    eval_inputs = get_input_fn(params, mode='eval')
 
     # Check for existing model and load if exists, otherwise create from scratch
     if latest_ckpt and not params.overwrite:
