@@ -262,7 +262,89 @@ def display_tf_dataset(dataset_data, data_format, data_dims, weighted=False):
 
 
 def save_tf_dataset(dataset_data, data_format, data_dims, out_file, weighted=False):
-    nii = nib.Nifti1Image(dataset_data.astype(np.float32), np.eye(4))
-    nib.save(nii, out_file)
+    """
+    Saves tensorflow dataset output images and labels/regression images as niis.
+    :param dataset_data: (tf.tensor) output from tf dataset function containing images and labels/regression image
+    :param data_format: (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param data_dims: (list or tuple of ints) the data dimensions that come out of the input function
+    :param out_file: (string) the full path to the output nii to save the data to
+    :param weighted: (bool) whether or not the labels slice includes weights as the final channel dimension
+    :return: displays images for 3 seconds then continues
+    """
+
+    # handle 2d case
+    if len(data_dims) == 2:
+
+        # image data
+        image_data = dataset_data[0]  # dataset_data[0]
+        if len(image_data.shape) > 3:
+            # handle batch data by taking only first element of batch
+            image_data = np.squeeze(image_data[0, :, :, :])
+        data_img = np.swapaxes(image_data, 0, 2) if data_format == 'channels_first' else image_data
+
+        # label data
+        label_data = dataset_data[1]  # dataset_data[1]
+        if len(label_data.shape) > 3:
+            # handle batch data by taking only first element of batch
+            label_data = np.squeeze(label_data[0, :, :, :])
+        label_img = np.swapaxes(label_data, 0, 2) if data_format == 'channels_first' else label_data
+
+    # handle 3d case
+    elif len(data_dims) == 3:
+
+        # load image data
+        image_data = dataset_data[0]  # dataset_data[0]
+
+        # handle channels first and batch data
+        if len(image_data.shape) > 4:
+            if data_format == 'channels_first':
+                image_data = np.transpose(image_data, [0, 2, 3, 4, 1])
+            # handle batch data by taking only first element of batch
+            image_data = np.squeeze(image_data[0, :, :, :, :])
+        else:
+            # no batch
+            if data_format == 'channels_first':
+                image_data = np.transpose(image_data, [1, 2, 3, 0])
+
+        # load label data
+        label_data = dataset_data[1]  # dataset_data[1]
+
+        # handle channels first and batch data
+        if len(label_data.shape) > 4:
+            if data_format == 'channels_first':
+                label_data = np.transpose(label_data, [0, 2, 3, 4, 1])
+            # handle batch data by taking only first element of batch
+            label_data = label_data[0, :, :, :, :]
+        else:
+            if data_format == 'channels_first':
+                label_data = np.transpose(label_data, [1, 2, 3, 0])
+
+        # handle weights
+        weights = None
+        if weighted:
+            weights = label_data[..., [-1]]  # last channel is weights
+            label_data = label_data[..., [0]]  # use first channel for labels
+
+    else:
+        raise ValueError("Data dimensions are not supported!")
+
+    # save data
+    outputs = []
+    # image data
+    image_nii_file = out_file.rsplit(".nii.gz") + "_image.nii.gz"
+    image_nii = nib.Nifti1Image(image_data.astype(np.float32), np.eye(4))
+    nib.save(image_nii, image_nii_file)
+    outputs.append(image_nii)
+    # label data
+    label_nii_file = out_file.rsplit(".nii.gz") + "_label.nii.gz"
+    label_nii = nib.Nifti1Image(label_data.astype(np.float32), np.eye(4))
+    nib.save(label_nii, label_nii_file)
+    outputs.append(label_nii)
+    # weights data
+    if weighted:
+        weights_nii_file = out_file.rsplit(".nii.gz") + "_weights.nii.gz"
+        weights_nii = nib.Nifti1Image(label_data.astype(np.float32), np.eye(4))
+        nib.save(weights_nii, weights_nii_file)
+        outputs.append(weights_nii)
 
     return data_format, data_dims, weighted

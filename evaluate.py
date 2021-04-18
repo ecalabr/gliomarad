@@ -13,7 +13,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = F
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 from predict import predict
 from utilities.eval_metrics import metric_picker
-from utilities.patch_input_fn import get_study_dirs, train_test_split
+from utilities.input_fn import get_study_dirs, train_test_split
 from utilities.utils import Params, set_logger
 from utilities.input_fn_util import normalize
 

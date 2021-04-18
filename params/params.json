@@ -10,7 +10,7 @@
   "mask_dilate": [232, 232, 80],
   "filter_zero": 0.2,
 
-  "custom_data_loader": "none",
+  "custom_data_loader": "patch_input_fn_3d",
   "dimension_mode": "3D",
   "data_plane": "ax",
   "train_dims": [80, 80, 80],

@@ -11,7 +11,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = F
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 from utilities.input_fn_util import reconstruct_infer_patches, reconstruct_infer_patches_3d
 from utilities.utils import Params, set_logger
-from utilities.patch_input_fn import get_input_fn
+from utilities.input_fn import get_input_fn
 from model.model_fn import model_fn
 
 

@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-# get built in locals
+# get built in globals
 start_globals = list(globals().keys())
 
 
@@ -118,7 +118,7 @@ def loss_picker(params):
     if params.loss in globals():
         loss_fn = globals()[params.loss]
     else:
-        methods = [k for k in globals().keys() if k not in start_globals]
+        methods = [k for k in globals().keys() if k not in start_globals and k != "loss_picker"]
         raise NotImplementedError(
             "Specified loss method: '{}' is not one of the available methods: {}".format(params.loss, methods))
 

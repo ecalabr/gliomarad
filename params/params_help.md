@@ -75,9 +75,9 @@ The following parameters pertain to training and inference inputs:
 ```
 ### Explanations
 ```json
-"custom_data_loader": "none",
+"custom_data_loader": "patch_input_fn_3d",
 ```
-If "none", this does nothing. If not "none", must be the name of a custom data loader function specified in input_fn_util.py, which completely replaces the normal patch input function. When specified, this may override other parameters depending on the implementation of the custom data loader.
+This param must be the name of a custom data loader function specified in input_fn.py.
 ```json
 "dimension_mode": "2.5D",
 ```

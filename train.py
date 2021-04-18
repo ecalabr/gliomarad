@@ -11,7 +11,7 @@ import tensorflow as tf
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, TensorBoard
 from utilities.utils import Params
 from utilities.utils import set_logger
-from utilities.patch_input_fn import get_input_fn
+from utilities.input_fn import get_input_fn
 from utilities.learning_rates import learning_rate_picker
 from model.model_fn import model_fn
 

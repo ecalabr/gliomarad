@@ -6,6 +6,9 @@ import nibabel as nib
 import scipy.stats as stats
 import scipy.ndimage as ndi
 import tensorflow as tf
+import random
+import logging
+import json
 
 
 ##############################################
@@ -450,7 +453,7 @@ def affine_transform(image, affine, offset=None, order=1):
     return image
 
 
-def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, order=1):
+def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, order=1, scale_cube_dim=None):
     """
     Function for affine transforming and extracting an roi from a set of input images and labels
     :param image: (np.ndarray) a 3d or 4d input image
@@ -460,6 +463,8 @@ def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, orde
     :param dilate: (np.ndarray) an int or list of 3 ints. If int, each dim is symmetrically expanded by that amount. If
     an array of 3 ints, then each dimension is expanded to the value of the corresponding int.
     :param order: (int) the spline order used for label interpolation
+    :param scale_cube_dim: (None or int) If None, has no effect. If an int, this will extract the ROI as a cube with
+    width equal to largest roi dimension and will then scale result to a cube with width equal to scale_cube_dim
     :return: (np.ndarray) The transformed and cropped images, rois and optionally labels
     """
 
@@ -467,12 +472,21 @@ def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, orde
     if affine is None:
         affine = create_affine()
 
-    # get input tight bbox shape
-    roi_bbox = nonzero_slice_inds3d(roi)
+    # get input tight bbox shape - convert to cubic ROI if specified with scale_cube_dim
+    roi_bbox = nonzero_slice_inds3d(roi, cube=True if scale_cube_dim is not None else False)
 
     # dilate if necessary
     if dilate is not None:
         roi_bbox = expand_region(roi.shape, roi_bbox, dilate)
+
+    # scale calculations if using scale_cube_dim
+    scale = scale_cube_dim / (roi_bbox[1] - roi_bbox[0])
+    affine_scale = np.array([
+        [scale, 1, 1],
+        [1, scale, 1],
+        [1, 1, scale]
+    ])
+    affine = affine * affine_scale
 
     # determine output shape
     in_shape = [roi_bbox[1] - roi_bbox[0], roi_bbox[3] - roi_bbox[2], roi_bbox[5] - roi_bbox[4]]
@@ -507,7 +521,14 @@ def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, orde
         image = ndi.interpolation.affine_transform(image, affine, offset=offset, order=1, output=np.float32,
                                                    output_shape=out_shape)
 
-    # crop to rotated input ROI, adjusting for dilate
+    # if using scale_cube_dims return as is
+    if scale_cube_dim is not None:
+        if labels is not None:
+            return image, roi, labels
+        else:
+            return image, roi
+
+    # crop to rotated input ROI, adjusting for dilate --- what does this do?
     nzi = nonzero_slice_inds3d(roi)
     if dilate is not None:
         nzi = expand_region(roi.shape, nzi, dilate)
@@ -584,10 +605,12 @@ def normalize(input_img, mode='zero_mean'):
     return input_img
 
 
-def nonzero_slice_inds3d(input_numpy):
+def nonzero_slice_inds3d(input_numpy, cube=False):
     """
     Takes numpy array and returns slice indices of first and last nonzero pixels in 3d
     :param input_numpy: (np.ndarray) a numpy array containing image data.
+    :param cube: (bool) if true, returns a cubic bounding box centered on roi with cube width equal to largest ROI
+    dimension
     :return: inds - a list of 2 indices per dimension corresponding to the first and last nonzero slices in the array
     """
 
@@ -609,6 +632,20 @@ def nonzero_slice_inds3d(input_numpy):
     vector = np.max(np.max(input_numpy, axis=0), axis=0)
     nz = np.nonzero(vector)[0]
     zinds = [nz[0], nz[-1]]
+
+    # handle cube option
+    if cube:
+        maxwidth = np.max([xinds[1] - xinds[0], yinds[1] - yinds[0], zinds[1] - zinds[0]])
+        # adjust other widths to match largest
+        if xinds[1] - xinds[0] < maxwidth:
+            xinds[0] = xinds[0] - np.floor((xinds[1] - xinds[0]) - maxwidth)
+            xinds[1] = xinds[1] + np.ceil((xinds[1] - xinds[0]) - maxwidth)
+        if yinds[1] - yinds[0] < maxwidth:
+            yinds[0] = yinds[0] - np.floor((yinds[1] - yinds[0]) - maxwidth)
+            yinds[1] = yinds[1] + np.ceil((yinds[1] - yinds[0]) - maxwidth)
+        if zinds[1] - zinds[0] < maxwidth:
+            zinds[0] = zinds[0] - np.floor((zinds[1] - zinds[0]) - maxwidth)
+            zinds[1] = zinds[1] + np.ceil((zinds[1] - zinds[0]) - maxwidth)
 
     # perpare return
     inds = [xinds[0], xinds[1], yinds[0], yinds[1], zinds[0], zinds[1]]
@@ -836,7 +873,7 @@ def load_roi_multicon_and_labels(study_dir, feature_prefx, label_prefx, mask_pre
 
 def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_prefx, dilate=0, plane='ax',
                                     data_fmt='channels_last', aug=False, interp=1, norm=True, norm_lab=True,
-                                    norm_mode='zero_mean', return_mask=False):
+                                    norm_mode='zero_mean', return_mask=False, scale_cube_dim=None):
     """
     Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
     Performs optional data augmentation with affine rotation in 3D.
@@ -855,6 +892,8 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     :param norm_mode: (str) The method for normalization, used by normalize function.
     :param return_mask: (bool or list) whether or not to return the mask as one of the outputs. If list, mask values are
     mapped to the values in the list. For example, passing [1, 2, 4] would map mask value 0->1, 1->2, 2->4.
+    :param scale_cube_dim: (None or int) If None, has no effect. If an int, this will extract the ROI as a cube with
+    width equal to largest roi dimension and will then scale result to a cube with width equal to scale_cube_dim
     :return: (tf.tensor) The patch data for features and labels as a tensorflow variable.
     """
 
@@ -924,7 +963,7 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
     affine = create_affine(theta=theta, phi=phi, psi=psi)
 
     # apply affines to mask, data, labels
-    data, mask, labels = affine_transform_roi(data, mask, labels, affine, dilate, interp)
+    data, mask, labels = affine_transform_roi(data, mask, labels, affine, dilate, interp, scale_cube_dim)
 
     # add batch and channel dims as necessary to get to [batch, x, y, z, channel]
     data = np.expand_dims(data, axis=0)  # add a batch dimension of 1
@@ -1117,5 +1156,81 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
     return output
 
 
-def scaled_whole_tumor_loader(params, mode, train_dirs, eval_dirs, infer_dir):
-    return params, mode, train_dirs, eval_dirs, infer_dir
+# utility function to get all study subdirectories in a given parent data directory
+# returns shuffled directory list using user defined randomization seed
+# saves a copy of output to study_dirs_list.json in study directory
+def get_study_dirs(params, change_basedir=None):
+
+    # Study dirs json filename setup
+    study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.json')
+
+    # load study dirs file if it already exists for consistent training
+    if os.path.isfile(study_dirs_filepath):
+        logging.info("Loading existing study directories file: {}".format(study_dirs_filepath))
+        with open(study_dirs_filepath) as f:
+            study_dirs = json.load(f)
+
+        # handle change_basedir argument
+        if change_basedir:
+            # get rename list of directories
+            study_dirs = [os.path.join(change_basedir, os.path.basename(os.path.dirname(item))) for item in study_dirs]
+            if not all([os.path.isdir(d) for d in study_dirs]):
+                logging.error("Using change basedir argument in get_study_dirs but not all study directories exist")
+                # get list of missing files
+                missing = []
+                for item in study_dirs:
+                    if not os.path.isdir(item):
+                        missing.append(item)
+                raise FileNotFoundError("Missing the following data directories: {}".format(', '.join(missing)))
+
+        # make sure that study directories loaded from file actually exist and warn/error if some/all do not
+        valid_study_dirs = []
+        for study in study_dirs:
+            # get list of all expected files via glob
+            files = [glob("{}/*{}.nii.gz".format(study, item)) for item in params.data_prefix + params.label_prefix]
+            # check that a file was found and that file exists in each case
+            if all(files) and all([os.path.isfile(f[0]) for f in files]):
+                valid_study_dirs.append(study)
+        # case, no valid study dirs
+        if not valid_study_dirs:
+            logging.error("study_dirs_list.json exists in the model directory but does not contain valid directories")
+            raise ValueError("No valid study directories in study_dirs_list.json")
+        # case, less valid study dirs than found in study dirs file
+        elif len(valid_study_dirs) < len(study_dirs):
+            logging.warning("Some study directories listed in study_dirs_list.json are missing or incomplete")
+        # case, all study dirs in study dirs file are valid
+        else:
+            logging.info("All directories listed in study_dirs_list.json are present and complete")
+        study_dirs = valid_study_dirs
+
+    # if study dirs file does not exist, then determine study directories and create study_dirs_list.json
+    else:
+        logging.info("Determining train/test split based on params and available study directories in data directory")
+        # get all valid subdirectories in data_dir
+        study_dirs = [item for item in glob(params.data_dir + '/*/') if os.path.isdir(item)]
+        # make sure all necessary files are present in each folder
+        study_dirs = [study for study in study_dirs if all(
+            [glob('{}/*{}.nii.gz'.format(study, item)) and os.path.isfile(glob('{}/*{}.nii.gz'.format(study, item))[0])
+             for item in params.data_prefix + params.label_prefix])]
+
+        # study dirs sorted in alphabetical order for reproducible results
+        study_dirs.sort()
+
+        # randomly shuffle input directories for training using a user defined randomization seed
+        random.Random(params.random_state).shuffle(study_dirs)
+
+        # save directory list to json file so it can be loaded in future
+        with open(study_dirs_filepath, 'w+', encoding='utf-8') as f:
+            json.dump(study_dirs, f, ensure_ascii=False, indent=4)  # save study dir list for consistency
+
+    return study_dirs
+
+
+# split list of all valid study directories into a train and test batch based on train fraction
+def train_test_split(study_dirs, params):
+    # first train fraction is train dirs, last 1-train fract is test dirs
+    # assumes study dirs is already shuffled and/or stratified as wanted
+    train_dirs = study_dirs[0:int(round(params.train_fract * len(study_dirs)))]
+    eval_dirs = study_dirs[int(round(params.train_fract * len(study_dirs))):]
+
+    return train_dirs, eval_dirs
