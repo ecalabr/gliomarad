@@ -61,7 +61,7 @@ Filters out patches where labels == 0 in most of the patch. filter_zero is a flo
 ## Training parameters
 The following parameters pertain to training and inference inputs:
 ```json
-"custom_data_loader": null,
+"custom_data_loader": "patch_input_fn_3d",
 "dimension_mode": "3D",
 "data_plane": "ax",
 "train_dims": [80, 80, 80],
@@ -77,7 +77,7 @@ The following parameters pertain to training and inference inputs:
 ```json
 "custom_data_loader": "patch_input_fn_3d",
 ```
-This param must be the name of a custom data loader function specified in input_fn.py.
+This param must be the name of a custom data loader function specified in input_fn.py. Depending on what the data loader does, the some other parameters may or may not be used. For example, non-patch based data loaders will not use train_patch_overlap, and 3D only data loaders will not use dimension_mode.
 ```json
 "dimension_mode": "2.5D",
 ```

@@ -280,14 +280,14 @@ def save_tf_dataset(dataset_data, data_format, data_dims, out_file, weighted=Fal
         if len(image_data.shape) > 3:
             # handle batch data by taking only first element of batch
             image_data = np.squeeze(image_data[0, :, :, :])
-        data_img = np.swapaxes(image_data, 0, 2) if data_format == 'channels_first' else image_data
+        image_data = np.swapaxes(image_data, 0, 2) if data_format == 'channels_first' else image_data
 
         # label data
         label_data = dataset_data[1]  # dataset_data[1]
         if len(label_data.shape) > 3:
             # handle batch data by taking only first element of batch
             label_data = np.squeeze(label_data[0, :, :, :])
-        label_img = np.swapaxes(label_data, 0, 2) if data_format == 'channels_first' else label_data
+        label_data = np.swapaxes(label_data, 0, 2) if data_format == 'channels_first' else label_data
 
     # handle 3d case
     elif len(data_dims) == 3:
@@ -319,31 +319,31 @@ def save_tf_dataset(dataset_data, data_format, data_dims, out_file, weighted=Fal
             if data_format == 'channels_first':
                 label_data = np.transpose(label_data, [1, 2, 3, 0])
 
-        # handle weights
-        weights = None
-        if weighted:
-            weights = label_data[..., [-1]]  # last channel is weights
-            label_data = label_data[..., [0]]  # use first channel for labels
-
     else:
         raise ValueError("Data dimensions are not supported!")
+
+    # handle weights
+    weights_data = None
+    if weighted:
+        weights_data = label_data[..., [-1]]  # last channel is weights
+        label_data = label_data[..., [0]]  # use first channel for labels
 
     # save data
     outputs = []
     # image data
-    image_nii_file = out_file.rsplit(".nii.gz") + "_image.nii.gz"
+    image_nii_file = out_file.rsplit(".nii.gz")[0] + "_image.nii.gz"
     image_nii = nib.Nifti1Image(image_data.astype(np.float32), np.eye(4))
     nib.save(image_nii, image_nii_file)
     outputs.append(image_nii)
     # label data
-    label_nii_file = out_file.rsplit(".nii.gz") + "_label.nii.gz"
+    label_nii_file = out_file.rsplit(".nii.gz")[0] + "_label.nii.gz"
     label_nii = nib.Nifti1Image(label_data.astype(np.float32), np.eye(4))
     nib.save(label_nii, label_nii_file)
     outputs.append(label_nii)
     # weights data
     if weighted:
-        weights_nii_file = out_file.rsplit(".nii.gz") + "_weights.nii.gz"
-        weights_nii = nib.Nifti1Image(label_data.astype(np.float32), np.eye(4))
+        weights_nii_file = out_file.rsplit(".nii.gz")[0] + "_weights.nii.gz"
+        weights_nii = nib.Nifti1Image(weights_data.astype(np.float32), np.eye(4))
         nib.save(weights_nii, weights_nii_file)
         outputs.append(weights_nii)
 

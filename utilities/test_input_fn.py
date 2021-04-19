@@ -5,8 +5,8 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 import tensorflow as tf
-from utilities.utils import Params, display_tf_dataset, save_tf_dataset
-from utilities.input_fn import get_input_fn
+from utils import Params, display_tf_dataset, save_tf_dataset
+from input_fn import get_input_fn
 import numpy as np
 
 
@@ -37,7 +37,6 @@ def test_input_fn(param_file, output, n=10, display=True, nii=False, skip=10):
         try:
             data_slice = next(inputs)
             s += 1  # increment overall counter when slice is generated
-            print("Generated input slice {}, epoch {}" .format(s, e + 1))
         except tf.errors.OutOfRangeError:
             # increment epoch counter when input is exhausted and refresh generator
             e += 1
@@ -45,14 +44,16 @@ def test_input_fn(param_file, output, n=10, display=True, nii=False, skip=10):
             data_slice = next(inputs)
 
         # increment counter at ever skip number of input slices
-        if i % skip == 0:
+        if skip == 0 or s % skip == 0:
             i += 1
-            print("Processing input slice {} [{:03d} of {:03d}]".format(s, i, n))
+            print("Processing input slice {}, epoch {}, [{:03d} of {:03d}]".format(s, e, i, n))
             if display:
                 display_tf_dataset(data_slice, params.data_format, params.train_dims, weighted=weighted)
             if nii:
                 outname = os.path.join(output, "slice_{:03d}_epoch_{:02d}.nii.gz".format(s, e))
                 save_tf_dataset(data_slice, params.data_format, params.train_dims, outname, weighted=weighted)
+        else:
+            print("Generated input slice {}, epoch {}, which is skipped".format(s, e))
 
 
 # executed  as script
@@ -82,6 +83,10 @@ if __name__ == '__main__':
         args.number = int(args.number)
     except:
         raise ValueError("Number argument (-n/--number) must be castable to int but is {}".format(args.number))
+    try:
+        args.skip = int(args.skip)
+    except:
+        raise ValueError("Skip argument (-s/--skip) must be castable to int but is {}".format(args.skip))
     assert os.path.isdir(args.output), "Specified output directory does not exist: {}".format(args.output)
 
     # do work

@@ -1,4 +1,5 @@
-from utilities.input_fn_util import *
+from input_fn_util import *
+import tensorflow as tf
 
 
 # get list of globals
@@ -294,18 +295,12 @@ def scaled_cube_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None)
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
-        # map each dataset to a series of patches
-        dataset = dataset.map(
-            lambda x, y: tf_patches_3d(x, y, params.train_dims, params.data_format, data_chan,
-                                       weighted=weighted,
-                                       overlap=params.train_patch_overlap),
-            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
-        # flatten out dataset so that each entry is a single patch and associated label
-        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # filter out zero patches
         if params.filter_zero > 0.:
             dataset = dataset.filter(lambda x, y: filter_zero_patches(
                 y, params.data_format, params.dimension_mode, params.filter_zero))
+        # flatten out dataset so that each entry is a single patch and associated label
+        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # shuffle a set number of exampes
         dataset = dataset.shuffle(buffer_size=params.shuffle_size)
         # generate batch data
@@ -342,6 +337,8 @@ def scaled_cube_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None)
                                         [x] + py_func_params,
                                         (tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
+        # flatten out dataset so that each entry is a single patch and associated label
+        dataset = dataset.flat_map(lambda x, y: tf.data.Dataset.from_tensor_slices((x, y)))
         # generate batch data
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
         # prefetch with experimental autotune
@@ -366,6 +363,8 @@ def scaled_cube_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None)
                                         [x] + py_func_params,
                                         tf.float32),
             num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        # flat map so that each tensor is a single slice
+        dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
         # generate a batch of data
         dataset = dataset.batch(batch_size=1, drop_remainder=True)
         # automatic prefetching to improve efficiency

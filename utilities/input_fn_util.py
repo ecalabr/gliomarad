@@ -227,7 +227,10 @@ def filter_zero_patches(labels, data_format, mode, thresh=0.05):
     # make threshold a tf tensor for comparisson
     thr = tf.constant(thresh, dtype=tf.float32)
 
-    return tf.less(thr, tf.math.count_nonzero(labels, dtype=tf.float32) / tf.size(input=labels, out_type=tf.float32))
+    # get nonzero fraction
+    nf = tf.math.count_nonzero(labels, dtype=tf.float32) / tf.cast(tf.size(input=labels, out_type=tf.int32), tf.float32)
+
+    return tf.less(thr, nf)
 
 
 # DATA UTILITIES
@@ -473,27 +476,33 @@ def affine_transform_roi(image, roi, labels=None, affine=None, dilate=None, orde
         affine = create_affine()
 
     # get input tight bbox shape - convert to cubic ROI if specified with scale_cube_dim
-    roi_bbox = nonzero_slice_inds3d(roi, cube=True if scale_cube_dim is not None else False)
+    roi_bbox = nonzero_slice_inds3d(roi)
 
     # dilate if necessary
     if dilate is not None:
         roi_bbox = expand_region(roi.shape, roi_bbox, dilate)
 
     # scale calculations if using scale_cube_dim
-    scale = scale_cube_dim / (roi_bbox[1] - roi_bbox[0])
-    affine_scale = np.array([
-        [scale, 1, 1],
-        [1, scale, 1],
-        [1, 1, scale]
-    ])
-    affine = affine * affine_scale
+    if scale_cube_dim is not None:
+        maxdim = np.max([roi_bbox[1] - roi_bbox[0], roi_bbox[3] - roi_bbox[2], roi_bbox[5] - roi_bbox[4]])
+        scale = maxdim / scale_cube_dim
+        # to add scale factor to affine, compute dot product of rotation affine and scale affine
+        affine = np.dot(affine, np.eye(3) * scale)
 
-    # determine output shape
+    # determine input and output shape
     in_shape = [roi_bbox[1] - roi_bbox[0], roi_bbox[3] - roi_bbox[2], roi_bbox[5] - roi_bbox[4]]
-    out_x = in_shape[0] * np.abs(affine[0, 0]) + in_shape[1] * np.abs(affine[0, 1]) + in_shape[2] * np.abs(affine[0, 2])
-    out_y = in_shape[0] * np.abs(affine[1, 0]) + in_shape[1] * np.abs(affine[1, 1]) + in_shape[2] * np.abs(affine[1, 2])
-    out_z = in_shape[0] * np.abs(affine[2, 0]) + in_shape[1] * np.abs(affine[2, 1]) + in_shape[2] * np.abs(affine[2, 2])
-    out_shape = [int(np.ceil(out_x)), int(np.ceil(out_y)), int(np.ceil(out_z))]
+    if scale_cube_dim is not None:
+        # set output shape to cube size
+        out_shape = [scale_cube_dim, scale_cube_dim, scale_cube_dim]
+    else:
+        # else determine output shape
+        out_x = in_shape[0] * np.abs(affine[0, 0]) + in_shape[1] * np.abs(affine[0, 1]) + in_shape[2] * np.abs(
+            affine[0, 2])
+        out_y = in_shape[0] * np.abs(affine[1, 0]) + in_shape[1] * np.abs(affine[1, 1]) + in_shape[2] * np.abs(
+            affine[1, 2])
+        out_z = in_shape[0] * np.abs(affine[2, 0]) + in_shape[1] * np.abs(affine[2, 1]) + in_shape[2] * np.abs(
+            affine[2, 2])
+        out_shape = [int(np.ceil(out_x)), int(np.ceil(out_y)), int(np.ceil(out_z))]
 
     # determine affine transform offset
     inv_af = affine.T
@@ -621,20 +630,30 @@ def nonzero_slice_inds3d(input_numpy, cube=False):
     # finds inds of first and last nonzero pixel in x
     vector = np.max(np.max(input_numpy, axis=2), axis=1)
     nz = np.nonzero(vector)[0]
+    # if everything is zero, use whole input
+    if nz.size == 0:
+        nz = [0, input_numpy.shape[0]]
     xinds = [nz[0], nz[-1]]
 
     # finds inds of first and last nonzero pixel in y
     vector = np.max(np.max(input_numpy, axis=0), axis=1)
     nz = np.nonzero(vector)[0]
+    # if everything is zero, use whole input
+    if nz.size == 0:
+        nz = [0, input_numpy.shape[0]]
     yinds = [nz[0], nz[-1]]
 
     # finds inds of first and last nonzero pixel in z
     vector = np.max(np.max(input_numpy, axis=0), axis=0)
     nz = np.nonzero(vector)[0]
+    # if everything is zero, use whole input
+    if nz.size == 0:
+        nz = [0, input_numpy.shape[0]]
     zinds = [nz[0], nz[-1]]
 
     # handle cube option
     if cube:
+        print("PRE CUBE DIMS ARE {}".format([xinds[1] - xinds[0], yinds[1] - yinds[0], zinds[1] - zinds[0]]))
         maxwidth = np.max([xinds[1] - xinds[0], yinds[1] - yinds[0], zinds[1] - zinds[0]])
         # adjust other widths to match largest
         if xinds[1] - xinds[0] < maxwidth:
@@ -646,6 +665,7 @@ def nonzero_slice_inds3d(input_numpy, cube=False):
         if zinds[1] - zinds[0] < maxwidth:
             zinds[0] = zinds[0] - np.floor((zinds[1] - zinds[0]) - maxwidth)
             zinds[1] = zinds[1] + np.ceil((zinds[1] - zinds[0]) - maxwidth)
+        print("POST CUBE DIMS ARE {}".format([xinds[1] - xinds[0], yinds[1] - yinds[0], zinds[1] - zinds[0]]))
 
     # perpare return
     inds = [xinds[0], xinds[1], yinds[0], yinds[1], zinds[0], zinds[1]]
