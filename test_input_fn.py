@@ -5,8 +5,8 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # FATAL
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 import tensorflow as tf
-from utils import Params, display_tf_dataset, save_tf_dataset
-from input_fn import get_input_fn
+from utilities.utils import Params, display_tf_dataset, save_tf_dataset
+from utilities.input_fn import get_input_fn
 import numpy as np
 
 

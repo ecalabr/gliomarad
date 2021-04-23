@@ -119,7 +119,7 @@ def train(param_file):
         histogram_freq=0,
         write_graph=True,
         write_images=False,
-        update_freq=(params.samples_per_epoch // params.batch_size) // 100,  # write losses/metrics 100x per epoch
+        update_freq=max(1, (params.samples_per_epoch // params.batch_size) // 100),  # write losses/metrics 100x/epoch
         profile_batch=2,
         embeddings_freq=0,
         embeddings_metadata=None)

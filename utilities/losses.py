@@ -84,6 +84,11 @@ def binaryCE(y_true, y_pred):
     return tf.keras.losses.BinaryCrossentropy(from_logits=False)(y_true, y_pred)
 
 
+# binary cross entropy from logits
+def binaryCElogits(y_true, y_pred):
+    return tf.keras.losses.BinaryCrossentropy(from_logits=True)(y_true, y_pred)
+
+
 # generalized DICE loss for 2D and 3D networks
 def dice_loss(y_true, y_pred):
     numerator = 2 * tf.reduce_sum(y_true * y_pred, axis=(1, 2, 3))

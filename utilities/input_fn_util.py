@@ -9,6 +9,7 @@ import tensorflow as tf
 import random
 import logging
 import json
+import csv
 
 
 ##############################################
@@ -1027,6 +1028,122 @@ def load_roi_multicon_and_labels_3d(study_dir, feature_prefx, label_prefx, mask_
         return data.astype(np.float32), labels.astype(np.float32)
 
 
+def load_csv_and_roi_multicon_3d(study_dir, feature_prefx, label_csv, mask_prefx, label_col=1, dilate=0, plane='ax',
+                                 data_fmt='channels_last', aug=False, interp=1, norm=True, norm_mode='zero_mean',
+                                 scale_cube_dim=None):
+    """
+    Patch loader generates 3D patch data for images and labels given a list of 3D input NiFTI images a mask.
+    Performs optional data augmentation with affine rotation in 3D.
+    Data is cropped to the nonzero bounding box for the mask file before patches are generated.
+    :param study_dir: (str) The path to the study directory to get data from.
+    :param feature_prefx: (iterable of str) The prefixes for the image files containing the data (features).
+    :param label_csv: (str) The full path to the labels CSV. First colum must correspond to data directory names.
+    :param mask_prefx: (str) The prefix of the image file containing the ROI to extraxt image data with.
+    :param label_col: (int) The index (from 0) of the csv column to use as labels
+    :param dilate: (int) The amount to dilate the region by in all dimensions
+    :param plane: (str) The plane to load data in. Must be a string in ['ax', 'cor', 'sag']
+    :param data_fmt (str) the desired tensorflow data format. Must be either 'channels_last' or 'channels_first'
+    :param aug: (bool) Whether or not to perform data augmentation with random 3D affine rotation.
+    :param interp: (int) The order of spline interpolation for label data. Must be 0-5
+    :param norm: (bool) Whether or not to normalize the input data after loading.
+    :param norm_mode: (str) The method for normalization, used by normalize function.
+    mapped to the values in the list. For example, passing [1, 2, 4] would map mask value 0->1, 1->2, 2->4.
+    :param scale_cube_dim: (None or int) If None, has no effect. If an int, this will extract the ROI as a cube with
+    width equal to largest roi dimension and will then scale result to a cube with width equal to scale_cube_dim
+    :return: (tf.tensor) The image data and labels as a tensorflow tensor.
+    """
+
+    # convert bytes to strings
+    study_dir = byte_convert(study_dir)
+    feature_prefx = byte_convert(feature_prefx)
+    label_csv = byte_convert(label_csv)
+    mask_prefx = byte_convert(mask_prefx)
+    plane = byte_convert(plane)
+    data_fmt = byte_convert(data_fmt)
+    norm_mode = byte_convert(norm_mode)
+
+    # sanity checks
+    if plane not in ['ax', 'cor', 'sag']:
+        raise ValueError("Did not understand specified plane: " + str(plane))
+    if data_fmt not in ['channels_last', 'channels_first']:
+        raise ValueError("Did not understand specified data_fmt: " + str(plane))
+
+    # define full paths and check that image files exist
+    data_files = [glob(study_dir + '/*' + contrast + '.nii.gz')[0] for contrast in feature_prefx]
+    if mask_prefx:
+        mask_file = glob(study_dir + '/*' + mask_prefx[0] + '.nii.gz')[0]
+    else:
+        mask_file = data_files[0]
+    if not all([os.path.isfile(img) for img in data_files + [mask_file]]):
+        raise ValueError("One or more of the input data/labels/mask files does not exist")
+
+    # check that label csv exists
+    if not os.path.isfile(label_csv[0]):
+        raise FileNotFoundError("Specified label CSV file does not exist: {}".format(label_csv))
+
+    # load labels and get value for this specific image file
+    with open(label_csv[0], 'r') as f:
+        csv_data = np.array(list(csv.reader(f)))
+    direc_id = os.path.basename(study_dir.rstrip('/'))
+    # handle numbered study direc name with leading zeroes
+    if direc_id.isdigit():
+        direc_id = str(int(direc_id))
+    # extract relevant datum from csv using direc ID - cast data to float32 and squeeze out extra dims
+    label_row = np.nonzero(csv_data[:,0] == direc_id)
+    label = np.squeeze(np.float32(csv_data[label_row, label_col]), axis=0)
+
+    # get extra data from csv to include as inputs
+    csv_features = np.squeeze(csv_data[label_row, label_col + 1:]).astype(np.float32)
+
+    # load the mask and get the full data dims - handle None mask argument where whole image is used
+    if mask_prefx:
+        mask = nib.load(mask_file).get_fdata()
+    else:
+        mask = np.ones_like(nib.load(mask_file).get_fdata(), dtype=np.float32)
+    data_dims = mask.shape
+
+    # load data and normalize
+    data = np.empty((data_dims[0], data_dims[1], data_dims[2], len(data_files)), dtype=np.float32)
+    for i, im_file in enumerate(data_files):
+        if norm:
+            data[:, :, :, i] = normalize(nib.load(im_file).get_fdata(), mode=norm_mode)
+        else:
+            data[:, :, :, i] = nib.load(im_file).get_fdata()
+
+    # center the ROI in the image usine affine, with optional rotation for data augmentation
+    if aug:  # if augmenting, select random rotation values for x, y, and z axes depending on plane
+        posneg = 1 if np.random.random() < 0.5 else -1
+        theta = np.random.random() * (np.pi / 6.) * posneg if plane == 'cor' else 0.  # rotation in yz plane
+        phi = np.random.random() * (np.pi / 6.) * posneg if plane == 'sag' else 0.  # rotation in xz plane
+        psi = np.random.random() * (np.pi / 6.) * posneg if plane == 'ax' else 0.  # rotation in xy plane
+    else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the mask ROI
+        theta = 0.
+        phi = 0.
+        psi = 0.
+
+    # make affine, calculate offset using mask center of mass of binirized mask, get nonzero bbox of mask
+    affine = create_affine(theta=theta, phi=phi, psi=psi)
+
+    # apply affines to mask, data, labels = None since labels are not image data
+    data, mask = affine_transform_roi(data, mask, None, affine, dilate, interp, scale_cube_dim)
+
+    # handle different planes
+    if plane == 'ax':
+        pass
+    elif plane == 'cor':
+        data = np.transpose(data, axes=[0, 1, 3, 2, 4])
+    elif plane == 'sag':
+        data = np.transpose(data, axes=[0, 2, 3, 1, 4])
+    else:
+        raise ValueError("Did not understand specified plane: " + str(plane))
+
+    # handle channels first data format
+    if data_fmt == 'channels_first':
+        data = np.transpose(data, axes=[0, 4, 1, 2, 3])
+
+    return data.astype(np.float32), csv_features.astype(np.float32), label.astype(np.float32)
+
+
 def load_multicon_preserve_size_3d(study_dir, feat_prefx, data_fmt, plane='ax', norm=True, norm_mode='zero_mean'):
     """
     Load multicontrast image data without cropping or otherwise adjusting size. For use with inference/prediction.
@@ -1179,7 +1296,9 @@ def reconstruct_infer_patches_3d(predictions, infer_dir, params):
 # utility function to get all study subdirectories in a given parent data directory
 # returns shuffled directory list using user defined randomization seed
 # saves a copy of output to study_dirs_list.json in study directory
-def get_study_dirs(params, change_basedir=None):
+def get_study_dirs(params, change_basedir=None, mode="unknown"):
+    # report
+    logging.info("Getting study directories for mode: {}".format(mode))
 
     # Study dirs json filename setup
     study_dirs_filepath = os.path.join(params.model_dir, 'study_dirs_list.json')
@@ -1201,13 +1320,19 @@ def get_study_dirs(params, change_basedir=None):
                 for item in study_dirs:
                     if not os.path.isdir(item):
                         missing.append(item)
-                raise FileNotFoundError("Missing the following data directories: {}".format(', '.join(missing)))
+                raise FileNotFoundError("Missing the following data directories: {}".format('\n'.join(missing)))
 
         # make sure that study directories loaded from file actually exist and warn/error if some/all do not
         valid_study_dirs = []
+        # check if label_prefix is a csv file
+        if os.path.isfile(params.label_prefix[0]) and params.label_prefix[0].endswith('.csv'):
+            logging.info("Label prefix is a csv file - assuming all directories are present in CSV file")
+            search_prefix = params.data_prefix
+        else:
+            search_prefix = params.data_prefix + params.label_prefix
         for study in study_dirs:
             # get list of all expected files via glob
-            files = [glob("{}/*{}.nii.gz".format(study, item)) for item in params.data_prefix + params.label_prefix]
+            files = [glob("{}/*{}.nii.gz".format(study, item)) for item in search_prefix]
             # check that a file was found and that file exists in each case
             if all(files) and all([os.path.isfile(f[0]) for f in files]):
                 valid_study_dirs.append(study)
@@ -1220,7 +1345,7 @@ def get_study_dirs(params, change_basedir=None):
             logging.warning("Some study directories listed in study_dirs_list.json are missing or incomplete")
         # case, all study dirs in study dirs file are valid
         else:
-            logging.info("All directories listed in study_dirs_list.json are present and complete")
+            logging.info("Complete!")
         study_dirs = valid_study_dirs
 
     # if study dirs file does not exist, then determine study directories and create study_dirs_list.json

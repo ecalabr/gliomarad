@@ -5,6 +5,7 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import nibabel as nib
+import csv
 
 
 class Params:
@@ -215,6 +216,9 @@ def display_tf_dataset(dataset_data, data_format, data_dims, weighted=False):
 
         # load label data
         label_data = dataset_data[1]  # dataset_data[1]
+        # handle integer labels by making them an image of all one value
+        if label_data.size == 1:
+            label_data = np.ones_like(image_data) * label_data
 
         # handle channels first and batch data
         if len(label_data.shape) > 4:
@@ -269,8 +273,11 @@ def save_tf_dataset(dataset_data, data_format, data_dims, out_file, weighted=Fal
     :param data_dims: (list or tuple of ints) the data dimensions that come out of the input function
     :param out_file: (string) the full path to the output nii to save the data to
     :param weighted: (bool) whether or not the labels slice includes weights as the final channel dimension
-    :return: displays images for 3 seconds then continues
+    :return: saves data to nifti in out_file with suffixes added for labels and ROI images
     """
+
+    # possible csv features
+    csv_features = None
 
     # handle 2d case
     if len(data_dims) == 2:
@@ -295,19 +302,33 @@ def save_tf_dataset(dataset_data, data_format, data_dims, out_file, weighted=Fal
         # load image data
         image_data = dataset_data[0]  # dataset_data[0]
 
+        # handle data as tuple with csv features
+        if isinstance(image_data, tuple):
+            csv_features = image_data[1]
+            image_data = image_data[0]
+
+        # load label data
+        label_data = dataset_data[1]  # dataset_data[1]
+
         # handle channels first and batch data
         if len(image_data.shape) > 4:
             if data_format == 'channels_first':
                 image_data = np.transpose(image_data, [0, 2, 3, 4, 1])
             # handle batch data by taking only first element of batch
-            image_data = np.squeeze(image_data[0, :, :, :, :])
+            image_data = np.squeeze(image_data[0, ...])
+            # also handle batch data for labels
+            label_data = np.squeeze(label_data[0, ...])
+            # also handle batch for csv_features
+            if csv_features is not None:
+                csv_features = csv_features[0, ...]
         else:
             # no batch
             if data_format == 'channels_first':
                 image_data = np.transpose(image_data, [1, 2, 3, 0])
 
-        # load label data
-        label_data = dataset_data[1]  # dataset_data[1]
+        # handle integer labels by making them an image of all one value
+        if label_data.size == 1:
+            label_data = np.ones_like(image_data) * label_data
 
         # handle channels first and batch data
         if len(label_data.shape) > 4:
@@ -340,6 +361,12 @@ def save_tf_dataset(dataset_data, data_format, data_dims, out_file, weighted=Fal
     label_nii = nib.Nifti1Image(label_data.astype(np.float32), np.eye(4))
     nib.save(label_nii, label_nii_file)
     outputs.append(label_nii)
+    # extra csv feature data
+    if csv_features is not None:
+        feature_file = out_file.rsplit(".nii.gz")[0] + "_csv_features.csv"
+        with open(feature_file, 'w+') as f:
+            writer = csv.writer(f)
+            writer.writerows([list(csv_features)])
     # weights data
     if weighted:
         weights_nii_file = out_file.rsplit(".nii.gz")[0] + "_weights.nii.gz"
