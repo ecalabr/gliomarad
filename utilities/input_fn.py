@@ -436,9 +436,11 @@ def scaled_cube_input_fn_3d_csv(params, mode, train_dirs, eval_dirs, infer_dir=N
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_csv_and_roi_multicon_3d,
                                         [x] + py_func_params,
-                                        (tf.float32, tf.float32)),
+                                        (tf.float32, tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
-        # generate batch data
+        # map data
+        dataset = dataset.map(lambda x, y, z: ((x, y), z))
+        # generate batch data (no shuffling) for eval mode
         dataset = dataset.batch(params.batch_size, drop_remainder=True)
         # prefetch with experimental autotune
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
