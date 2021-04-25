@@ -565,8 +565,10 @@ def binary_classifier_3d_scalar(params):
     image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
     scalar_features = Input(shape=(n_scalar_features,), batch_size=batch_size, dtype='float32')
 
+    # first layer
+    x = bneck_resid3d(image_features, filt, ksize, dfmt, dropout, act, policy=policy)
+
     # encoder limb with residual bottleneck blocks
-    x = image_features
     for n, level in enumerate(layer_layout, 1):
         for block in range(level):
             x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
