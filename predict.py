@@ -6,6 +6,7 @@ import os
 from glob import glob
 import nibabel as nib
 import numpy as np
+import csv
 # set tensorflow logging to FATAL before importing things with tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
@@ -21,7 +22,7 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     nii1 = nib.load(glob(infer_dir + '/*' + params.data_prefix[0] + '*.nii.gz')[0])
     affine = nii1.affine
     shape = np.array(nii1.shape)
-    name_prefix = os.path.basename(infer_dir[0:-1] if infer_dir.endswith('/') else infer_dir)
+    name_prefix = os.path.basename(infer_dir.rstrip('/'))
 
     # handle 2 and 2.5 dimensional inference
     if params.dimension_mode in ['2D', '2.5D']:
@@ -93,6 +94,22 @@ def predictions_2_nii(predictions, infer_dir, out_dir, params, mask=None):
     return nii_out
 
 
+# take raw predictions and convert to nifti file
+def save_1D_out(predictions, infer_dir, out_dir, params):
+
+    # define output csv
+    name_prefix = os.path.basename(infer_dir.rstrip('/'))
+    model_name = os.path.basename(params.model_dir.rstrip('/'))
+    csv_out = os.path.join(out_dir, 'predictions_' + model_name + '.nii.gz')
+
+    # write to csv - writing mode at EOF
+    with open(csv_out, 'a') as f:
+        # write prediction as a line in the csv
+        csv.writer(f).writerow([[name_prefix] + list(predictions[0, :])])
+
+    return csv_out
+
+
 # predict a batch of input directories
 def predict(params, pred_dirs, out_dir, mask=None, checkpoint='last'):
 
@@ -144,8 +161,12 @@ def predict(params, pred_dirs, out_dir, mask=None, checkpoint='last'):
             infer_inputs = get_input_fn(params=params, mode='infer', infer_dir=pred_dir)
             # predict
             predictions = model.predict(infer_inputs)
-            # save nii
-            pred_out = predictions_2_nii(predictions, pred_dir, out_dir, params, mask=mask)
+            # handle 1D prediction
+            if len(predictions.shape) == 2:  # batch plus 1D
+                pred_out = save_1D_out(predictions, pred_dir, out_dir, params)
+            else:
+                # save nii
+                pred_out = predictions_2_nii(predictions, pred_dir, out_dir, params, mask=mask)
         else:
             logging.info("Predictions already exist and will not be overwritten: {}".format(pred_out))
         # update list of output niis

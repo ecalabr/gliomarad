@@ -98,14 +98,13 @@ def patch_input_fn_2d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     elif mode == 'infer':
         if not infer_dir:
             assert ValueError("Must specify inference directory for inference mode")
-        dirs = tf.constant(infer_dir)
         # define dims of inference
         data_dims = list(params.infer_dims)
         chan_size = len(params.data_prefix)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data, params.norm_mode]
         # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(dirs)
+        dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size,
@@ -228,7 +227,6 @@ def patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
     elif mode == 'infer':
         if not infer_dir:
             assert ValueError("Must specify inference directory for inference mode")
-        dirs = tf.constant(infer_dir)
         # define dims of inference
         data_dims = list(params.infer_dims)
         chan_size = len(params.data_prefix)
@@ -236,7 +234,7 @@ def patch_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None):
         py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data,
                           params.norm_mode]
         # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(dirs)
+        dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
@@ -344,12 +342,11 @@ def scaled_cube_input_fn_3d(params, mode, train_dirs, eval_dirs, infer_dir=None)
     elif mode == 'infer':
         if not infer_dir:
             assert ValueError("Must specify inference directory for inference mode")
-        dirs = tf.constant(infer_dir)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data,
                           params.norm_mode]
         # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(dirs)
+        dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
             lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
@@ -449,23 +446,38 @@ def scaled_cube_input_fn_3d_csv(params, mode, train_dirs, eval_dirs, infer_dir=N
     elif mode == 'infer':
         if not infer_dir:
             assert ValueError("Must specify inference directory for inference mode")
-        dirs = tf.constant(infer_dir)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data,
                           params.norm_mode]
         # create tensorflow dataset variable from data directories
-        dataset = tf.data.Dataset.from_tensor_slices(dirs)
+        infer_dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
+        # defined the fixed py_func params, the study directory will be passed separately by the iterator
+        py_func_params = [params.data_prefix,
+                          params.label_prefix,  # in this case, label prefix is the full path to the label CSV
+                          params.mask_prefix,
+                          1,  # this is the colum of he data csv that contains the desired label - include in params?
+                          params.mask_dilate,
+                          params.data_plane,
+                          params.data_format,
+                          False,  # no data augmentation for infer mode
+                          params.label_interp,
+                          params.norm_data,
+                          params.norm_mode,
+                          params.train_dims[0]  # the first value in train_dims is assumed as scaled cube shape
+                          ]
+        # create tensorflow dataset variable from data directories
+        dataset = tf.data.Dataset.from_tensor_slices(infer_dataset)
         # map data directories to the data using a custom python function
         dataset = dataset.map(
-            lambda x: tf.numpy_function(load_multicon_preserve_size_3d,
+            lambda x: tf.numpy_function(load_csv_and_roi_multicon_3d,
                                         [x] + py_func_params,
-                                        tf.float32),
-            num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        # flat map so that each tensor is a single slice
-        dataset = dataset.flat_map(lambda x: tf.data.Dataset.from_tensor_slices(x))
-        # generate a batch of data
-        dataset = dataset.batch(batch_size=1, drop_remainder=True)
-        # automatic prefetching to improve efficiency
+                                        (tf.float32, tf.float32, tf.float32)),
+            num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
+        # map data discarding label data for inference mode
+        dataset = dataset.map(lambda x, y, z: (x, y))
+        # generate batch data (no shuffling) for infer mode, batch size of 1 for infer mode
+        dataset = dataset.batch(1, drop_remainder=True)
+        # prefetch with experimental autotune
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
     # error if not train, eval, or infer
