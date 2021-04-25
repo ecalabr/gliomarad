@@ -27,7 +27,7 @@
   "norm_mode": "zscore",
 
   "model_name": "binary_classifier_3d_scalar",
-  "base_filters": 32,
+  "base_filters": 48,
   "output_filters": 1,
   "layer_layout": [2, 2, 2, 2],
   "final_layer": "dense",
@@ -45,7 +45,7 @@
   "learning_rate": 0.001,
   "learning_rate_decay": "constant",
   "optimizer": "adam",
-  "loss": "binaryCElogits",
+  "loss": "binaryCE",
   "num_epochs": 25,
   "dropout_rate": 0.3
 }

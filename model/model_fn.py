@@ -31,7 +31,7 @@ def model_fn(params):
 
     # save text representation of graph
     model_info_dir = os.path.join(params.model_dir, 'model')
-    if not os.path.isdir(model_info_dir):
+    if not os.path.isdir(model_info_dir) or params.overwrite:
         os.mkdir(model_info_dir)
     model_sum = os.path.join(model_info_dir, 'model_summary.txt')
     if not os.path.isfile(model_sum):
@@ -41,7 +41,7 @@ def model_fn(params):
 
     # save graphical representation of graph
     model_im = os.path.join(model_info_dir, 'model_graphic.png')
-    if not os.path.isfile(model_im):
+    if not os.path.isfile(model_im) or params.overwrite:
         tf.keras.utils.plot_model(
             model, to_file=model_im, show_shapes=False, show_layer_names=True,
             rankdir='TB', expand_nested=False, dpi=96)

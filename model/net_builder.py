@@ -559,35 +559,34 @@ def binary_classifier_3d_scalar(params):
     batch_size = params.batch_size
     output_filt = params.output_filters
     policy = params.policy
-    scalar_feature_shape = (128,)  # this is hard-coded for now, but could be included in params?
+    n_scalar_features = 128  # this is hard-coded for now, but could be included in params?
 
     # input layer
-    image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')
-    scalar_features = Input(shape=scalar_feature_shape, batch_size=batch_size, dtype='float32')
-
-    # initial convolution layer
-    x = Conv3D(filt, ksize, padding='same', data_format=dfmt, dtype=policy)(image_features)
+    image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
+    scalar_features = Input(shape=(n_scalar_features,), batch_size=batch_size, dtype='float32')
 
     # encoder limb with residual bottleneck blocks
+    x = image_features
     for n, level in enumerate(layer_layout, 1):
         for block in range(level):
             x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
 
-        # downsample block if not last level
-        if n != len(layer_layout):
-            # filt = filt * 2  # double filters before strided conv downsampling
-            x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
+        # downsample block at the end of each level including last
+        x = MaxPool3D((2, 2, 2), strides=None, padding='same', data_format=dfmt)
+        filt = int(filt * 1.5)  # increase filters after pooling
+        # x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
 
-    # fully connected layer
+    # flatten and fully connected layer
     x = tf.keras.layers.Flatten(data_format=dfmt)(x)
-    x = tf.keras.layers.Dense(32, activation='relu')(x)
+    x = tf.keras.layers.Dense(params.base_filters * 2, activation='relu')(x)
 
-    # scalar features layers
-    x2 = tf.keras.layers.Dense(32, activation='relu')(scalar_features)
-    x2 = tf.keras.layers.Dense(16, activation='relu')(x2)
-    x2 = tf.keras.layers.Dense(8, activation='relu')(x2)
+    # scalar features ANN limb
+    x2 = scalar_features
+    x2 = tf.keras.layers.Dense(n_scalar_features // 2, activation='relu')(x2)
+    x2 = tf.keras.layers.Dense(n_scalar_features, activation='relu')(x2)
+    x2 = tf.keras.layers.Dense(n_scalar_features // 2, activation='relu')(x2)
 
-    # combine
+    # combine image and scalar features before output layer
     x = tf.concat([x, x2], 1)
 
     # output layer - no mixed precision data policy
@@ -600,7 +599,8 @@ def binary_classifier_3d_scalar(params):
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
         x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     elif params.final_layer == "dense":
-        x = tf.keras.layers.Dense(output_filt)(x)
+        # can add sigmoid activation here and use binary CE without logits or no activation and use BCE w logits
+        x = tf.keras.layers.Dense(output_filt, activation='sigmoid')(x)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
