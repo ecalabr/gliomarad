@@ -573,7 +573,7 @@ def binary_classifier_3d_scalar(params):
 
         # downsample block at the end of each level including last
         x = MaxPool3D((2, 2, 2), strides=None, padding='same', data_format=dfmt)(x)
-        filt = int(filt * 2)  # increase filters after pooling
+        filt = int(filt * 1.5)  # increase filters after pooling
         # x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
 
     # flatten and fully connected layer
