@@ -84,9 +84,10 @@ def binaryCE(y_true, y_pred):
     return tf.keras.losses.BinaryCrossentropy(from_logits=False)(y_true, y_pred)
 
 
-# binary cross entropy from logits
-def binaryCElogits(y_true, y_pred):
-    return tf.keras.losses.BinaryCrossentropy(from_logits=True)(y_true, y_pred)
+# binary cross entropy from logits with reduction set to NONE for mirrored distribution strategy
+def binaryCElogitsMirrored(y_true, y_pred):
+    return tf.keras.losses.BinaryCrossentropy(from_logits=True,
+                                              reduction=tf.keras.losses.Reduction.NONE)(y_true, y_pred)
 
 
 # generalized DICE loss for 2D and 3D networks

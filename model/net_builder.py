@@ -600,7 +600,7 @@ def binary_classifier_3d_scalar(params):
         x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
     elif params.final_layer == "dense":
         # can add sigmoid activation here and use binary CE without logits or no activation and use BCE w logits
-        x = tf.keras.layers.Dense(output_filt, activation='sigmoid')(x)
+        x = tf.keras.layers.Dense(output_filt)(x)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
