@@ -565,17 +565,15 @@ def binary_classifier_3d_scalar(params):
     image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
     scalar_features = Input(shape=(n_scalar_features,), batch_size=batch_size, dtype='float32')
 
-    # first layer
-    x = bneck_resid3d(image_features, filt, ksize, dfmt, dropout, act, policy=policy)
-
     # encoder limb with residual bottleneck blocks
+    x = image_features
     for n, level in enumerate(layer_layout, 1):
         for block in range(level):
             x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
 
         # downsample block at the end of each level including last
-        x = MaxPool3D((2, 2, 2), strides=None, padding='same', data_format=dfmt)
-        filt = int(filt * 1.5)  # increase filters after pooling
+        x = MaxPool3D((2, 2, 2), strides=None, padding='same', data_format=dfmt)(x)
+        filt = int(filt * 2)  # increase filters after pooling
         # x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
 
     # flatten and fully connected layer

@@ -31,10 +31,10 @@ def model_fn(params):
 
     # save text representation of graph
     model_info_dir = os.path.join(params.model_dir, 'model')
-    if not os.path.isdir(model_info_dir) or params.overwrite:
+    if not os.path.isdir(model_info_dir):
         os.mkdir(model_info_dir)
     model_sum = os.path.join(model_info_dir, 'model_summary.txt')
-    if not os.path.isfile(model_sum):
+    if not os.path.isfile(model_sum) or params.overwrite:
         with open(model_sum, 'w+') as f:
             with redirect_stdout(f):
                 model.summary()
