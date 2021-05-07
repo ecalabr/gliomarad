@@ -221,7 +221,7 @@ if __name__ == '__main__':
     logging.info("Log file created at " + log_path)
 
     # get list of study valid study directories - optionally change base directory name
-    study_dirs = get_study_dirs(my_params, change_basedir=args.rename)
+    study_dirs = get_study_dirs(my_params, change_basedir=args.rename, mode='eval')
 
     # separate eval dirs from list of all study dirs using train fraction (same function used by train.py)
     _, my_eval_dirs = train_test_split(study_dirs, my_params)
@@ -233,6 +233,11 @@ if __name__ == '__main__':
 
     # predict output niis
     niis_pred = predict(my_params, my_eval_dirs, args.out_dir, mask=args.mask, checkpoint=args.checkpoint)
+
+    # handle CSV out
+    if niis_pred[0].endswith('.csv'):
+        logging.info("Evaluation output CSV created at {}".format(niis_pred[0]))
+        exit()
 
     # handle baseline predictions
     if args.baseline:

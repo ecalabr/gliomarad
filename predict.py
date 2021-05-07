@@ -100,12 +100,12 @@ def save_1D_out(predictions, infer_dir, out_dir, params):
     # define output csv
     name_prefix = os.path.basename(infer_dir.rstrip('/'))
     model_name = os.path.basename(params.model_dir.rstrip('/'))
-    csv_out = os.path.join(out_dir, 'predictions_' + model_name + '.nii.gz')
+    csv_out = os.path.join(out_dir, 'predictions_' + model_name + '.csv')
 
     # write to csv - writing mode at EOF
     with open(csv_out, 'a') as f:
         # write prediction as a line in the csv
-        csv.writer(f).writerow([[name_prefix] + list(predictions[0, :])])
+        csv.writer(f).writerow([name_prefix] + list(predictions[0, :]))
 
     return csv_out
 

@@ -450,7 +450,7 @@ def scaled_cube_input_fn_3d_csv(params, mode, train_dirs, eval_dirs, infer_dir=N
         py_func_params = [params.data_prefix, params.data_format, params.data_plane, params.norm_data,
                           params.norm_mode]
         # create tensorflow dataset variable from data directories
-        infer_dataset = tf.data.Dataset.from_tensor_slices(infer_dir)
+        infer_dataset = tf.constant(infer_dir)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator
         py_func_params = [params.data_prefix,
                           params.label_prefix,  # in this case, label prefix is the full path to the label CSV
@@ -474,7 +474,7 @@ def scaled_cube_input_fn_3d_csv(params, mode, train_dirs, eval_dirs, infer_dir=N
                                         (tf.float32, tf.float32, tf.float32)),
             num_parallel_calls=params.num_threads)  # tf.data.experimental.AUTOTUNE)
         # map data discarding label data for inference mode
-        dataset = dataset.map(lambda x, y, z: (x, y))
+        dataset = dataset.map(lambda x, y, z: ((x, y), z))  # z is not actually used, but structure is needed for infer
         # generate batch data (no shuffling) for infer mode, batch size of 1 for infer mode
         dataset = dataset.batch(1, drop_remainder=True)
         # prefetch with experimental autotune
