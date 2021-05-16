@@ -1,6 +1,14 @@
 import tensorflow as tf
-from tensorflow.keras.layers import BatchNormalization, Conv3D, Conv2D, Dropout, Conv3DTranspose
+from tensorflow.keras.layers import BatchNormalization, Conv3D, Conv2D, Dropout, Conv3DTranspose, Dense
 from utilities.activations import activation_layer
+
+
+def dense_act_bn(x, filt, dropout=0., act='relu', policy='float32'):
+    x = Dense(filt, activation=act, dtype=policy)(x)
+    x = BatchNormalization()(x)
+    if dropout > 0.:
+        x = Dropout(rate=dropout)(x)
+    return x
 
 
 def conv3d_act_bn(x, filt, ksize, dfmt, dropout, act, policy='float32'):

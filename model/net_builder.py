@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Conv3D, Conv3DTranspose, Conv2D, Conv2DTranspose, Input, MaxPool3D
 from tensorflow.keras.models import Model
-from model.net_layers import bneck_resid3d, bneck_resid2d, conv3d_act_bn
+from model.net_layers import bneck_resid3d, bneck_resid2d, conv3d_act_bn, dense_act_bn
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 
@@ -578,12 +578,15 @@ def binary_classifier_3d_scalar(params):
 
     # flatten and fully connected layer
     x = tf.keras.layers.Flatten(data_format=dfmt)(x)
-    x = tf.keras.layers.Dense(n_scalar_features // 2, activation='relu')(x)
+    x = dense_act_bn(x, n_scalar_features)
 
     # scalar features ANN limb
     x2 = scalar_features
-    x2 = tf.keras.layers.Dense(n_scalar_features, activation='relu')(x2)
-    x2 = tf.keras.layers.Dense(n_scalar_features // 2, activation='relu')(x2)
+    x2 = dense_act_bn(x2, n_scalar_features)
+    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
 
     # combine image and scalar features before output layer
     x = tf.concat([x, x2], 1)
