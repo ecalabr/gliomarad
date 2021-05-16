@@ -559,7 +559,7 @@ def binary_classifier_3d_scalar(params):
     batch_size = params.batch_size
     output_filt = params.output_filters
     policy = params.policy
-    n_scalar_features = 128  # this is hard-coded for now, but could be included in params?
+    n_scalar_features = 32  # this is hard-coded for now, but could be included in params?
 
     # input layer
     image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
