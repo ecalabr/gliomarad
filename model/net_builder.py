@@ -610,6 +610,71 @@ def binary_classifier_3d_scalar(params):
     return Model(inputs=(image_features, scalar_features), outputs=x)
 
 
+# 3D binary classification with scalar inputs
+def binary_classifier_3d_scalar2(params):
+
+    # define fixed params
+    layer_layout = params.layer_layout
+    filt = params.base_filters
+    dfmt = params.data_format
+    dropout = params.dropout_rate
+    ksize = params.kernel_size
+    act = params.activation
+    chan = len(params.data_prefix)
+    train_dims = params.train_dims + [chan] if dfmt == 'channels_last' else [chan] + params.train_dims
+    batch_size = params.batch_size
+    output_filt = params.output_filters
+    policy = params.policy
+    n_scalar_features = 32  # this is hard-coded for now, but could be included in params?
+
+    # input layer
+    image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
+    scalar_features = Input(shape=(n_scalar_features,), batch_size=batch_size, dtype='float32')
+
+    # encoder limb with residual bottleneck blocks
+    x = image_features
+    for n, level in enumerate(layer_layout, 1):
+        for block in range(level):
+            x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
+
+        # downsample block at the end of each level including last
+        filt = int(filt * 2)  # increase filters after pooling
+        x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
+
+    # flatten and fully connected layer
+    x = tf.keras.layers.Flatten(data_format=dfmt)(x)
+    x = dense_act_bn(x, n_scalar_features)
+
+    # scalar features ANN limb
+    x2 = scalar_features
+    x2 = dense_act_bn(x2, n_scalar_features)
+    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
+
+    # combine image and scalar features before output layer
+    x = tf.concat([x, x2], 1)
+
+    # output layer - no mixed precision data policy
+    if params.final_layer == "conv":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+    elif params.final_layer == "sigmoid":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.sigmoid(x)
+    elif params.final_layer == "softmax":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+    elif params.final_layer == "dense":
+        # can add sigmoid activation here and use binary CE without logits or no activation and use BCE w logits
+        x = tf.keras.layers.Dense(output_filt)(x)
+        x = tf.nn.sigmoid(x)
+    else:
+        assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
+
+    return Model(inputs=(image_features, scalar_features), outputs=x)
+
+
 # Wrapper function
 def net_builder(params):
     # set up mixed precision computation to take advantage of Nvidia tensor cores
