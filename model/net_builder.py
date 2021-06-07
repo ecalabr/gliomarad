@@ -576,16 +576,16 @@ def binary_classifier_3d_scalar(params):
         filt = int(filt * 2)  # increase filters after pooling
         # x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
 
-    # flatten and fully connected layer
+    # flatten and fully connected layer - outputs is same as n scalar features
     x = tf.keras.layers.Flatten(data_format=dfmt)(x)
-    x = dense_act_bn(x, n_scalar_features)
+    x = dense_act_bn(x, n_scalar_features, dropout=dropout)
 
     # scalar features ANN limb
     x2 = scalar_features
-    x2 = dense_act_bn(x2, n_scalar_features)
-    x2 = dense_act_bn(x2, n_scalar_features * 2)
-    x2 = dense_act_bn(x2, n_scalar_features * 2)
-    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
+    x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
+    x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
+    x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
     x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
 
     # combine image and scalar features before output layer
