@@ -1111,11 +1111,11 @@ def load_csv_and_roi_multicon_3d(study_dir, feature_prefx, label_csv, mask_prefx
             data[:, :, :, i] = nib.load(im_file).get_fdata()
 
     # center the ROI in the image usine affine, with optional rotation for data augmentation
-    if aug:  # if augmenting, select random rotation values for x, y, and z axes depending on plane
+    if aug:  # if augmenting, select random rotation values +/- 60 degrees for each rotation plane
         posneg = 1 if np.random.random() < 0.5 else -1
-        theta = np.random.random() * (np.pi / 6.) * posneg if plane == 'cor' else 0.  # rotation in yz plane
-        phi = np.random.random() * (np.pi / 6.) * posneg if plane == 'sag' else 0.  # rotation in xz plane
-        psi = np.random.random() * (np.pi / 6.) * posneg if plane == 'ax' else 0.  # rotation in xy plane
+        theta = np.random.random() * (np.pi / 3.) * posneg  # rotation in yz plane
+        phi = np.random.random() * (np.pi / 3.) * posneg  # rotation in xz plane
+        psi = np.random.random() * (np.pi / 3.) * posneg  # rotation in xy plane
     else:  # if not augmenting, no rotation is applied, and affine is used only for offset to center the mask ROI
         theta = 0.
         phi = 0.

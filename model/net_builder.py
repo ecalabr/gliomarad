@@ -548,7 +548,7 @@ def binary_classifier_3d(params):
 def binary_classifier_3d_scalar(params):
 
     # define fixed params
-    layer_layout = params.layer_layout
+    layer_layout = params.layer_layout  # final number in layer layout is for ANN limb, rest are for CNN limb
     filt = params.base_filters
     dfmt = params.data_format
     dropout = params.dropout_rate
@@ -567,7 +567,7 @@ def binary_classifier_3d_scalar(params):
 
     # encoder limb with residual bottleneck blocks
     x = image_features
-    for n, level in enumerate(layer_layout, 1):
+    for n, level in enumerate(layer_layout[:-1], 1):  # final number in layer layout is for ANN limb
         for block in range(level):
             x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
 
@@ -583,9 +583,8 @@ def binary_classifier_3d_scalar(params):
     # scalar features ANN limb
     x2 = scalar_features
     x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
-    x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
-    x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
-    x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
+    for block in range(layer_layout[-1]):  # final number in layer layout is for ANN limb, rest are for CNN limb
+        x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
     x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
 
     # combine image and scalar features before output layer
@@ -614,7 +613,7 @@ def binary_classifier_3d_scalar(params):
 def binary_classifier_3d_scalar2(params):
 
     # define fixed params
-    layer_layout = params.layer_layout
+    layer_layout = params.layer_layout  # final number in layer layout is for ANN limb, rest are for CNN limb
     filt = params.base_filters
     dfmt = params.data_format
     dropout = params.dropout_rate
@@ -633,7 +632,7 @@ def binary_classifier_3d_scalar2(params):
 
     # encoder limb with residual bottleneck blocks
     x = image_features
-    for n, level in enumerate(layer_layout, 1):
+    for n, level in enumerate(layer_layout[:-1], 1):  # final number in layer layout is for ANN
         for block in range(level):
             x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
 
@@ -648,9 +647,8 @@ def binary_classifier_3d_scalar2(params):
     # scalar features ANN limb
     x2 = scalar_features
     x2 = dense_act_bn(x2, n_scalar_features)
-    x2 = dense_act_bn(x2, n_scalar_features * 2)
-    x2 = dense_act_bn(x2, n_scalar_features * 2)
-    x2 = dense_act_bn(x2, n_scalar_features * 2)
+    for block in range (layer_layout[-1]):  # final number in layer layout is for ANN
+        x2 = dense_act_bn(x2, n_scalar_features * 2)
     x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
 
     # combine image and scalar features before output layer
