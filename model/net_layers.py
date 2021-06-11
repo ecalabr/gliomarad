@@ -3,8 +3,8 @@ from tensorflow.keras.layers import BatchNormalization, Conv3D, Conv2D, Dropout,
 from utilities.activations import activation_layer
 
 
-def dense_act_bn(x, filt, dropout=0., act='relu', policy='float32'):
-    x = Dense(filt, activation=act, dtype=policy)(x)
+def dense_act_bn(x, filt, dropout=0., act='relu', policy='float32', reg=None):
+    x = Dense(filt, activation=act, dtype=policy, kernel_regularizer=reg)(x)
     x = BatchNormalization()(x)
     if dropout > 0.:
         x = Dropout(rate=dropout)(x)

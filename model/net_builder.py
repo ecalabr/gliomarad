@@ -560,6 +560,7 @@ def binary_classifier_3d_scalar(params):
     output_filt = params.output_filters
     policy = params.policy
     n_scalar_features = 32  # this is hard-coded for now, but could be included in params?
+    dense_reg = 'l2'  # kernel regulizer for dense layers
 
     # input layer
     image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
@@ -578,14 +579,14 @@ def binary_classifier_3d_scalar(params):
 
     # flatten and fully connected layer - outputs is same as n scalar features
     x = tf.keras.layers.Flatten(data_format=dfmt)(x)
-    x = dense_act_bn(x, n_scalar_features, dropout=dropout)
+    x = dense_act_bn(x, n_scalar_features, dropout=dropout, reg=dense_reg)
 
     # scalar features ANN limb
     x2 = scalar_features
-    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
+    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout, reg=dense_reg)
     for block in range(layer_layout[-1]):  # final number in layer layout is for ANN limb, rest are for CNN limb
-        x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout)
-    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout)
+        x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout, reg=dense_reg)
+    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout, reg=dense_reg)
 
     # combine image and scalar features before output layer
     x = tf.concat([x, x2], 1)
