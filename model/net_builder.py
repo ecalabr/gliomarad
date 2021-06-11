@@ -560,7 +560,7 @@ def binary_classifier_3d_scalar(params):
     output_filt = params.output_filters
     policy = params.policy
     n_scalar_features = 32  # this is hard-coded for now, but could be included in params?
-    dense_reg = 'l2'  # kernel regulizer for dense layers
+    dense_reg = None  # kernel regulizer for dense layers
 
     # input layer
     image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
