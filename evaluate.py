@@ -186,9 +186,12 @@ if __name__ == '__main__':
                         help="Prefix for image contrast to use in place of predictions")
     parser.add_argument('-r', '--rename', default=None,
                         help="Optionally rename the base folder for study dirs (useful when trained in production env)")
+    parser.add_argument('-n', '--rename_label', default=None,
+                        help="Optionally rename the label prefix in param file (useful when trained in production env)")
     parser.add_argument('-f', '--force_cpu', default=False,
                         help="Disable GPU and force all computation to be done on CPU",
                         action='store_true')
+
 
     # handle param argument
     args = parser.parse_args()
@@ -198,6 +201,10 @@ if __name__ == '__main__':
     # turn of distributed strategy and mixed precision
     my_params.dist_strat = None
     my_params.mixed_precision = False
+
+    # handle label replacement
+    if args.rename_label:
+        my_params.label_prefix = [args.rename_label]
 
     # determine model dir
     if my_params.model_dir == 'same':  # this allows the model dir to be inferred from params.json file path
