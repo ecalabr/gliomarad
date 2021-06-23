@@ -731,7 +731,7 @@ def binary_classifier_3d_scalar3(params):
         # can add sigmoid activation here and use binary CE without logits or no activation and use BCE w logits
         x = tf.keras.layers.Dense(output_filt)(x)
         x2 = tf.keras.layers.Dense(output_filt)(x2)
-        x = tf.reduce_mean(tf.concat([tf.nn.sigmoid(x), tf.nn.sigmoid(x2)], axis=1))
+        x = tf.reduce_mean(tf.concat([tf.nn.sigmoid(x), tf.nn.sigmoid(x2)], axis=1), axis=1)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
