@@ -610,7 +610,7 @@ def binary_classifier_3d_scalar(params):
     return Model(inputs=(image_features, scalar_features), outputs=x)
 
 
-# 3D binary classification with scalar inputs
+# 3D binary classification with scalar inputs - uses conv instead of maxpool for downsampling
 def binary_classifier_3d_scalar2(params):
 
     # define fixed params
@@ -668,6 +668,70 @@ def binary_classifier_3d_scalar2(params):
         # can add sigmoid activation here and use binary CE without logits or no activation and use BCE w logits
         x = tf.keras.layers.Dense(output_filt)(x)
         x = tf.nn.sigmoid(x)
+    else:
+        assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
+
+    return Model(inputs=(image_features, scalar_features), outputs=x)
+
+
+# 3D binary classification with scalar inputs - combines logits at very end and uses maxpool
+def binary_classifier_3d_scalar3(params):
+
+    # define fixed params
+    layer_layout = params.layer_layout  # final number in layer layout is for ANN limb, rest are for CNN limb
+    filt = params.base_filters
+    dfmt = params.data_format
+    dropout = params.dropout_rate
+    ksize = params.kernel_size
+    act = params.activation
+    chan = len(params.data_prefix)
+    train_dims = params.train_dims + [chan] if dfmt == 'channels_last' else [chan] + params.train_dims
+    batch_size = params.batch_size
+    output_filt = params.output_filters
+    policy = params.policy
+    n_scalar_features = 32  # this is hard-coded for now, but could be included in params?
+    dense_reg = None  # kernel regulizer for dense layers
+
+    # input layer
+    image_features = Input(shape=train_dims, batch_size=batch_size, dtype='float32')  # image features
+    scalar_features = Input(shape=(n_scalar_features,), batch_size=batch_size, dtype='float32')
+
+    # encoder limb with residual bottleneck blocks
+    x = image_features
+    for n, level in enumerate(layer_layout[:-1], 1):  # final number in layer layout is for ANN limb
+        for block in range(level):
+            x = bneck_resid3d(x, filt, ksize, dfmt, dropout, act, policy=policy)
+
+        # downsample block at the end of each level including last
+        x = MaxPool3D((2, 2, 2), strides=None, padding='same', data_format=dfmt)(x)
+        filt = int(filt * 2)  # increase filters after pooling
+        # x = Conv3D(filt, ksize, strides=[2, 2, 2], padding='same', data_format=dfmt, dtype=policy)(x)
+
+    # flatten and fully connected layer - outputs is same as n scalar features
+    x = tf.keras.layers.Flatten(data_format=dfmt)(x)
+    x = dense_act_bn(x, n_scalar_features, dropout=dropout, reg=dense_reg)
+
+    # scalar features ANN limb
+    x2 = scalar_features
+    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout, reg=dense_reg)
+    for block in range(layer_layout[-1]):  # final number in layer layout is for ANN limb, rest are for CNN limb
+        x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout, reg=dense_reg)
+    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout, reg=dense_reg)
+
+    # output layer - no mixed precision data policy
+    if params.final_layer == "conv":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+    elif params.final_layer == "sigmoid":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.sigmoid(x)
+    elif params.final_layer == "softmax":
+        x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
+        x = tf.nn.softmax(x, axis=-1 if dfmt == 'channels_last' else 1)
+    elif params.final_layer == "dense":
+        # can add sigmoid activation here and use binary CE without logits or no activation and use BCE w logits
+        x = tf.keras.layers.Dense(output_filt)(x)
+        x2 = tf.keras.layers.Dense(output_filt)(x2)
+        x = tf.nn.sigmoid(tf.math.add(x, x2))
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
