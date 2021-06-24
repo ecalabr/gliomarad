@@ -711,13 +711,6 @@ def binary_classifier_3d_scalar3(params):
     x = tf.keras.layers.Flatten(data_format=dfmt)(x)
     x = dense_act_bn(x, n_scalar_features, dropout=dropout, reg=dense_reg)
 
-    # scalar features ANN limb
-    x2 = scalar_features
-    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout, reg=dense_reg)
-    for block in range(layer_layout[-1]):  # final number in layer layout is for ANN limb, rest are for CNN limb
-        x2 = dense_act_bn(x2, n_scalar_features * 2, dropout=dropout, reg=dense_reg)
-    x2 = dense_act_bn(x2, n_scalar_features, dropout=dropout, reg=dense_reg)
-
     # output layer - no mixed precision data policy
     if params.final_layer == "conv":
         x = Conv3D(filters=output_filt, kernel_size=[1, 1, 1], padding='same', data_format=dfmt, dtype='float32')(x)
@@ -730,8 +723,7 @@ def binary_classifier_3d_scalar3(params):
     elif params.final_layer == "dense":
         # can add sigmoid activation here and use binary CE without logits or no activation and use BCE w logits
         x = tf.keras.layers.Dense(output_filt)(x)
-        x2 = tf.keras.layers.Dense(output_filt)(x2)
-        x = tf.reduce_mean(tf.concat([tf.nn.sigmoid(x), tf.nn.sigmoid(x2)], axis=1), axis=1)
+        x = tf.nn.sigmoid(x)
     else:
         assert ValueError("Specified final layer is not implemented: {}".format(params.final_layer))
 
