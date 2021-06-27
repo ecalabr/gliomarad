@@ -1375,7 +1375,7 @@ def get_study_dirs(params, change_basedir=None, mode="unknown"):
 def train_test_split(study_dirs, params):
     # first train fraction is train dirs, last 1-train fract is test dirs
     # assumes study dirs is already shuffled and/or stratified as wanted
-    train_dirs = study_dirs[0:int(round(params.train_fract * len(study_dirs)))]
-    eval_dirs = study_dirs[int(round(params.train_fract * len(study_dirs))):]
+    train_dirs = study_dirs[0:int(np.floor(params.train_fract * len(study_dirs)))]  # favor larger eval set
+    eval_dirs = study_dirs[int(np.floor(params.train_fract * len(study_dirs))):]  # favor larger eval set for rounding
 
     return train_dirs, eval_dirs
