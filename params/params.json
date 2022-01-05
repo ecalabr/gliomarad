@@ -4,7 +4,7 @@
   "overwrite": true,
   "random_state": 42,
 
-  "data_prefix": ["T1_wmtbn", "T1gad_wmtbn", "T2_wmtbn", "FLAIR_wmtbn", "SWI_wmtbn", "DWI_wmtbn", "ASL_wmn", "DTI_eddy_MD_wmn", "DTI_eddy_FA_wmn"],
+  "data_prefix": ["T1_wmtbn", "T1gad_wmtbn", "T2_wmtbn", "FLAIR_wmtbn", "SWI_wmtbn", "DWI_wmtbn", "ASL_wmn", "DTI_eddy_MD_wmn", "DTI_eddy_FA_wmn", "DTI_eddy_AD_wmn", "DTI_eddy_RD_wmn"],
   "label_prefix": ["/media/ecalabr/scratch1/gliomarad_cdkn2a_test/glioma_labels_cdk_radiomics_norm_reduced.csv"],
   "mask_prefix": ["tumor_mask"],
   "mask_dilate": 10,

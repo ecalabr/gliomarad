@@ -376,20 +376,6 @@ def scaled_cube_input_fn_3d_csv(params, mode, train_dirs, eval_dirs, infer_dir=N
     # train mode - uses patches, patch filtering, batching, data augmentation, and shuffling - works on train_dirs
     if mode == 'train':
 
-        # balance imbalanced classes by oversampling minority class
-        # load csv and use binary classification to balance train_dirs
-        label_df = pd.read_csv(params.label_prefix[0])  # label prefix is a list of length 1 - the filename of csv
-        # randomly oversample the minority class
-        ros = RandomOverSampler(random_state=params.random_state)
-        X = label_df[label_df.columns[0]].to_numpy().reshape(-1, 1)  # IDs are first column of label file
-        y = label_df[label_df.columns[1]].to_numpy().reshape(-1, 1)  # classification labels are second column
-        X_res, y_res = ros.fit_resample(X, y)
-        # covert IDs to folder names to replace train dirs
-        example_dir = train_dirs[0]
-        example_id = os.path.basename(example_dir.rstrip('/'))
-        example_base = example_dir.rsplit(example_id, 1)[0]
-        train_dirs = [example_base + str(item[0]).zfill(len(example_id)) + '/' for item in X_res]
-
         # convert train dirs to TF variable
         data_dirs = tf.constant(train_dirs)
         # defined the fixed py_func params, the study directory will be passed separately by the iterator

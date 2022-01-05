@@ -7,6 +7,7 @@ from glob import glob
 import nibabel as nib
 import numpy as np
 import csv
+import json
 # set tensorflow logging to FATAL before importing things with tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0 = INFO, 1 = WARN, 2 = ERROR, 3 = FATAL
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
@@ -184,6 +185,8 @@ if __name__ == '__main__':
                         help="Path to params.json")
     parser.add_argument('-d', '--data_dir', default=None,
                         help="Path to directory to generate inference from")
+    parser.add_argument('-l', '--list', default=None,
+                        help="Optionally specify a JSON file containing a list of directories to predict on.")
     parser.add_argument('-c', '--checkpoint', default='last',
                         help="Can be 'best', 'last', or an hdf5 filename in the checkpoints subdirectory of model_dir")
     parser.add_argument('-m', '--mask', default=None,
@@ -226,8 +229,9 @@ if __name__ == '__main__':
     logging.info("Log file created at " + log_path)
 
     # determine directories for inference
-    if not any([args.data_dir, args.spec_direc]):
-        raise ValueError("Must specify directory for inference with -d (parent directory) or -s (single directory)")
+    if not any([args.data_dir, args.spec_direc, args.list]):
+        raise ValueError("Must specify directory for inference with -d (parent directory) or -s (single directory)"
+                         " or -l (json list of directories).")
     study_dirs = []
     # handle specific directory argument
     if args.spec_direc:
@@ -238,7 +242,13 @@ if __name__ == '__main__':
         else:
             logging.error("Specified directory does not have the required files: {}".format(args.spec_direc))
             exit()
-    # if specific directory is not specified, then use data_dir argument
+    # handle list argument
+    elif args.list:
+        logging.info("Loading JSON file for infer directories: {}".format(args.list))
+        # load json file
+        with open(args.list, 'r') as f:
+            study_dirs = list(json.load(f))
+    # if specific directory or list is not specified, then use data_dir argument
     else:
         # get all subdirectories in data_dir
         study_dirs = [item for item in glob(args.data_dir + '/*/') if os.path.isdir(item)]
